@@ -22,9 +22,6 @@
     "url": "git+https://github.com/omnibuf/omnibuf-es.git",
     "directory": "packages/omnibuf-web"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

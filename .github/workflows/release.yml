@@ -68,11 +68,13 @@ jobs:
           if [[ "$RAW_TAG" =~ -(alpha|beta|rc|next|stage) ]]; then
             TAG_ARGS=(--tag next)
           fi
+          STATUS=0
           for pkg in packages/omnibuf packages/omnibuf-node packages/omnibuf-web packages/protoc-gen-omnibuf-es; do
             echo "Packing and publishing $pkg..."
             rm -f "$pkg"/*.tgz
             (cd "$pkg" && pnpm pack)
             tgz=$(ls "$pkg"/*.tgz | head -n 1)
-            npm publish "$tgz" --access public --provenance "${TAG_ARGS[@]}"
+            npm publish "$tgz" --provenance --loglevel verbose "${TAG_ARGS[@]}" || STATUS=1
             rm -f "$tgz"
           done
+          exit $STATUS
