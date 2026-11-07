@@ -33,7 +33,8 @@ function resolveRunnerBinary() {
 }
 
 const runner = resolveRunnerBinary();
-execFileSync(runner, [process.execPath, adapterPath], {
+const runnerFlags = process.argv.slice(2).filter((arg) => arg !== '--');
+execFileSync(runner, [...runnerFlags, process.execPath, adapterPath], {
   cwd: rootDir,
   stdio: 'inherit',
 });
