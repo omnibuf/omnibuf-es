@@ -18,6 +18,7 @@ import {
   base64ToUint8Array,
   decodeBlind,
   decodeSchemaMeta,
+  decodeUTF8,
   decodeVarintAuto,
   decodeVarintBigInt,
   decodeZigZagAuto,
@@ -573,7 +574,7 @@ export function inspectPacket(packet: Uint8Array): PacketInspection {
         if (fieldNumber === 0) {
           previewValue = decodeSchemaMeta(bodySlice);
         } else if (wireType === WireString) {
-          previewValue = BrowserStringCodec.decode(bodySlice, 0, bodySlice.length);
+          previewValue = decodeUTF8(bodySlice);
         } else {
           // Decode this specific field slice in isolation so duplicate/concatenated occurrences
           // show their own slice value rather than only the final merged packet state

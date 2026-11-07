@@ -873,6 +873,13 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
         ].join('\n');
       case ProtoScalarType.INT32:
       case ProtoScalarType.SINT32:
+        return [
+          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+          `${indent}const [arr, ok] = appendSint32ArrBody(prev, body);`,
+          `${indent}if (!ok) throw new Error('omnibuf: invalid sint32 array');`,
+          `${indent}${prop} = arr as any; pos = nextPos;`,
+        ].join('\n');
       case ProtoScalarType.INT64:
       case ProtoScalarType.SINT64:
         return [
@@ -1277,7 +1284,7 @@ function emitOpaqueGetterBody(f: ResolvedField, oneof?: ResolvedOneof): string {
         break;
       case ProtoScalarType.SINT32:
       case ProtoScalarType.INT32:
-        readExpr = `readSintArr(this._raw, ${num})[0] as number[]`;
+        readExpr = `readSint32Arr(this._raw, ${num})[0]`;
         break;
       case ProtoScalarType.SINT64:
       case ProtoScalarType.INT64:
@@ -1317,14 +1324,14 @@ function emitOpaqueGetterBody(f: ResolvedField, oneof?: ResolvedOneof): string {
       : '';
     switch (f.type) {
       case ProtoScalarType.UINT32:
-        return `${oneofPreamble}const [v, ok] = readUint(${srcExpr}, ${num}); return (ok ? v : undefined) as any;`;
+        return `${oneofPreamble}const [v, ok] = readUint32(${srcExpr}, ${num}); return (ok ? v : undefined) as any;`;
       case ProtoScalarType.ENUM:
         return `${oneofPreamble}const [v, ok] = readEnum(${srcExpr}, ${num}); return (ok ? v : undefined) as any;`;
       case ProtoScalarType.UINT64:
         return `${oneofPreamble}const [v, ok] = readUintAuto(${srcExpr}, ${num}); return ok ? v : undefined;`;
       case ProtoScalarType.INT32:
       case ProtoScalarType.SINT32:
-        return `${oneofPreamble}const [v, ok] = readInt(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = readInt32(${srcExpr}, ${num}); return ok ? v : undefined;`;
       case ProtoScalarType.INT64:
       case ProtoScalarType.SINT64:
         return `${oneofPreamble}const [v, ok] = readIntAuto(${srcExpr}, ${num}); return ok ? v : undefined;`;
@@ -1354,14 +1361,14 @@ function emitOpaqueGetterBody(f: ResolvedField, oneof?: ResolvedOneof): string {
   }
   switch (f.type) {
     case ProtoScalarType.UINT32:
-      return `return readUint(this._raw, ${num})[0] as any;`;
+      return `return readUint32(this._raw, ${num})[0] as any;`;
     case ProtoScalarType.ENUM:
       return `return readEnum(this._raw, ${num})[0] as any;`;
     case ProtoScalarType.UINT64:
       return `return readUintAuto(this._raw, ${num})[0];`;
     case ProtoScalarType.INT32:
     case ProtoScalarType.SINT32:
-      return `return readInt(this._raw, ${num})[0];`;
+      return `return readInt32(this._raw, ${num})[0];`;
     case ProtoScalarType.INT64:
     case ProtoScalarType.SINT64:
       return `return readIntAuto(this._raw, ${num})[0];`;
@@ -1413,12 +1420,13 @@ export function generateFileCode(
     'appendEnumArrBody',
     'appendFloat32ArrBody',
     'appendFloat64ArrBody',
+    'appendSint32ArrBody',
     'appendSintArrAutoBody',
     'appendStringArrBody',
     'appendUint32ArrBody',
     'appendUintArrAutoBody',
     'countSubMsgArrElems',
-    'decodeSchemaMeta',
+    '$decodeSchemaMeta',
     'decodeUTF8',
     'decodeVarintAuto',
     'decodeVarintBigInt',
@@ -1436,6 +1444,7 @@ export function generateFileCode(
     'readBytesArr',
     'readEnum',
     'readEnumArr',
+    'readField0SchemaMeta',
     'readFixed32',
     'readFixed32Arr',
     'readFixed64Auto',
@@ -1446,12 +1455,14 @@ export function generateFileCode(
     'readFloat64Arr',
     'readFloat64At',
     'readInt',
+    'readInt32',
     'readIntAuto',
     'readLenSlice',
     'readSfixed32',
     'readSfixed32Arr',
     'readSfixed64Auto',
     'readSfixed64Arr',
+    'readSint32Arr',
     'readSintArr',
     'readString',
     'readStringArr',
@@ -1459,6 +1470,7 @@ export function generateFileCode(
     'readSubMsgMerged',
     'readTypedMap',
     'readUint',
+    'readUint32',
     'readUint32Arr',
     'readUintArr',
     'readUintAuto',
@@ -1792,12 +1804,13 @@ export function generateFileCode(
   lines.push('  appendEnumArrBody,');
   lines.push('  appendFloat32ArrBody,');
   lines.push('  appendFloat64ArrBody,');
+  lines.push('  appendSint32ArrBody,');
   lines.push('  appendSintArrAutoBody,');
   lines.push('  appendStringArrBody,');
   lines.push('  appendUint32ArrBody,');
   lines.push('  appendUintArrAutoBody,');
   lines.push('  countSubMsgArrElems,');
-  lines.push('  decodeSchemaMeta,');
+  lines.push('  decodeSchemaMeta as $decodeSchemaMeta,');
   lines.push('  decodeUTF8,');
   lines.push('  decodeVarintAuto,');
   lines.push('  decodeVarintBigInt,');
@@ -1815,6 +1828,7 @@ export function generateFileCode(
   lines.push('  readBytesArr,');
   lines.push('  readEnum,');
   lines.push('  readEnumArr,');
+  lines.push('  readField0SchemaMeta,');
   lines.push('  readFixed32,');
   lines.push('  readFixed32Arr,');
   lines.push('  readFixed64Auto,');
@@ -1825,12 +1839,14 @@ export function generateFileCode(
   lines.push('  readFloat64Arr,');
   lines.push('  readFloat64At,');
   lines.push('  readInt,');
+  lines.push('  readInt32,');
   lines.push('  readIntAuto,');
   lines.push('  readLenSlice,');
   lines.push('  readSfixed32,');
   lines.push('  readSfixed32Arr,');
   lines.push('  readSfixed64Auto,');
   lines.push('  readSfixed64Arr,');
+  lines.push('  readSint32Arr,');
   lines.push('  readSintArr,');
   lines.push('  readString,');
   lines.push('  readStringArr,');
@@ -1838,6 +1854,7 @@ export function generateFileCode(
   lines.push('  readSubMsgMerged,');
   lines.push('  readTypedMap,');
   lines.push('  readUint,');
+  lines.push('  readUint32,');
   lines.push('  readUint32Arr,');
   lines.push('  readUintArr,');
   lines.push('  readUintAuto,');
@@ -2053,9 +2070,22 @@ export function generateFileCode(
     );
     lines.push('  }');
     lines.push(`  const out: ${msgName} = target ?? new ${msgName}Msg();`);
-    lines.push('  if (target !== undefined && !options?.merge) {');
-    lines.push(`    Object.assign(out, new ${msgName}Msg());`);
-    lines.push('    delete (out as any).$unknown;');
+    lines.push('  if (target !== undefined) {');
+    lines.push(`    if (!(out instanceof ${msgName}Msg)) {`);
+    lines.push(`      Object.setPrototypeOf(out, ${msgName}Msg.prototype);`);
+    lines.push('    }');
+    lines.push('    if (!options?.merge) {');
+    for (const oneof of oneofs) {
+      for (const ofld of oneof.fields) {
+        lines.push(`      delete (out as any).${ofld.localName};`);
+        if (ofld.emitNameAlias) {
+          lines.push(`      delete (out as any).${ofld.name};`);
+        }
+      }
+    }
+    lines.push(`      Object.assign(out, new ${msgName}Msg());`);
+    lines.push('      delete (out as any).$unknown;');
+    lines.push('    }');
     lines.push('  }');
     lines.push('  const n = endPos;');
     lines.push('  let pos = startPos;');
@@ -2091,7 +2121,7 @@ export function generateFileCode(
     lines.push('    if (fieldNum === 0) {');
     lines.push("      if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');");
     lines.push('      const [meta, nextPos] = readLenSlice(buf, pos, 0, n);');
-    lines.push('      decodeSchemaMeta(meta, depth + 1, maxDepth);');
+    lines.push('      $decodeSchemaMeta(meta, depth + 1, maxDepth);');
     lines.push('      pos = nextPos;');
     lines.push('      continue;');
     lines.push('    }');
@@ -2210,6 +2240,7 @@ export function generateFileCode(
 
       lines.push(`  ${f.setterName}(val: ${tsTypeForField(f)}): void {`);
       if (oneofGroup) {
+        lines.push(`    if (val === undefined && this.${f.getterName}() === undefined) return;`);
         for (const ofld of oneofGroup.fields) {
           if (ofld.number !== f.number) {
             lines.push(`    this.${ofld.storageProp} = undefined;`);
@@ -2241,9 +2272,7 @@ export function generateFileCode(
     lines.push('      });');
     lines.push(`      this._dirtyMask = ${zeroMask};`);
     lines.push('    }');
-    lines.push(
-      '    if (options?.selfDescribing && (this._raw.length === 0 || this._raw[0] !== 0x19)) {',
-    );
+    lines.push('    if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {');
     lines.push(
       `      const f0 = encodeField0SchemaMeta(${msgName}Schema.getSchemaMeta(0), Boolean(options.deterministic));`,
     );

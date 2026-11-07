@@ -2086,7 +2086,14 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'sint32[]':
-    case 'int32[]':
+    case 'int32[]': {
+      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const prev: number[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
+      const [arr, ok] = appendEnumArrBody(prev, body);
+      if (!ok) throw new Error(`omnibuf: invalid sint32 array at ${pos}`);
+      out[key] = arr;
+      return nextPos;
+    }
     case 'sint64[]':
     case 'int64[]': {
       const [body, nextPos] = readLenSlice(data, pos, 2);
@@ -2094,8 +2101,7 @@ function decodeCompiledFieldValue(
       const startLen = prev.length;
       const [arr, ok] = appendSintArrAutoBody(prev, body);
       if (!ok) throw new Error(`omnibuf: invalid sint array at ${pos}`);
-      const is64 = f.effectiveType === 'sint64[]' || f.effectiveType === 'int64[]';
-      if (f.useBigInt && is64) {
+      if (f.useBigInt) {
         for (let i = startLen; i < arr.length; i++) {
           arr[i] = BigInt(arr[i]!);
         }
@@ -2344,6 +2350,13 @@ function decodeMapFieldBody(
     out[f.propKey] = targetMap;
   }
 
+  const isKey64 =
+    f.useBigInt &&
+    (f.mapKeyType === 'uint64' ||
+      f.mapKeyType === 'sint64' ||
+      f.mapKeyType === 'int64' ||
+      f.mapKeyType === 'fixed64' ||
+      f.mapKeyType === 'sfixed64');
   const isVal64 =
     f.useBigInt &&
     (f.mapValType === 'uint64' ||
@@ -2388,7 +2401,7 @@ function decodeMapFieldBody(
       return v;
     };
     const vv = convert(isVal64 ? BigInt(rawVv) : rawVv, f.mapValType);
-    const key = convert(kv, f.mapKeyType);
+    const key = convert(isKey64 ? BigInt(kv) : kv, f.mapKeyType);
     p = nextP2;
     if (targetMap instanceof Map) {
       targetMap.set(key, vv);

@@ -26,7 +26,6 @@ import {
   decodeZigZag,
   decodeZigZagAuto,
   decodeZigZagBigInt,
-  fastSkipValue,
   float32FromBits,
   float64FromBits,
   locateField,
@@ -34,6 +33,7 @@ import {
   parseArrayHeader,
   parseMapHeader,
   roundFloat32Shortest,
+  skipValidatedValue,
   skipValue,
 } from './wire.js';
 
@@ -48,8 +48,28 @@ export function readUint(packet: Uint8Array, fieldNum: number): [value: number, 
   return [v, n > 0];
 }
 
+export function readUint32(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
+  const { valSlice, wireType, ok } = locateField(packet, fieldNum);
+  if (!ok || wireType !== WireUint || valSlice.length === 0) return [0, false];
+  const b0 = valSlice[0]!;
+  if ((b0 & 7) !== 0) {
+    const [v, n] = decodeVarint(valSlice, 0);
+    return [v >>> 0, n > 0];
+  }
+  if (b0 !== 0 || valSlice.length < 9) return [0, false];
+  const lo =
+    (valSlice[1]! | (valSlice[2]! << 8) | (valSlice[3]! << 16) | (valSlice[4]! << 24)) >>> 0;
+  return [lo, true];
+}
+
+export function readInt32(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
+  const [v, ok] = readInt(packet, fieldNum);
+  return [v | 0, ok];
+}
+
 export function readEnum(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  return readInt(packet, fieldNum);
+  const [v, ok] = readInt(packet, fieldNum);
+  return [v | 0, ok];
 }
 
 export function readUintBigInt(packet: Uint8Array, fieldNum: number): [value: bigint, ok: boolean] {
@@ -187,10 +207,7 @@ export function readFloat64(packet: Uint8Array, fieldNum: number): [value: numbe
   return [float64FromBits(u64), true];
 }
 
-export function readStringBytes(
-  packet: Uint8Array,
-  fieldNum: number,
-): [bytes: Uint8Array, ok: boolean] {
+function locateStringSlice(packet: Uint8Array, fieldNum: number): [bytes: Uint8Array, ok: boolean] {
   const { valSlice, wireType, ok } = locateField(packet, fieldNum);
   if (!ok || wireType !== WireString || valSlice.length === 0) {
     return [new Uint8Array(0), false];
@@ -210,10 +227,28 @@ export function readStringBytes(
   return [valSlice.subarray(sn, sn + Number(sLen)), true];
 }
 
+export function readStringBytes(
+  packet: Uint8Array,
+  fieldNum: number,
+): [bytes: Uint8Array, ok: boolean] {
+  const [slice, ok] = locateStringSlice(packet, fieldNum);
+  if (!ok) return [new Uint8Array(0), false];
+  try {
+    decodeUTF8(slice);
+    return [slice, true];
+  } catch {
+    return [new Uint8Array(0), false];
+  }
+}
+
 export function readString(packet: Uint8Array, fieldNum: number): [value: string, ok: boolean] {
-  const [b, ok] = readStringBytes(packet, fieldNum);
+  const [b, ok] = locateStringSlice(packet, fieldNum);
   if (!ok) return ['', false];
-  return [decodeUTF8(b), true];
+  try {
+    return [decodeUTF8(b), true];
+  } catch {
+    return ['', false];
+  }
 }
 
 export function readBytes(packet: Uint8Array, fieldNum: number): [value: Uint8Array, ok: boolean] {
@@ -590,6 +625,8 @@ export function appendEnumArrBody(dst: number[], body: Uint8Array): [out: number
   return [dst, true];
 }
 
+export const appendSint32ArrBody = appendEnumArrBody;
+
 export function appendUintArrAutoBody(
   dst: (number | bigint)[],
   body: Uint8Array,
@@ -736,6 +773,8 @@ export function readEnumArr(packet: Uint8Array, fieldNum: number): [value: numbe
     if (!ok) return [[], false];
   }
 }
+
+export const readSint32Arr = readEnumArr;
 
 export function readSintArr(
   packet: Uint8Array,
@@ -1044,6 +1083,8 @@ export function readSubMsgMerged<T>(
       pos += tn;
     }
 
+    if (fnum === 0 && wt !== WireSubMsg) return [null, false];
+
     if (fnum === fieldNum) {
       if (wt !== WireSubMsg || pos >= n) return [null, false];
       let lenNum = 0;
@@ -1343,6 +1384,10 @@ export function activeOneofSlice(
       pos += tn;
     }
 
+    if (fnum === 0 && wt !== WireSubMsg) {
+      return null;
+    }
+
     for (let i = 0; i < oneofSpecs.length; i++) {
       const spec = oneofSpecs[i]!;
       if (spec[0] === fnum && ((spec[1] >>> wt) & 1) !== 0) {
@@ -1354,7 +1399,7 @@ export function activeOneofSlice(
       }
     }
 
-    const nextPos = fastSkipValue(packet, pos, wt);
+    const nextPos = skipValidatedValue(packet, pos, wt);
     if (nextPos < 0) {
       return null;
     }
@@ -1428,6 +1473,9 @@ export function spliceFields(
         }
         const fnum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);
         const wt = tag & 0x0f;
+        if (fnum === 0 && wt !== WireSubMsg) {
+          throw new Error('omnibuf: invalid Field #0 wire type');
+        }
         pos = skipValue(raw, pos, wt);
         const fieldEnd = pos;
 
@@ -1491,6 +1539,9 @@ export function spliceFields(
     if (!width || tag >> 4n > 536870911n) throw new Error('omnibuf: invalid tag while splicing');
     const fnum = Number(tag >> 4n);
     const wt = Number(tag & 15n);
+    if (fnum === 0 && wt !== WireSubMsg) {
+      throw new Error('omnibuf: invalid Field #0 wire type');
+    }
     pos = skipValue(raw, pos + width, wt);
     const fieldEnd = pos;
 

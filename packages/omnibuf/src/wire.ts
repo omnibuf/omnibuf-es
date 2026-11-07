@@ -424,7 +424,10 @@ export function decodeZigZag(u: number | bigint): number {
     return (u >>> 1) ^ -(u & 1);
   }
   const b = decodeZigZagBigInt(u);
-  return Number(b);
+  if (b >= -9007199254740991n && b <= 9007199254740991n) {
+    return Number(b);
+  }
+  return Number(BigInt.asIntN(32, b));
 }
 
 /**
@@ -852,6 +855,53 @@ function isValidMapHeaderAt(body: Uint8Array, start: number, end: number): boole
   return pos <= end && countNum <= (end - pos) >>> 1;
 }
 
+export function skipValidatedValue(b: Uint8Array, pos: number, wireType: number): number {
+  const n = b.length;
+  if (pos < 0 || pos > n) {
+    return -1;
+  }
+  if (wireType === WireArray || wireType === WireMap || wireType === WireExtended) {
+    if (pos >= n) {
+      return -1;
+    }
+    let lenNum = 0;
+    let ln = 0;
+    const lb = b[pos]!;
+    if ((lb & 1) !== 0) {
+      lenNum = lb >>> 1;
+      ln = 1;
+    } else if ((lb & 2) !== 0) {
+      if (pos + 2 > n) {
+        return -1;
+      }
+      lenNum = (lb | (b[pos + 1]! << 8)) >>> 2;
+      ln = 2;
+    } else {
+      const [bLen, lBytes] = decodeVarintBigInt(b, pos);
+      if (lBytes === 0 || bLen < 1n || bLen > BigInt(n - pos - lBytes)) {
+        return -1;
+      }
+      lenNum = Number(bLen);
+      ln = lBytes;
+    }
+    if (lenNum < 1 || pos + ln + lenNum > n) {
+      return -1;
+    }
+    const end = pos + ln + lenNum;
+    if (wireType === WireArray) {
+      if (!isValidArrayHeaderAt(b, pos + ln, end)) {
+        return -1;
+      }
+    } else if (wireType === WireMap) {
+      if (!isValidMapHeaderAt(b, pos + ln, end)) {
+        return -1;
+      }
+    }
+    return end;
+  }
+  return fastSkipValue(b, pos, wireType);
+}
+
 export function skipValue(b: Uint8Array, pos: number, wireType: number): number {
   const n = b.length;
   if (pos < 0 || pos > n) {
@@ -952,12 +1002,16 @@ export function locateField(packet: Uint8Array, targetField: number): LocateFiel
       pos += tn;
     }
 
+    if (fnum === 0 && wt !== WireSubMsg) {
+      return NOT_FOUND;
+    }
+
     if (fnum === targetField) {
       lastPos = pos;
       lastWT = wt;
     }
 
-    const nextPos = fastSkipValue(packet, pos, wt);
+    const nextPos = skipValidatedValue(packet, pos, wt);
     if (nextPos < 0) {
       return NOT_FOUND;
     }
@@ -1018,6 +1072,10 @@ export function nextContainerField(
       fnum = Number(tag >> 4n);
       wt = Number(tag & 0x0fn);
       pos += tn;
+    }
+
+    if (fnum === 0 && wt !== WireSubMsg) {
+      return { body: new Uint8Array(0), nextPos: 0, matched: false, valid: false };
     }
 
     if (fnum === targetField) {

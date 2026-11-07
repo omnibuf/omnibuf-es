@@ -59,15 +59,22 @@ import {
   readFloat64,
   readFloat64Arr,
   readInt,
+  readInt32,
   readIntBigInt,
+  readSint32Arr,
   readSintArr,
   readString,
   readStringArr,
+  readStringBytes,
   readSubMsg,
   readSubMsgArrElem,
+  readSubMsgMerged,
   readUint,
+  readUint32,
   readUint32Arr,
   readUintBigInt,
+  activeOneofSlice,
+  nextContainerField,
   spliceFields,
   subMsgArrLen,
   toBinary,
@@ -798,5 +805,47 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
       () => parseBinaryFileDescriptorSet(new Uint8Array([0x09, 0x01, 0x02, 0x03])),
       /truncated protobuf 64-bit field/,
     );
+  });
+
+  it('enforces Field #0 wire type, UTF-8 in readStringBytes, 32-bit int32[] coercion, bigint map keys, and custom string codecs', () => {
+    // 1. Invalid Field #0 wire type (field 0, wireType 0) rejected by locateField, nextContainerField, readSubMsgMerged, activeOneofSlice, spliceFields
+    const badField0 = new Uint8Array([0x01, 0x03, 0x21, 0x05]);
+    expect(locateField(badField0, 1).ok).toBe(false);
+    expect(nextContainerField(badField0, 0, 1, 12, 0).valid).toBe(false);
+    expect(readSubMsgMerged(badField0, 1, () => ({}))[1]).toBe(false);
+    expect(activeOneofSlice(badField0, 1, [[1, 1]])).toBe(null);
+    assert.throws(() => spliceFields(badField0, 2, 2, () => {}), /invalid Field #0 wire type/);
+
+    // 2. Invalid UTF-8 rejected by readStringBytes and readString
+    const invalidUtf8Pkt = new Uint8Array([0x35, 0x03, 0xff]); // field #1 WireString (10), len=1, byte=0xff
+    expect(readStringBytes(invalidUtf8Pkt, 1)[1]).toBe(false);
+    expect(readString(invalidUtf8Pkt, 1)[1]).toBe(false);
+
+    // 3. 32-bit coercion on int32[]/sint32[] and readUint32/readInt32
+    const Int32ArrSchema = defineMessage<{ vals: number[] }>('test.Int32Arr', {
+      vals: { fieldNum: 1, type: 'int32[]' },
+    });
+    const enc = new Encoder();
+    enc.writeSintArr(1, [0x1_0000_0005n, -0x1_0000_0000n]);
+    enc.writeUint(2, 0x1_0000_0007n);
+    enc.writeInt(3, 0x1_0000_0009n);
+    const coercePkt = enc.finish();
+    const decodedArr = Int32ArrSchema.decode(coercePkt);
+    expect(decodedArr.vals).toEqual([5, 0]);
+    expect(readSint32Arr(coercePkt, 1)).toEqual([[5, 0], true]);
+    expect(readUint32(coercePkt, 2)).toEqual([7, true]);
+    expect(readInt32(coercePkt, 3)).toEqual([9, true]);
+
+    // 4. useBigInt: true map keys decoded into ES Map as bigint
+    const BigKeyMapSchema = defineMessage<{ m: Map<bigint, bigint> }>(
+      'test.BigKeyMap',
+      {
+        m: { fieldNum: 1, type: 'map', mapKey: 'uint64', mapVal: 'uint64', useBigInt: true },
+      },
+      () => ({ m: new Map<bigint, bigint>() }),
+    );
+    const mapBytes = BigKeyMapSchema.encode({ m: new Map([[42n, 99n]]) });
+    const decodedMap = BigKeyMapSchema.decode(mapBytes);
+    expect(decodedMap.m.get(42n)).toBe(99n);
   });
 });
