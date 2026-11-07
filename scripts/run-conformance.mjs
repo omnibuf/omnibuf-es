@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const adapterPath = resolve(rootDir, 'packages/omnibuf-node/dist/bin/conformance-es.js');
 // Keep the runner and testdata/conformance_corpus.json on the same upstream revision.
-const upstreamRevision = '9b0d5a7faf8ba742d5f9fb7df2b8507fbde2bf68';
+const upstreamRevision = 'v0.1.0';
 const runnerDir = resolve(rootDir, 'bin/conformance', upstreamRevision);
 const localRunner = resolve(runnerDir, 'conformance-runner');
 
@@ -22,7 +22,7 @@ function resolveRunnerBinary() {
   mkdirSync(runnerDir, { recursive: true });
   execFileSync(
     'go',
-    ['install', `github.com/sudorandom/omnibuf/cmd/conformance-runner@${upstreamRevision}`],
+    ['install', `github.com/omnibuf/omnibuf-go/cmd/conformance-runner@${upstreamRevision}`],
     {
       cwd: rootDir,
       env: { ...process.env, GOBIN: runnerDir },

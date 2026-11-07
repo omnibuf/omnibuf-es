@@ -1,6 +1,6 @@
 # OmniBuf for TypeScript & JavaScript (`omnibuf-es`)
 
-[![CI](https://github.com/sudorandom/omnibuf-es/actions/workflows/ci.yml/badge.svg)](https://github.com/sudorandom/omnibuf-es/actions/workflows/ci.yml)
+[![CI](https://github.com/omnibuf/omnibuf-es/actions/workflows/ci.yml/badge.svg)](https://github.com/omnibuf/omnibuf-es/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Website](https://img.shields.io/badge/website-omnibuf.com-111111?style=flat&labelColor=111111&color=D4FF33)](https://omnibuf.com/es)
 

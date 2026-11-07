@@ -22,7 +22,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sudorandom/omnibuf-es.git",
+    "url": "git+https://github.com/omnibuf/omnibuf-es.git",
     "directory": "packages/omnibuf-node"
   },
   "publishConfig": {
