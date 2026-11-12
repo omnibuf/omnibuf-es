@@ -35,8 +35,8 @@ export class Encoder {
   private buf: Uint8Array;
   private view: DataView;
   private pos = 0;
-  private readonly lenStack = new Int32Array(MaxNestingDepth * 2 + 8);
-  private readonly elemCountStack = new Int32Array(MaxNestingDepth * 2 + 8);
+  private lenStack = new Int32Array(MaxNestingDepth * 2 + 8);
+  private elemCountStack = new Int32Array(MaxNestingDepth * 2 + 8);
   private depth = 0;
 
   constructor(initialCapacityOrBuffer: number | Uint8Array = 512, initialPos = 0) {
@@ -327,7 +327,13 @@ export class Encoder {
     if (!Number.isInteger(fieldNum) || fieldNum < 0 || fieldNum > 536870911) {
       throw new Error(`omnibuf: invalid field number ${fieldNum}`);
     }
-    const tag = fieldNum * 16 + (wireType & 0x0f);
+    if (!Number.isInteger(wireType) || wireType < 0 || wireType > 15) {
+      throw new Error(`omnibuf: invalid wire type ${wireType}`);
+    }
+    if (fieldNum === 0 && wireType !== WireSubMsg) {
+      throw new Error(`omnibuf: Field #0 requires WireSubMsg (12), got ${wireType}`);
+    }
+    const tag = fieldNum * 16 + wireType;
     if (tag <= 127) {
       this.ensureCapacity(1);
       this.buf[this.pos++] = ((tag << 1) | 1) & 0xff;
@@ -378,6 +384,15 @@ export class Encoder {
    * Reserves a 2-byte Prefix-Varint container length slot on `lenStack`.
    */
   beginContainer(): void {
+    if (this.depth >= this.lenStack.length) {
+      const nextCap = this.lenStack.length * 2;
+      const nextLen = new Int32Array(nextCap);
+      nextLen.set(this.lenStack);
+      this.lenStack = nextLen;
+      const nextElem = new Int32Array(nextCap);
+      nextElem.set(this.elemCountStack);
+      this.elemCountStack = nextElem;
+    }
     this.ensureCapacity(2);
     this.lenStack[this.depth++] = this.pos;
     this.buf[this.pos++] = 0;
@@ -389,6 +404,9 @@ export class Encoder {
    * Expands to 4-byte or 9-byte Prefix-Varint if the container exceeds 16,383 bytes.
    */
   endContainer(): void {
+    if (this.depth <= 0) {
+      throw new Error('omnibuf: endContainer called without matching beginContainer');
+    }
     this.depth--;
     const lenPos = this.lenStack[this.depth]!;
     const subLen = this.pos - (lenPos + 2);
@@ -864,6 +882,9 @@ export class Encoder {
    * Finishes the open `WireArray(WireSubMsg)` and backpatches its element count and total byte length.
    */
   endSubMsgArr(): void {
+    if (this.depth <= 0) {
+      throw new Error('omnibuf: endSubMsgArr called without matching beginSubMsgArr');
+    }
     const lenPos = this.lenStack[this.depth - 1]!;
     const count = this.elemCountStack[this.depth - 1]!;
     this.patchReservedVarint(lenPos + 3, count);

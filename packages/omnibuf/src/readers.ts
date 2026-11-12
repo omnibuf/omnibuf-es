@@ -1515,18 +1515,54 @@ export function activeOneofSlice(
 const sharedSpliceEncoder = new Encoder(8192);
 let sharedSpliceInUse = false;
 
+function extractDirtySetFromBigInt(mask: bigint, maxField: number): Set<number> {
+  const dirtySet = new Set<number>();
+  let remMask = mask & ~1n;
+  let bitBase = 0;
+  while (remMask !== 0n && bitBase <= maxField) {
+    if ((remMask & 0xffffffffffffffffn) === 0n) {
+      let shift = 64;
+      while ((remMask & ((1n << BigInt(shift)) - 1n)) === 0n && bitBase + shift <= maxField) {
+        shift *= 2;
+      }
+      if (shift > 64) shift >>= 1;
+      remMask >>= BigInt(shift);
+      bitBase += shift;
+      continue;
+    }
+    let wordLo = Number(remMask & 0xffffffffn) >>> 0;
+    let wordHi = Number((remMask >> 32n) & 0xffffffffn) >>> 0;
+    while (wordLo !== 0) {
+      const tz = 31 - Math.clz32(wordLo & -wordLo);
+      const fn = bitBase + tz;
+      if (fn >= 1 && fn <= maxField) dirtySet.add(fn);
+      wordLo &= wordLo - 1;
+    }
+    while (wordHi !== 0) {
+      const tz = 31 - Math.clz32(wordHi & -wordHi);
+      const fn = bitBase + 32 + tz;
+      if (fn >= 1 && fn <= maxField) dirtySet.add(fn);
+      wordHi &= wordHi - 1;
+    }
+    remMask >>= 64n;
+    bitBase += 64;
+  }
+  return dirtySet;
+}
+
 /**
  * Splices unmodified contiguous byte ranges from `raw` and invokes `appendDirty`
- * only for fields whose bit is set in `dirtyMask`, avoiding any decoding of untouched fields.
+ * only for fields whose bit is set in `dirtyMask` (or present in a `ReadonlySet<number>`),
+ * avoiding any decoding of untouched fields.
  */
 export function spliceFields(
   raw: Uint8Array,
-  dirtyMask: number | bigint,
+  dirtyMask: number | bigint | ReadonlySet<number>,
   maxField: number,
   appendDirty: (enc: Encoder, fieldNum: number) => void,
   enc?: Encoder,
 ): Uint8Array {
-  if (maxField <= 30) {
+  if (maxField <= 30 && (typeof dirtyMask === 'number' || typeof dirtyMask === 'bigint')) {
     const mask32 = typeof dirtyMask === 'bigint' ? Number(dirtyMask & 0x7fffffffn) : dirtyMask | 0;
     if (mask32 === 0) {
       if (enc !== undefined) {
@@ -1613,8 +1649,15 @@ export function spliceFields(
     }
   }
 
-  const mask = typeof dirtyMask === 'bigint' ? dirtyMask : BigInt(dirtyMask >>> 0);
-  if (mask === 0n) {
+  const dirtySet: ReadonlySet<number> =
+    typeof dirtyMask === 'object' && dirtyMask !== null
+      ? dirtyMask
+      : extractDirtySetFromBigInt(
+          typeof dirtyMask === 'bigint' ? dirtyMask : BigInt(dirtyMask >>> 0),
+          maxField,
+        );
+
+  if (dirtySet.size === 0) {
     if (enc !== undefined) {
       enc.detachIfOverlaps(raw, 0);
       enc.writeRaw(raw);
@@ -1631,32 +1674,44 @@ export function spliceFields(
   const n = raw.length;
   let pos = 0;
   let cleanStart = 0;
-  let emitted = 0n;
+  const emittedSet = new Set<number>();
 
   while (pos < n) {
     const fieldStart = pos;
-    const [tag, width] = decodeVarintBigInt(raw, pos);
-    if (!width || tag >> 4n > 536870911n) throw new Error('omnibuf: invalid tag while splicing');
-    const fnum = Number(tag >> 4n);
-    const wt = Number(tag & 15n);
+    let tag = 0;
+    const b0 = raw[pos]!;
+    if ((b0 & 1) !== 0) {
+      tag = b0 >>> 1;
+      pos += 1;
+    } else if ((b0 & 2) !== 0) {
+      if (pos + 2 > n) throw new Error('omnibuf: invalid tag while splicing');
+      tag = ((b0 | (raw[pos + 1]! << 8)) >>> 2) >>> 0;
+      pos += 2;
+    } else {
+      const [t64, width] = decodeVarintBigInt(raw, pos);
+      if (!width || t64 >> 4n > 536870911n) throw new Error('omnibuf: invalid tag while splicing');
+      tag = Number(t64);
+      pos += width;
+    }
+    const fnum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);
+    const wt = tag & 0x0f;
     if (fnum === 0 && wt !== WireSubMsg) {
       throw new Error('omnibuf: invalid Field #0 wire type');
     }
-    pos = skipValue(raw, pos + width, wt);
+    pos = skipValue(raw, pos, wt);
     const fieldEnd = pos;
 
-    const bit = fnum >= 1 && fnum <= maxField ? 1n << BigInt(fnum) : 0n;
-    if ((mask & bit) !== 0n) {
+    if (fnum >= 1 && fnum <= maxField && dirtySet.has(fnum)) {
       if (cleanStart < fieldStart) {
         activeEnc.writeRaw(raw.subarray(cleanStart, fieldStart));
       }
-      if ((emitted & bit) === 0n) {
+      if (!emittedSet.has(fnum)) {
         appendDirty(activeEnc, fnum);
-        emitted |= bit;
+        emittedSet.add(fnum);
       }
       cleanStart = fieldEnd;
-    } else {
-      emitted |= bit;
+    } else if (fnum >= 1) {
+      emittedSet.add(fnum);
     }
   }
 
@@ -1664,13 +1719,17 @@ export function spliceFields(
     activeEnc.writeRaw(raw.subarray(cleanStart, n));
   }
 
-  const rem = mask & ~emitted;
-  if (rem !== 0n) {
-    for (let fnum = 1; fnum <= maxField; fnum++) {
-      if ((rem & (1n << BigInt(fnum))) !== 0n) {
-        appendDirty(activeEnc, fnum);
-      }
+  const remaining: number[] = [];
+  for (const fn of dirtySet) {
+    if (fn >= 1 && fn <= maxField && !emittedSet.has(fn)) {
+      remaining.push(fn);
     }
+  }
+  if (remaining.length > 1) {
+    remaining.sort((a, b) => a - b);
+  }
+  for (let i = 0; i < remaining.length; i++) {
+    appendDirty(activeEnc, remaining[i]!);
   }
 
   return activeEnc.finish();

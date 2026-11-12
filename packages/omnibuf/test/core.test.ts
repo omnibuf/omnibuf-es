@@ -37,6 +37,7 @@ import {
   decodeZigZag,
   decodeZigZagBigInt,
   defineMessage,
+  encodeField0SchemaMeta,
   encodeZigZag,
   encodeZigZagNumber,
   equals,
@@ -46,6 +47,7 @@ import {
   marshalDeterministic,
   marshalProto,
   mergeFromBinary,
+  mergeSchemaMeta,
   omnibufField,
   omnibufMessage,
   parseBinaryFileDescriptorSet,
@@ -1116,5 +1118,71 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     expect(Object.getPrototypeOf(regCreated)).toBe(Object.prototype);
     expect(Object.getOwnPropertyDescriptor(regCreated, '__proto__')?.value).toBe('');
     expect(Object.getOwnPropertyDescriptor(regCreated, 'constructor')?.value).toBe('');
+  });
+
+  it('grows Encoder container stacks, rejects invalid Field #0 tags/keys, short-circuits empty mergeSchemaMeta, and splices max field numbers in O(1)', () => {
+    // 1. Deep container nesting (>80 levels) dynamically grows lenStack and elemCountStack
+    const deepEnc = new Encoder();
+    const levels = 90;
+    for (let i = 0; i < levels; i++) {
+      deepEnc.beginSubMsg(1);
+    }
+    deepEnc.writeUint(1, 42);
+    for (let i = 0; i < levels; i++) {
+      deepEnc.endSubMsg();
+    }
+    const deepPkt = deepEnc.finish();
+    expect(deepPkt.length > levels * 3).toBe(true);
+
+    // 2. Encoder.writeTag rejects non-WireSubMsg on Field #0 and out-of-range wire types
+    const tagEnc = new Encoder();
+    assert.throws(() => tagEnc.writeTag(0, WireUint), /Field #0/);
+    assert.throws(() => tagEnc.writeTag(1, 16), /wire type/);
+    assert.throws(() => tagEnc.writeTag(1, -1), /wire type/);
+
+    // 3. encodeField0SchemaMeta rejects invalid field numbers in fields/children maps
+    assert.throws(() => encodeField0SchemaMeta({ fields: { 0: 'bad' } }), /field number/);
+    assert.throws(
+      () => encodeField0SchemaMeta({ children: { 0: { typeName: 'Bad' } } }),
+      /field number/,
+    );
+
+    // 4. mergeSchemaMeta short-circuits empty SchemaMeta overlays without cloning base maps
+    const baseFields: Record<number, string> = {};
+    for (let i = 1; i <= 500; i++) baseFields[i] = `f_${i}`;
+    const baseMeta = { typeName: 'Big', fields: baseFields };
+    expect(mergeSchemaMeta(baseMeta, {})).toBe(baseMeta);
+
+    // 10,000 empty Field #0 blocks after a 500-field Field #0 block must decodeBlind in < 150ms
+    const f0Initial = encodeField0SchemaMeta(baseMeta);
+    const emptyCount = 10000;
+    const spamPkt = new Uint8Array(f0Initial.length + emptyCount * 2 + 2);
+    spamPkt.set(f0Initial, 0);
+    for (let i = 0; i < emptyCount; i++) {
+      spamPkt[f0Initial.length + i * 2] = 0x19;
+      spamPkt[f0Initial.length + i * 2 + 1] = 0x01;
+    }
+    spamPkt[spamPkt.length - 2] = 0x21; // field #1 WireUint
+    spamPkt[spamPkt.length - 1] = 0x0f; // value 7
+    const t0 = performance.now();
+    const blindOut = decodeBlind(spamPkt);
+    expect(performance.now() - t0 < 250).toBe(true);
+    expect(blindOut.f_1).toBe(7);
+
+    // 5. spliceFields supports Set<number> dirty sets at max field number 536870911 and sparse bigint masks in O(1)
+    const highEnc = new Encoder();
+    highEnc.writeUint(1, 10);
+    highEnc.writeString(536870911, 'old-max');
+    const highRaw = highEnc.finish();
+    const splicedMax = spliceFields(highRaw, new Set([536870911]), 536870911, (e, fn) => {
+      if (fn === 536870911) e.writeString(536870911, 'new-max');
+    });
+    expect(readUint(splicedMax, 1)).toEqual([10, true]);
+    expect(readString(splicedMax, 536870911)).toEqual(['new-max', true]);
+
+    const splicedBigInt = spliceFields(highRaw, 1n << 50000n, 50000, (e, fn) => {
+      if (fn === 50000) e.writeUint(50000, 999);
+    });
+    expect(readUint(splicedBigInt, 50000)).toEqual([999, true]);
   });
 });

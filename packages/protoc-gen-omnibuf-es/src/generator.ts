@@ -2196,11 +2196,14 @@ export function generateFileCode(
     lines.push('});');
     lines.push('');
 
-    // 6. Lazy Opaque<Message> View with dirty bitmask & spliceFields
-    const zeroMask = use32Mask ? '0' : '0n';
+    // 6. Lazy Opaque<Message> View with dirty bitmask (<=30) or dirty Set (>30) & spliceFields
     lines.push(`export class Opaque${msgName} {`);
     lines.push('  private _raw: Uint8Array;');
-    lines.push(`  private _dirtyMask = ${zeroMask};`);
+    if (use32Mask) {
+      lines.push('  private _dirtyMask = 0;');
+    } else {
+      lines.push('  private _dirtySet: Set<number> | null = null;');
+    }
     for (const f of fields) {
       lines.push(`  private ${f.storageProp}?: ${tsTypeForField(f)};`);
     }
@@ -2215,16 +2218,14 @@ export function generateFileCode(
     lines.push('');
 
     for (const f of fields) {
-      const bit = use32Mask ? `1 << ${f.number}` : `1n << ${f.number}n`;
       const oneofGroup = f.oneofLocalName ? oneofByLocalName.get(f.oneofLocalName) : undefined;
-      const dirtyMaskExpr = oneofGroup
-        ? oneofGroup.fields
-            .map((of) => (use32Mask ? `(1 << ${of.number})` : `(1n << ${of.number}n)`))
-            .join(' | ')
-        : bit;
 
       lines.push(`  ${f.getterName}(): ${tsTypeForField(f)} {`);
-      lines.push(`    if ((this._dirtyMask & (${bit})) !== ${zeroMask}) {`);
+      if (use32Mask) {
+        lines.push(`    if ((this._dirtyMask & (1 << ${f.number})) !== 0) {`);
+      } else {
+        lines.push(`    if (this._dirtySet !== null && this._dirtySet.has(${f.number})) {`);
+      }
       lines.push(`      return this.${f.storageProp}!;`);
       lines.push('    }');
       lines.push(`    ${emitOpaqueGetterBody(f, oneofGroup)}`);
@@ -2248,16 +2249,37 @@ export function generateFileCode(
         }
       }
       lines.push(`    this.${f.storageProp} = val;`);
-      lines.push(`    this._dirtyMask |= (${dirtyMaskExpr});`);
+      if (use32Mask) {
+        const dirtyMaskExpr = oneofGroup
+          ? oneofGroup.fields.map((of) => `(1 << ${of.number})`).join(' | ')
+          : `1 << ${f.number}`;
+        lines.push(`    this._dirtyMask |= (${dirtyMaskExpr});`);
+      } else {
+        lines.push('    if (!this._dirtySet) this._dirtySet = new Set<number>();');
+        if (oneofGroup) {
+          for (const ofld of oneofGroup.fields) {
+            lines.push(`    this._dirtySet.add(${ofld.number});`);
+          }
+        } else {
+          lines.push(`    this._dirtySet.add(${f.number});`);
+        }
+      }
       lines.push('  }');
       lines.push('');
     }
 
     lines.push('  marshal(options?: MarshalOptions): Uint8Array {');
-    lines.push(`    if (this._dirtyMask !== ${zeroMask}) {`);
-    lines.push(
-      `      this._raw = spliceFields(this._raw, this._dirtyMask, ${maxField}, (enc, fnum) => {`,
-    );
+    if (use32Mask) {
+      lines.push('    if (this._dirtyMask !== 0) {');
+      lines.push(
+        `      this._raw = spliceFields(this._raw, this._dirtyMask, ${maxField}, (enc, fnum) => {`,
+      );
+    } else {
+      lines.push('    if (this._dirtySet !== null && this._dirtySet.size > 0) {');
+      lines.push(
+        `      this._raw = spliceFields(this._raw, this._dirtySet, ${maxField}, (enc, fnum) => {`,
+      );
+    }
     lines.push('        switch (fnum) {');
     for (const f of fields) {
       lines.push(`          case ${f.number}: {`);
@@ -2270,7 +2292,11 @@ export function generateFileCode(
     }
     lines.push('        }');
     lines.push('      });');
-    lines.push(`      this._dirtyMask = ${zeroMask};`);
+    if (use32Mask) {
+      lines.push('      this._dirtyMask = 0;');
+    } else {
+      lines.push('      this._dirtySet = null;');
+    }
     lines.push('    }');
     lines.push('    if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {');
     lines.push(

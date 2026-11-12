@@ -17,7 +17,7 @@ import {
   appendUint32ArrBody,
   appendUintArrAutoBody,
   countSubMsgArrElems,
-  decodeSchemaMeta,
+  decodeSchemaMeta as $decodeSchemaMeta,
   decodeUTF8,
   decodeVarintAuto,
   decodeVarintBigInt,
@@ -292,7 +292,7 @@ export function decodeConformanceRequest(
     if (fieldNum === 0) {
       if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');
       const [meta, nextPos] = readLenSlice(buf, pos, 0, n);
-      decodeSchemaMeta(meta, depth + 1, maxDepth);
+      $decodeSchemaMeta(meta, depth + 1, maxDepth);
       pos = nextPos;
       continue;
     }
@@ -1025,7 +1025,7 @@ export function decodeConformanceResponse(
     if (fieldNum === 0) {
       if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');
       const [meta, nextPos] = readLenSlice(buf, pos, 0, n);
-      decodeSchemaMeta(meta, depth + 1, maxDepth);
+      $decodeSchemaMeta(meta, depth + 1, maxDepth);
       pos = nextPos;
       continue;
     }
@@ -1551,7 +1551,7 @@ export function decodeAllTypesSubMsg(
     if (fieldNum === 0) {
       if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');
       const [meta, nextPos] = readLenSlice(buf, pos, 0, n);
-      decodeSchemaMeta(meta, depth + 1, maxDepth);
+      $decodeSchemaMeta(meta, depth + 1, maxDepth);
       pos = nextPos;
       continue;
     }
@@ -2170,7 +2170,7 @@ export function decodeTestAllTypes(
     if (fieldNum === 0) {
       if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');
       const [meta, nextPos] = readLenSlice(buf, pos, 0, n);
-      decodeSchemaMeta(meta, depth + 1, maxDepth);
+      $decodeSchemaMeta(meta, depth + 1, maxDepth);
       pos = nextPos;
       continue;
     }

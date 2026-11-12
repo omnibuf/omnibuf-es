@@ -112,6 +112,32 @@ describe('@omnibuf/protoc-gen-omnibuf-es - Code Generator', () => {
     expect(confFile).toBeDefined();
     expect(confFile!.content).toContain('export interface TestAllTypes');
     expect(confFile!.content).toContain('export class OpaqueTestAllTypes');
+
+    const highFiles = generateFromDescriptorSet({
+      file: [
+        {
+          name: 'high.proto',
+          package: 'omnibuf.high',
+          syntax: 'proto3',
+          messageType: [
+            {
+              name: 'ExtremeFieldMsg',
+              field: [
+                { name: 'low', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' },
+                {
+                  name: 'extreme',
+                  number: 536870911,
+                  label: 'LABEL_OPTIONAL',
+                  type: 'TYPE_STRING',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    assert.equal(highFiles[0]!.content.includes('1n << 536870911n'), false);
+    expect(highFiles[0]!.content).toContain('_dirtySet');
   });
 });
 
@@ -298,6 +324,11 @@ it('resolves nested messages, colliding short names, cross-file imports, enums, 
                   oneofIndex: 1,
                   proto3Optional: true,
                 },
+                {
+                  name: 'extreme_tag',
+                  number: 536870911,
+                  type: 'TYPE_STRING',
+                },
               ],
               nestedType: [
                 {
@@ -359,6 +390,10 @@ it('resolves nested messages, colliding short names, cross-file imports, enums, 
     assert.equal(opaque.getNumChoice(), -42);
     assert.equal(opaque.getStrChoice(), undefined);
     assert.equal(opaque.getOptScore(), 0);
+    opaque.setExtremeTag('max-field-536870911');
+    const updatedExtreme = svcMod.decodeSecondOuter(opaque.marshal());
+    assert.equal(updatedExtreme.extremeTag, 'max-field-536870911');
+    assert.equal(updatedExtreme.localInner.label, 'nested-second');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

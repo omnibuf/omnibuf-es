@@ -129,6 +129,11 @@ function writeSchemaMetaBody(
   if (meta.fields) {
     const keys = Object.keys(meta.fields).map(Number);
     if (keys.length > 0) {
+      for (const k of keys) {
+        if (!Number.isInteger(k) || k < 1 || k > 536870911) {
+          throw new Error(`omnibuf: invalid SchemaMeta field number ${k}`);
+        }
+      }
       if (deterministic) {
         keys.sort((a, b) => a - b);
       }
@@ -149,6 +154,11 @@ function writeSchemaMetaBody(
   if (meta.children) {
     const keys = Object.keys(meta.children).map(Number);
     if (keys.length > 0) {
+      for (const k of keys) {
+        if (!Number.isInteger(k) || k < 1 || k > 536870911) {
+          throw new Error(`omnibuf: invalid SchemaMeta child field number ${k}`);
+        }
+      }
       if (deterministic) {
         keys.sort((a, b) => a - b);
       }
@@ -197,6 +207,39 @@ export function encodeField0SchemaMeta(
   return enc.finish();
 }
 
+function hasAnyOwnKey(obj: Record<number, unknown> | undefined): boolean {
+  if (!obj) return false;
+  for (const _ in obj) {
+    if (Object.hasOwn(obj, _)) return true;
+  }
+  return false;
+}
+
+function mergeSchemaMetaInPlace(target: SchemaMeta, next: SchemaMeta): SchemaMeta {
+  if (next.typeName) {
+    target.typeName = next.typeName;
+  }
+  if (next.fields) {
+    if (!target.fields) {
+      target.fields = next.fields;
+    } else {
+      Object.assign(target.fields, next.fields);
+    }
+  }
+  if (next.children) {
+    if (!target.children) {
+      target.children = next.children;
+    } else {
+      for (const [k, c] of Object.entries(next.children)) {
+        const numK = Number(k);
+        const existing = target.children[numK];
+        target.children[numK] = existing ? mergeSchemaMetaInPlace(existing, c) : c;
+      }
+    }
+  }
+  return target;
+}
+
 /**
  * Merges two `SchemaMeta` definitions (later fields and children override/extend earlier ones).
  */
@@ -205,31 +248,36 @@ export function mergeSchemaMeta(
   next: SchemaMeta | null | undefined,
 ): SchemaMeta | null {
   if (!next) return base ?? null;
+  const nextHasFields = hasAnyOwnKey(next.fields);
+  const nextHasChildren = hasAnyOwnKey(next.children);
   if (!base) {
     const cp: SchemaMeta = {};
     if (next.typeName) cp.typeName = next.typeName;
-    if (next.fields && Object.keys(next.fields).length > 0) {
+    if (nextHasFields) {
       cp.fields = { ...next.fields };
     }
-    if (next.children && Object.keys(next.children).length > 0) {
+    if (nextHasChildren) {
       cp.children = {};
-      for (const [k, c] of Object.entries(next.children)) {
+      for (const [k, c] of Object.entries(next.children!)) {
         const mergedChild = mergeSchemaMeta(null, c);
         if (mergedChild) cp.children[Number(k)] = mergedChild;
       }
     }
     return cp;
   }
+  if (!next.typeName && !nextHasFields && !nextHasChildren) {
+    return base;
+  }
   const out: SchemaMeta = {
     typeName: next.typeName || base.typeName,
   };
-  if (base.fields || next.fields) {
+  if (base.fields || nextHasFields) {
     out.fields = { ...(base.fields ?? {}), ...(next.fields ?? {}) };
   }
-  if (base.children || next.children) {
+  if (base.children || nextHasChildren) {
     out.children = { ...(base.children ?? {}) };
-    if (next.children) {
-      for (const [k, c] of Object.entries(next.children)) {
+    if (nextHasChildren) {
+      for (const [k, c] of Object.entries(next.children!)) {
         const numK = Number(k);
         const mergedChild = mergeSchemaMeta(out.children[numK], c);
         if (mergedChild) out.children[numK] = mergedChild;
@@ -353,7 +401,7 @@ export function readField0SchemaMeta(packet: Uint8Array): [meta: SchemaMeta | nu
     pos = nextPos;
     try {
       const m = decodeSchemaMeta(body, 0);
-      merged = mergeSchemaMeta(merged, m);
+      merged = merged ? mergeSchemaMetaInPlace(merged, m) : m;
     } catch {
       return [null, false];
     }
@@ -458,7 +506,7 @@ function decodeBlindWithSchema(
       const [f0Body, nextPos] = readLenSlice(data, scanPos, 0);
       scanPos = nextPos;
       const parsedMeta = decodeSchemaMeta(f0Body, depth + 1);
-      localSchema = mergeSchemaMeta(localSchema, parsedMeta);
+      localSchema = localSchema ? mergeSchemaMetaInPlace(localSchema, parsedMeta) : parsedMeta;
       continue;
     }
     scanPos = skipValue(data, scanPos, wt);
