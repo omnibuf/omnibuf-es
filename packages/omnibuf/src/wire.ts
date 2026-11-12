@@ -114,7 +114,7 @@ export function parseArrayHeader(
     if (remaining % width !== 0 || countNum !== remaining / width) {
       return [0, 0, 0, false];
     }
-  } else if (countNum > remaining) {
+  } else if (countNum === 0 ? remaining !== 0 : countNum > remaining) {
     return [0, 0, 0, false];
   }
   return [elemType, countNum, pos, true];
@@ -168,7 +168,7 @@ export function parseMapHeader(
     cn = cBytes;
   }
   const pos = start + 2 + cn;
-  if (pos > end || countNum > (end - pos) >>> 1) {
+  if (pos > end || (countNum === 0 ? end !== pos : countNum > (end - pos) >>> 1)) {
     return [0, 0, 0, 0, false];
   }
   return [keyWT, valWT, countNum, pos, true];
@@ -815,7 +815,7 @@ function isValidArrayHeaderAt(body: Uint8Array, start: number, end: number): boo
     case WireSfixed64:
       return (remaining & 7) === 0 && countNum === remaining >>> 3;
     default:
-      return countNum <= remaining;
+      return countNum === 0 ? remaining === 0 : countNum <= remaining;
   }
 }
 
@@ -852,7 +852,7 @@ function isValidMapHeaderAt(body: Uint8Array, start: number, end: number): boole
     cn = cBytes;
   }
   const pos = start + 2 + cn;
-  return pos <= end && countNum <= (end - pos) >>> 1;
+  return pos <= end && (countNum === 0 ? end === pos : countNum <= (end - pos) >>> 1);
 }
 
 export function skipValidatedValue(b: Uint8Array, pos: number, wireType: number): number {

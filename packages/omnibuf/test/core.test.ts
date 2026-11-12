@@ -997,5 +997,27 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     expect(parseArrayHeader(paddedArrHeader, 0, 3)[3]).toBe(false);
     const paddedMapHeader = new Uint8Array([WireString, WireUint, 0x04, 0x00, 0x00, 0x00]); // 4B count=0 (6 bytes total)
     expect(parseMapHeader(paddedMapHeader, 0, 4)[4]).toBe(false);
+
+    // 8. Empty variable-width WireArray and WireMap (count=0) must reject trailing bytes across headers and scanners
+    const emptyArrWithTrailing = new Uint8Array([WireString, 0x01, 0xaa]); // count=0 + 1 trailing byte
+    expect(parseArrayHeader(emptyArrWithTrailing)[3]).toBe(false);
+    const emptyMapWithTrailing = new Uint8Array([WireString, WireUint, 0x01, 0xaa]); // count=0 + 1 trailing byte
+    expect(parseMapHeader(emptyMapWithTrailing)[4]).toBe(false);
+    // Unknown WireArray/WireMap with count=0 + trailing byte followed by field #1 uint=5 must be rejected by locateField / spliceFields
+    const badEmptyArrPkt = new Uint8Array([0x9b, 0x07, WireString, 0x01, 0xaa, 0x21, 0x0b]);
+    expect(locateField(badEmptyArrPkt, 1).ok).toBe(false);
+    assert.throws(() => spliceFields(badEmptyArrPkt, 2, 2, () => {}), /invalid array header/);
+    const badEmptyMapPkt = new Uint8Array([
+      0x9d,
+      0x09,
+      WireString,
+      WireUint,
+      0x01,
+      0xaa,
+      0x21,
+      0x0b,
+    ]);
+    expect(locateField(badEmptyMapPkt, 1).ok).toBe(false);
+    assert.throws(() => spliceFields(badEmptyMapPkt, 2, 2, () => {}), /invalid map header/);
   });
 });
