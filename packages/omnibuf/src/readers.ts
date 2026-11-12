@@ -24,6 +24,7 @@ import {
   decodeVarintAuto,
   decodeVarintBigInt,
   decodeZigZag,
+  decodeZigZag32,
   decodeZigZagAuto,
   decodeZigZagBigInt,
   float32FromBits,
@@ -63,14 +64,14 @@ export function readUint32(packet: Uint8Array, fieldNum: number): [value: number
 }
 
 export function readInt32(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const [v, ok] = readInt(packet, fieldNum);
-  return [v | 0, ok];
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint);
+  if (!ok) return [0, false];
+  const [u, n] = decodeVarintBigInt(valSlice, 0);
+  if (n === 0) return [0, false];
+  return [decodeZigZag32(u), true];
 }
 
-export function readEnum(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const [v, ok] = readInt(packet, fieldNum);
-  return [v | 0, ok];
-}
+export const readEnum = readInt32;
 
 export function readUintBigInt(packet: Uint8Array, fieldNum: number): [value: bigint, ok: boolean] {
   const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint);
@@ -659,7 +660,7 @@ export function appendEnumArrBody(dst: number[], body: Uint8Array): [out: number
     const [v, vn] = decodeVarintBigInt(body, p);
     if (vn === 0) return [[], false];
     p += vn;
-    dst.push(decodeZigZag(v) | 0);
+    dst.push(decodeZigZag32(v));
   }
   if (p !== body.length) {
     return [[], false];

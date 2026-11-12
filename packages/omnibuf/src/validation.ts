@@ -58,7 +58,7 @@ function validateContainerEntry(
     return nextP;
   }
   if (wt === WireArray || wt === WireMap) {
-    return validateValue(body, p, wt, depth + 1, limit);
+    return validateValue(body, p, wt, depth, limit);
   }
   return skipValue(body, p, wt);
 }
@@ -78,6 +78,7 @@ export function validateValue(
     return end;
   }
   if (wt === WireArray) {
+    if (depth + 1 > limit) throw new Error(`omnibuf: nesting depth exceeds ${limit}`);
     const [body, end] = readLenSlice(data, pos, 2);
     const [elemType, count, startP, ok] = parseArrayHeader(body);
     if (!ok) {
@@ -109,12 +110,13 @@ export function validateValue(
       return end;
     }
     for (let i = 0; i < count; i++) {
-      p = validateContainerEntry(body, p, elemType, depth, limit);
+      p = validateContainerEntry(body, p, elemType, depth + 1, limit);
     }
     if (p !== body.length) throw new Error('omnibuf: trailing WireArray bytes');
     return end;
   }
   if (wt === WireMap) {
+    if (depth + 1 > limit) throw new Error(`omnibuf: nesting depth exceeds ${limit}`);
     const [body, end] = readLenSlice(data, pos, 3);
     const key = body[0]!;
     const value = body[1]!;
@@ -125,8 +127,8 @@ export function validateValue(
       throw new Error('omnibuf: invalid WireMap count');
     }
     for (let i = 0; i < Number(count); i++) {
-      p = validateContainerEntry(body, p, key, depth, limit);
-      p = validateContainerEntry(body, p, value, depth, limit);
+      p = validateContainerEntry(body, p, key, depth + 1, limit);
+      p = validateContainerEntry(body, p, value, depth + 1, limit);
     }
     if (p !== body.length) throw new Error('omnibuf: trailing WireMap bytes');
     return end;

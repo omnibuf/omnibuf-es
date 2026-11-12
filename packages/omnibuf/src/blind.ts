@@ -290,7 +290,7 @@ export function mergeSchemaMeta(
 export function decodeSchemaMeta(data: Uint8Array, depth = 0, limit = MaxNestingDepth): SchemaMeta {
   if (depth > limit) {
     throw new Error(
-      `omnibuf: SchemaMeta nesting depth ${depth} exceeds MaxNestingDepth (${MaxNestingDepth})`,
+      `omnibuf: SchemaMeta nesting depth ${depth} exceeds MaxNestingDepth (${limit})`,
     );
   }
   const meta: SchemaMeta = {};
@@ -320,6 +320,11 @@ export function decodeSchemaMeta(data: Uint8Array, depth = 0, limit = MaxNesting
         if (wt !== WireMap) {
           throw new Error(`omnibuf: SchemaMeta field #2 (fields) must be WireMap, got ${wt}`);
         }
+        if (depth + 1 > limit) {
+          throw new Error(
+            `omnibuf: SchemaMeta fields map nesting depth ${depth + 1} exceeds MaxNestingDepth (${limit})`,
+          );
+        }
         const [body, nextPos] = readLenSlice(data, pos, 3);
         pos = nextPos;
         const [keyWT, valWT, c, startP, ok] = parseMapHeader(body);
@@ -348,6 +353,11 @@ export function decodeSchemaMeta(data: Uint8Array, depth = 0, limit = MaxNesting
       case 3: {
         if (wt !== WireMap) {
           throw new Error(`omnibuf: SchemaMeta field #3 (children) must be WireMap, got ${wt}`);
+        }
+        if (depth + 1 > limit) {
+          throw new Error(
+            `omnibuf: SchemaMeta children map nesting depth ${depth + 1} exceeds MaxNestingDepth (${limit})`,
+          );
         }
         const [body, nextPos] = readLenSlice(data, pos, 3);
         pos = nextPos;
@@ -605,7 +615,7 @@ function decodeBlindWithSchema(
         }
         const childSchema = blindChildSchema(activeSchema, fieldNum);
         const prev = Array.isArray(out[name]) ? (out[name] as unknown[]) : [];
-        out[name] = decodeArrayBodyBlind(prev, body, childSchema, depth, options);
+        out[name] = decodeArrayBodyBlind(prev, body, childSchema, depth + 1, options);
         pos = nextPos;
         break;
       }
@@ -623,7 +633,7 @@ function decodeBlindWithSchema(
           prev && typeof prev === 'object' && !Array.isArray(prev) && !(prev instanceof Uint8Array)
             ? (prev as Record<string, unknown>)
             : {};
-        out[name] = decodeMapBodyBlind(m, body, childSchema, depth, options);
+        out[name] = decodeMapBodyBlind(m, body, childSchema, depth + 1, options);
         pos = nextPos;
         break;
       }
@@ -1215,6 +1225,7 @@ export function stringifyBlindJSON(
         if (v === undefined) continue;
         parts.push(`${nextIndent}${JSON.stringify(k)}: ${serialize(v, nextIndent)}`);
       }
+      if (parts.length === 0) return '{}';
       return `{\n${parts.join(',\n')}\n${currentIndent}}`;
     }
     return 'null';

@@ -63,6 +63,7 @@ export interface FileDescriptorProtoJSON {
   dependency?: string[];
   messageType?: DescriptorProtoJSON[];
   enumType?: EnumDescriptorProtoJSON[];
+  extension?: FieldDescriptorProtoJSON[];
   syntax?: string;
 }
 
@@ -78,6 +79,7 @@ export interface OneofDescriptorProtoJSON {
 export interface DescriptorProtoJSON {
   name?: string;
   field?: FieldDescriptorProtoJSON[];
+  extension?: FieldDescriptorProtoJSON[];
   nestedType?: DescriptorProtoJSON[];
   enumType?: EnumDescriptorProtoJSON[];
   oneofDecl?: OneofDescriptorProtoJSON[];
@@ -212,6 +214,8 @@ function scalarTypeFromProto(protoType: number): {
       return { scalar: 'string', array: 'string[]' };
     case ProtoScalarType.BYTES:
       return { scalar: 'bytes', array: 'bytes[]' };
+    case ProtoScalarType.GROUP:
+      throw new Error('omnibuf: proto2 groups (TYPE_GROUP) are not supported');
     default:
       throw new Error(`omnibuf: unsupported scalar type ${protoType}`);
   }
@@ -423,20 +427,31 @@ export class DescriptorRegistry {
 
   constructor(fds: FileDescriptorSetJSON, options?: { useBigInt?: boolean }) {
     const rawMap = new Map<string, DescriptorProtoJSON>();
+    const syntaxMap = new Map<string, string>();
     const useBigInt = options?.useBigInt ?? false;
 
-    const registerRecursive = (prefix: string, desc: DescriptorProtoJSON) => {
+    const registerRecursive = (prefix: string, desc: DescriptorProtoJSON, syntax: string) => {
+      if ((desc.extension?.length ?? 0) > 0) {
+        throw new Error(`omnibuf: proto2 extensions are not supported (${desc.name ?? prefix})`);
+      }
       const fullName = prefix ? `${prefix}.${desc.name ?? ''}` : (desc.name ?? '');
       rawMap.set(fullName, desc);
+      syntaxMap.set(fullName, syntax);
       for (const nested of desc.nestedType ?? []) {
-        registerRecursive(fullName, nested);
+        registerRecursive(fullName, nested, syntax);
       }
     };
 
     for (const file of fds.file ?? []) {
+      if ((file.extension?.length ?? 0) > 0) {
+        throw new Error(
+          `omnibuf: proto2 extensions are not supported (${file.name ?? 'file.proto'})`,
+        );
+      }
       const pkg = file.package ?? '';
+      const syntax = file.syntax ?? '';
       for (const msg of file.messageType ?? []) {
-        registerRecursive(pkg, msg);
+        registerRecursive(pkg, msg, syntax);
       }
     }
 
@@ -447,11 +462,17 @@ export class DescriptorRegistry {
 
       building.add(fullName);
       const specs: Record<string, FieldSpec> = Object.create(null);
+      const isProto2 = syntaxMap.get(fullName) === 'proto2';
 
       for (const f of desc.field ?? []) {
         const num = f.number ?? 0;
         const protoName = f.name ?? `field_${num}`;
         const typeNum = parseFieldDescriptorType(f.type);
+        if (typeNum === ProtoScalarType.GROUP) {
+          throw new Error(
+            `omnibuf: proto2 groups (TYPE_GROUP) are not supported (${fullName}.${protoName})`,
+          );
+        }
         const repeated = isRepeatedLabel(f.label);
         const cleanTypeName = (f.typeName ?? '').replace(/^\./, '');
         const hasRealOneof =
@@ -460,7 +481,8 @@ export class DescriptorRegistry {
         const oneofLocalName = oneofProtoName
           ? safeObjectProperty(protoCamelCase(oneofProtoName))
           : undefined;
-        const explicitPresence = !oneofLocalName && Boolean(f.proto3Optional);
+        const explicitPresence =
+          !oneofLocalName && !repeated && (Boolean(f.proto3Optional) || isProto2);
 
         if (typeNum === ProtoScalarType.MESSAGE) {
           const target = rawMap.get(cleanTypeName);
@@ -747,7 +769,13 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
         `omnibuf: descriptor nesting depth ${depth} exceeds MaxNestingDepth (${MaxNestingDepth})`,
       );
     }
-    const out: DescriptorProtoJSON = { field: [], nestedType: [], enumType: [], oneofDecl: [] };
+    const out: DescriptorProtoJSON = {
+      field: [],
+      extension: [],
+      nestedType: [],
+      enumType: [],
+      oneofDecl: [],
+    };
     let pos = 0;
     while (pos < b.length) {
       const [tag, p1] = readPbVarint(b, pos);
@@ -760,6 +788,7 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
           fieldNum === 2 ||
           fieldNum === 3 ||
           fieldNum === 4 ||
+          fieldNum === 6 ||
           fieldNum === 7 ||
           fieldNum === 8)
       ) {
@@ -769,6 +798,7 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
         else if (fieldNum === 2) out.field!.push(decodeFieldDescriptor(sub));
         else if (fieldNum === 3) out.nestedType!.push(decodeDescriptorProto(sub, depth + 1));
         else if (fieldNum === 4) out.enumType!.push(decodeEnumDescriptor(sub));
+        else if (fieldNum === 6) out.extension!.push(decodeFieldDescriptor(sub));
         else if (fieldNum === 7) out.options = decodeMessageOptions(sub);
         else if (fieldNum === 8) out.oneofDecl!.push(decodeOneofDescriptor(sub));
       } else {
@@ -779,7 +809,12 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
   }
 
   function decodeFileDescriptor(b: Uint8Array): FileDescriptorProtoJSON {
-    const out: FileDescriptorProtoJSON = { dependency: [], messageType: [], enumType: [] };
+    const out: FileDescriptorProtoJSON = {
+      dependency: [],
+      messageType: [],
+      enumType: [],
+      extension: [],
+    };
     let pos = 0;
     while (pos < b.length) {
       const [tag, p1] = readPbVarint(b, pos);
@@ -793,6 +828,7 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
           fieldNum === 3 ||
           fieldNum === 4 ||
           fieldNum === 5 ||
+          fieldNum === 7 ||
           fieldNum === 12)
       ) {
         const [sub, nextPos] = readPbBytes(b, pos);
@@ -802,6 +838,7 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
         else if (fieldNum === 3) out.dependency!.push(decodeUTF8(sub));
         else if (fieldNum === 4) out.messageType!.push(decodeDescriptorProto(sub, 0));
         else if (fieldNum === 5) out.enumType!.push(decodeEnumDescriptor(sub));
+        else if (fieldNum === 7) out.extension!.push(decodeFieldDescriptor(sub));
         else if (fieldNum === 12) out.syntax = decodeUTF8(sub);
       } else {
         pos = skipPbField(b, pos, wt);

@@ -657,3 +657,152 @@ it('CLI executable handles cross-file references, colliding field names, negativ
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it('generated codecs enforce Spec §10 container depth, empty map headers, 32-bit coercion, proto2 presence, Opaque clean validation/copying, and reserved checks', async () => {
+  const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  const { pathToFileURL, fileURLToPath } = await import('node:url');
+  const ts = await import('typescript');
+
+  assert.throws(
+    () =>
+      generateFromDescriptorSet({
+        file: [
+          {
+            name: 'bad_reserved.proto',
+            syntax: 'proto3',
+            messageType: [
+              { name: 'Bad', field: [{ name: 'x', number: 19000, type: 'TYPE_UINT32' }] },
+            ],
+          },
+        ],
+      }),
+    /reserved/i,
+  );
+
+  assert.throws(
+    () =>
+      generateFromDescriptorSet({
+        file: [
+          {
+            name: 'bad_group.proto',
+            syntax: 'proto2',
+            messageType: [
+              { name: 'BadGrp', field: [{ name: 'g', number: 1, type: 'TYPE_GROUP' }] },
+            ],
+          },
+        ],
+      }),
+    /group/i,
+  );
+
+  const fds: FileDescriptorSetJSON = {
+    file: [
+      {
+        name: 'p2_edge.proto\n*/ alert(1); /*',
+        package: 'edge',
+        syntax: 'proto2',
+        messageType: [
+          {
+            name: 'Sub',
+            field: [{ name: 'val', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' }],
+          },
+          {
+            name: 'MapEntry',
+            options: { mapEntry: true },
+            field: [
+              { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+              { name: 'value', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+            ],
+          },
+          {
+            name: 'Holder',
+            nestedType: [],
+            field: [
+              { name: 'opt_num', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+              {
+                name: 'subs',
+                number: 2,
+                label: 'LABEL_REPEATED',
+                type: 'TYPE_MESSAGE',
+                typeName: '.edge.Sub',
+              },
+              {
+                name: 'scores',
+                number: 3,
+                label: 'LABEL_REPEATED',
+                type: 'TYPE_MESSAGE',
+                typeName: '.edge.MapEntry',
+              },
+              { name: 'has_own_property', number: 4, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const generated = generateFromDescriptorSet(fds);
+  assert.equal(generated.length, 1);
+  assert.ok(!generated[0]!.content.includes('\n*/ alert(1);'));
+
+  const coreBase = fileURLToPath(new URL('../../omnibuf/dist', import.meta.url));
+  const dir = await mkdtemp(join(coreBase, '.tmp-edge-test-'));
+  try {
+    const outPath = join(dir, 'edge_omnibuf.pb.mjs');
+    const js = ts.transpileModule(generated[0]!.content, {
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.ES2022,
+      },
+    }).outputText;
+    await writeFile(outPath, js, 'utf8');
+    const mod = await import(pathToFileURL(outPath).href);
+
+    // 1. Proto2 explicit presence: unset optNum is undefined, explicit 0 round-trips as 0
+    assert.equal(mod.createHolder().optNum, undefined);
+    const zeroBytes = mod.marshalHolderOmniBuf({ optNum: 0 });
+    assert.ok(zeroBytes.length > 0);
+    assert.equal(mod.decodeHolder(new Uint8Array(0)).optNum, undefined);
+    assert.equal(mod.decodeHolder(zeroBytes).optNum, 0);
+
+    // 2. 32-bit wrap on encode for INT32 scalar and map value (0x1_0000_0005 -> 5)
+    const wrappedBytes = mod.marshalHolderOmniBuf({
+      optNum: 0x1_0000_0005,
+      scores: { k: 0x1_0000_0007 },
+      subs: [null as any, { val: 0x1_0000_0009 }],
+    });
+    const wrappedDec = mod.decodeHolder(wrappedBytes);
+    assert.equal(wrappedDec.optNum, 5);
+    assert.equal(wrappedDec.scores.k, 7);
+    assert.equal(wrappedDec.subs.length, 2);
+    assert.equal(wrappedDec.subs[1].val, 9);
+
+    // 3. Empty map with wrong wire types (e.g. string->string 10/10 instead of string->sint 10/1) rejected
+    const badEmptyMap = new Uint8Array([(((3 << 4) | 14) << 1) | 1, 0x07, 10, 10, 0x01]);
+    assert.throws(() => mod.decodeHolder(badEmptyMap), /map/i);
+
+    // 4. Container depth: recursionLimit = 0 rejects repeated/map at depth 1; recursionLimit = 1 rejects submsg element at depth 2
+    assert.throws(
+      () => mod.decodeHolder(wrappedBytes, undefined, 0, { recursionLimit: 0 }),
+      /nesting depth/,
+    );
+    assert.throws(
+      () => mod.decodeHolder(wrappedBytes, undefined, 0, { recursionLimit: 1 }),
+      /nesting depth/,
+    );
+
+    // 5. Target reset deletes stale snake_case own property
+    const plainTarget: any = { opt_num: 999 };
+    mod.decodeHolder(new Uint8Array(0), plainTarget);
+    assert.equal(Object.hasOwn(plainTarget, 'opt_num'), false);
+
+    // 6. Clean Opaque.marshal() validates corrupt bytes while preserving zero-copy identity on valid bytes
+    const corruptOpaque = new mod.OpaqueHolder(new Uint8Array([0x55]));
+    assert.throws(() => corruptOpaque.marshal());
+    const cleanOpaque = new mod.OpaqueHolder(zeroBytes);
+    assert.equal(cleanOpaque.marshal(), zeroBytes);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

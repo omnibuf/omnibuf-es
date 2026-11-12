@@ -375,16 +375,18 @@ function emitMapPayload(type: number, subMsgSymbol: string | undefined, value: s
     case ProtoScalarType.DOUBLE:
       return `enc.writeRawFloat64(Number(${value}));`;
     case ProtoScalarType.FIXED32:
+      return `enc.writeRawFixed32(Number(${value}) >>> 0);`;
     case ProtoScalarType.SFIXED32:
-      return `enc.writeRawFixed32(Number(${value}));`;
+      return `enc.writeRawFixed32(Number(${value}) | 0);`;
     case ProtoScalarType.FIXED64:
     case ProtoScalarType.SFIXED64:
       return `enc.writeRawFixed64(BigInt(${value}));`;
     case ProtoScalarType.INT32:
-    case ProtoScalarType.INT64:
     case ProtoScalarType.SINT32:
-    case ProtoScalarType.SINT64:
     case ProtoScalarType.ENUM:
+      return `enc.writeRawVarint(encodeZigZag(Number(${value}) | 0));`;
+    case ProtoScalarType.INT64:
+    case ProtoScalarType.SINT64:
       return `enc.writeRawVarint(encodeZigZag(BigInt(${value})));`;
     case ProtoScalarType.UINT32:
       return `enc.writeRawVarint(Number(${value}) >>> 0);`;
@@ -489,7 +491,7 @@ function emitEncodeScalarOrSubMsgWithVar(f: ResolvedField, val: string, indent: 
           `${indent}  enc.beginSubMsgArr(${num});`,
           `${indent}  for (let i = 0; i < arr.length; i++) {`,
           `${indent}    enc.beginSubMsgElem();`,
-          `${indent}    encode${sub}(enc, arr[i]!, options);`,
+          `${indent}    if (arr[i] !== null && arr[i] !== undefined) encode${sub}(enc, arr[i]!, options);`,
           `${indent}    enc.endSubMsgElem();`,
           `${indent}  }`,
           `${indent}  enc.endSubMsgArr();`,
@@ -507,15 +509,16 @@ function emitEncodeScalarOrSubMsgWithVar(f: ResolvedField, val: string, indent: 
     case ProtoScalarType.UINT64:
       return `${indent}enc.writeUint(${num}, ${val} ?? 0);`;
     case ProtoScalarType.INT32:
-    case ProtoScalarType.INT64:
     case ProtoScalarType.SINT32:
-    case ProtoScalarType.SINT64:
     case ProtoScalarType.ENUM:
+      return `${indent}enc.writeInt(${num}, Number(${val} ?? 0) | 0);`;
+    case ProtoScalarType.INT64:
+    case ProtoScalarType.SINT64:
       return `${indent}enc.writeInt(${num}, ${val} ?? 0);`;
     case ProtoScalarType.FIXED32:
-      return `${indent}enc.writeFixed32(${num}, ${val} ?? 0);`;
+      return `${indent}enc.writeFixed32(${num}, Number(${val} ?? 0) >>> 0);`;
     case ProtoScalarType.SFIXED32:
-      return `${indent}enc.writeSfixed32(${num}, ${val} ?? 0);`;
+      return `${indent}enc.writeSfixed32(${num}, Number(${val} ?? 0) | 0);`;
     case ProtoScalarType.FIXED64:
       return `${indent}enc.writeFixed64(${num}, ${val} ?? 0);`;
     case ProtoScalarType.SFIXED64:
@@ -639,7 +642,7 @@ function emitDecodeMapEntryInline(
         `${indent}if (${wtVar} !== 1) throw new Error('omnibuf: invalid map sint32/enum wire type');`,
         `${indent}const [__u, __un] = decodeVarintBigInt(body, p);`,
         `${indent}if (__un === 0) throw new Error('omnibuf: truncated map sint32/enum');`,
-        `${indent}${targetVar} = decodeZigZag(__u) | 0; p += __un;`,
+        `${indent}${targetVar} = decodeZigZag32(__u); p += __un;`,
       ].join('\n');
     case ProtoScalarType.INT64:
     case ProtoScalarType.SINT64:
@@ -688,7 +691,7 @@ function emitDecodeMapEntryInline(
       return [
         `${indent}if (${wtVar} !== 12) throw new Error('omnibuf: invalid map submsg wire type');`,
         `${indent}const [__sub, __np] = readLenSlice(body, p, 0);`,
-        `${indent}${targetVar} = decode${subMsgSymbol}(__sub, undefined, depth + 1, options); p = __np;`,
+        `${indent}${targetVar} = decode${subMsgSymbol}(__sub, undefined, depth + 2, options); p = __np;`,
       ].join('\n');
     default:
       return '';
@@ -698,11 +701,15 @@ function emitDecodeMapEntryInline(
 function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
   const prop = `out.${f.localName}`;
   if (f.isMap) {
+    const expKeyWT = mapWireType(f.mapKeyType);
+    const expValWT = mapWireType(f.mapValType);
     return [
+      `${indent}if (depth + 1 > maxDepth) throw new Error(\`omnibuf: nesting depth \${depth + 1} exceeds MaxNestingDepth (\${maxDepth})\`);`,
       `${indent}const [body, nextPos] = readLenSlice(buf, pos, 3, n);`,
       `${indent}const keyWT = body[0]!;`,
       `${indent}const valWT = body[1]!;`,
       `${indent}validateMapTypes(keyWT, valWT);`,
+      `${indent}if (keyWT !== ${expKeyWT} || valWT !== ${expValWT}) throw new Error('omnibuf: WireMap header mismatch');`,
       `${indent}const [count, cn] = decodeVarintBigInt(body, 2);`,
       `${indent}if (cn === 0 || count > BigInt(Math.floor((body.length - (2 + cn)) / 2))) throw new Error('omnibuf: invalid map count');`,
       `${indent}const dst: Record<string, any> = alreadySeen && ${prop} && typeof ${prop} === 'object' ? ${prop} : {};`,
@@ -726,302 +733,306 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
   }
 
   if (f.repeated) {
-    switch (f.type) {
-      case ProtoScalarType.STRING:
-        return [
-          `${indent}if (pos >= n) throw new Error('omnibuf: invalid string array');`,
-          `${indent}const lb = buf[pos]!;`,
-          `${indent}let bodyLen = 0;`,
-          `${indent}if ((lb & 1) !== 0) {`,
-          `${indent}  bodyLen = lb >>> 1;`,
-          `${indent}  pos += 1;`,
-          `${indent}} else if ((lb & 2) !== 0) {`,
-          `${indent}  if (pos + 2 > n) throw new Error('omnibuf: invalid string array');`,
-          `${indent}  bodyLen = (lb | (buf[pos + 1]! << 8)) >>> 2;`,
-          `${indent}  pos += 2;`,
-          `${indent}} else {`,
-          `${indent}  const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}  const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}  const [arr, ok] = appendStringArrBody(prev, body);`,
-          `${indent}  if (!ok) throw new Error('omnibuf: invalid string array');`,
-          `${indent}  ${prop} = arr; pos = nextPos;`,
-          `${indent}  break;`,
-          `${indent}}`,
-          `${indent}const bodyEnd = pos + bodyLen;`,
-          `${indent}if (bodyLen < 2 || bodyEnd > n) throw new Error('omnibuf: invalid string array');`,
-          `${indent}if (buf[pos]! === 10 && (buf[pos + 1]! & 1) !== 0) {`,
-          `${indent}  const count = buf[pos + 1]! >>> 1;`,
-          `${indent}  let p = pos + 2;`,
-          `${indent}  if (count > bodyEnd - p) throw new Error('omnibuf: invalid string array');`,
-          `${indent}  let dst = ${prop};`,
-          `${indent}  if (!Array.isArray(dst)) { dst = []; ${prop} = dst; } else if (!alreadySeen) { dst.length = 0; }`,
-          `${indent}  for (let i = 0; i < count; i++) {`,
-          `${indent}    if (p >= bodyEnd) throw new Error('omnibuf: invalid string array');`,
-          `${indent}    const sb = buf[p]!;`,
-          `${indent}    if ((sb & 1) !== 0) {`,
-          `${indent}      const sLen = sb >>> 1;`,
-          `${indent}      p += 1;`,
-          `${indent}      if (p + sLen > bodyEnd) throw new Error('omnibuf: invalid string array');`,
-          `${indent}      dst.push(decodeUTF8(buf, p, p + sLen));`,
-          `${indent}      p += sLen;`,
-          `${indent}    } else {`,
-          `${indent}      const [sLen, sn] = decodeVarintBigInt(buf, p, bodyEnd);`,
-          `${indent}      if (sn === 0 || sLen > BigInt(bodyEnd - (p + sn))) throw new Error('omnibuf: invalid string array');`,
-          `${indent}      p += sn;`,
-          `${indent}      const sLenNum = Number(sLen);`,
-          `${indent}      dst.push(decodeUTF8(buf, p, p + sLenNum));`,
-          `${indent}      p += sLenNum;`,
-          `${indent}    }`,
-          `${indent}  }`,
-          `${indent}  if (p !== bodyEnd) throw new Error('omnibuf: invalid string array');`,
-          `${indent}  pos = bodyEnd;`,
-          `${indent}  break;`,
-          `${indent}}`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendStringArrBody(prev, buf.subarray(pos, bodyEnd));`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid string array');`,
-          `${indent}${prop} = arr; pos = bodyEnd;`,
-        ].join('\n');
-      case ProtoScalarType.BYTES:
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendBytesArrBody(prev, body, false);`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid bytes array');`,
-          `${indent}${prop} = arr; pos = nextPos;`,
-        ].join('\n');
-      case ProtoScalarType.BOOL:
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendBoolArrBody(prev, body);`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid bool array');`,
-          `${indent}${prop} = arr; pos = nextPos;`,
-        ].join('\n');
-      case ProtoScalarType.UINT32:
-        return [
-          `${indent}if (pos >= n) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}const lb = buf[pos]!;`,
-          `${indent}let bodyLen = 0;`,
-          `${indent}if ((lb & 1) !== 0) {`,
-          `${indent}  bodyLen = lb >>> 1;`,
-          `${indent}  pos += 1;`,
-          `${indent}} else if ((lb & 2) !== 0) {`,
-          `${indent}  if (pos + 2 > n) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}  bodyLen = (lb | (buf[pos + 1]! << 8)) >>> 2;`,
-          `${indent}  pos += 2;`,
-          `${indent}} else {`,
-          `${indent}  const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}  const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}  const [arr, ok] = appendUint32ArrBody(prev, body);`,
-          `${indent}  if (!ok) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}  ${prop} = arr as any; pos = nextPos;`,
-          `${indent}  break;`,
-          `${indent}}`,
-          `${indent}const bodyEnd = pos + bodyLen;`,
-          `${indent}if (bodyLen < 2 || bodyEnd > n) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}if (buf[pos]! === 0 && (buf[pos + 1]! & 1) !== 0) {`,
-          `${indent}  const count = buf[pos + 1]! >>> 1;`,
-          `${indent}  let p = pos + 2;`,
-          `${indent}  if (count > bodyEnd - p) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}  let dst = ${prop} as number[];`,
-          `${indent}  if (!Array.isArray(dst)) { dst = []; ${prop} = dst as any; } else if (!alreadySeen) { dst.length = 0; }`,
-          `${indent}  for (let i = 0; i < count; i++) {`,
-          `${indent}    if (p >= bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}    const vb = buf[p]!;`,
-          `${indent}    if ((vb & 1) !== 0) {`,
-          `${indent}      dst.push(vb >>> 1);`,
-          `${indent}      p += 1;`,
-          `${indent}    } else if ((vb & 2) !== 0) {`,
-          `${indent}      if (p + 2 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}      dst.push((vb | (buf[p + 1]! << 8)) >>> 2);`,
-          `${indent}      p += 2;`,
-          `${indent}    } else if ((vb & 4) !== 0) {`,
-          `${indent}      if (p + 4 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}      dst.push(((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0);`,
-          `${indent}      p += 4;`,
-          `${indent}    } else {`,
-          `${indent}      if (vb !== 0 || p + 9 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}      dst.push((buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>> 0);`,
-          `${indent}      p += 9;`,
-          `${indent}    }`,
-          `${indent}  }`,
-          `${indent}  if (p !== bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}  pos = bodyEnd;`,
-          `${indent}  break;`,
-          `${indent}}`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendUint32ArrBody(prev, buf.subarray(pos, bodyEnd));`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid uint32 array');`,
-          `${indent}${prop} = arr as any; pos = bodyEnd;`,
-        ].join('\n');
-      case ProtoScalarType.ENUM:
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendEnumArrBody(prev, body);`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid enum array');`,
-          `${indent}${prop} = arr as any; pos = nextPos;`,
-        ].join('\n');
-      case ProtoScalarType.UINT64:
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendUintArrAutoBody(prev, body);`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid uint64 array');`,
-          `${indent}${prop} = arr; pos = nextPos;`,
-        ].join('\n');
-      case ProtoScalarType.INT32:
-      case ProtoScalarType.SINT32:
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendSint32ArrBody(prev, body);`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid sint32 array');`,
-          `${indent}${prop} = arr as any; pos = nextPos;`,
-        ].join('\n');
-      case ProtoScalarType.INT64:
-      case ProtoScalarType.SINT64:
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendSintArrAutoBody(prev, body);`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid sint array');`,
-          `${indent}${prop} = arr as any; pos = nextPos;`,
-        ].join('\n');
-      case ProtoScalarType.FLOAT:
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const startLen = prev.length;`,
-          `${indent}const [arr, ok] = appendFloat32ArrBody(prev, body);`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid float32 array');`,
-          `${indent}for (let i = startLen; i < arr.length; i++) arr[i] = roundFloat32Shortest(arr[i]!);`,
-          `${indent}${prop} = arr; pos = nextPos;`,
-        ].join('\n');
-      case ProtoScalarType.DOUBLE:
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}const [arr, ok] = appendFloat64ArrBody(prev, body);`,
-          `${indent}if (!ok) throw new Error('omnibuf: invalid float64 array');`,
-          `${indent}${prop} = arr; pos = nextPos;`,
-        ].join('\n');
-      case ProtoScalarType.FIXED32:
-      case ProtoScalarType.SFIXED32: {
-        const expElemType = f.type === ProtoScalarType.SFIXED32 ? 6 : 4;
-        const castOp = f.type === ProtoScalarType.SFIXED32 ? '| 0' : '>>> 0';
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const [elemType, c, startP, ok] = parseArrayHeader(body);`,
-          `${indent}if (!ok || elemType !== ${expElemType} || body.length - startP !== c * 4) throw new Error('omnibuf: invalid fixed32 array');`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}for (let i = 0; i < c; i++) {`,
-          `${indent}  const off = startP + i * 4;`,
-          `${indent}  prev.push((body[off]! | (body[off + 1]! << 8) | (body[off + 2]! << 16) | (body[off + 3]! << 24)) ${castOp});`,
-          `${indent}}`,
-          `${indent}${prop} = prev; pos = nextPos;`,
-        ].join('\n');
+    const depthGuard = `${indent}if (depth + 1 > maxDepth) throw new Error(\`omnibuf: nesting depth \${depth + 1} exceeds MaxNestingDepth (\${maxDepth})\`);\n`;
+    const bodyCode = ((): string => {
+      switch (f.type) {
+        case ProtoScalarType.STRING:
+          return [
+            `${indent}if (pos >= n) throw new Error('omnibuf: invalid string array');`,
+            `${indent}const lb = buf[pos]!;`,
+            `${indent}let bodyLen = 0;`,
+            `${indent}if ((lb & 1) !== 0) {`,
+            `${indent}  bodyLen = lb >>> 1;`,
+            `${indent}  pos += 1;`,
+            `${indent}} else if ((lb & 2) !== 0) {`,
+            `${indent}  if (pos + 2 > n) throw new Error('omnibuf: invalid string array');`,
+            `${indent}  bodyLen = (lb | (buf[pos + 1]! << 8)) >>> 2;`,
+            `${indent}  pos += 2;`,
+            `${indent}} else {`,
+            `${indent}  const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}  const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}  const [arr, ok] = appendStringArrBody(prev, body);`,
+            `${indent}  if (!ok) throw new Error('omnibuf: invalid string array');`,
+            `${indent}  ${prop} = arr; pos = nextPos;`,
+            `${indent}  break;`,
+            `${indent}}`,
+            `${indent}const bodyEnd = pos + bodyLen;`,
+            `${indent}if (bodyLen < 2 || bodyEnd > n) throw new Error('omnibuf: invalid string array');`,
+            `${indent}if (buf[pos]! === 10 && (buf[pos + 1]! & 1) !== 0) {`,
+            `${indent}  const count = buf[pos + 1]! >>> 1;`,
+            `${indent}  let p = pos + 2;`,
+            `${indent}  if (count > bodyEnd - p) throw new Error('omnibuf: invalid string array');`,
+            `${indent}  let dst = ${prop};`,
+            `${indent}  if (!Array.isArray(dst)) { dst = []; ${prop} = dst; } else if (!alreadySeen) { dst.length = 0; }`,
+            `${indent}  for (let i = 0; i < count; i++) {`,
+            `${indent}    if (p >= bodyEnd) throw new Error('omnibuf: invalid string array');`,
+            `${indent}    const sb = buf[p]!;`,
+            `${indent}    if ((sb & 1) !== 0) {`,
+            `${indent}      const sLen = sb >>> 1;`,
+            `${indent}      p += 1;`,
+            `${indent}      if (p + sLen > bodyEnd) throw new Error('omnibuf: invalid string array');`,
+            `${indent}      dst.push(decodeUTF8(buf, p, p + sLen));`,
+            `${indent}      p += sLen;`,
+            `${indent}    } else {`,
+            `${indent}      const [sLen, sn] = decodeVarintBigInt(buf, p, bodyEnd);`,
+            `${indent}      if (sn === 0 || sLen > BigInt(bodyEnd - (p + sn))) throw new Error('omnibuf: invalid string array');`,
+            `${indent}      p += sn;`,
+            `${indent}      const sLenNum = Number(sLen);`,
+            `${indent}      dst.push(decodeUTF8(buf, p, p + sLenNum));`,
+            `${indent}      p += sLenNum;`,
+            `${indent}    }`,
+            `${indent}  }`,
+            `${indent}  if (p !== bodyEnd) throw new Error('omnibuf: invalid string array');`,
+            `${indent}  pos = bodyEnd;`,
+            `${indent}  break;`,
+            `${indent}}`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendStringArrBody(prev, buf.subarray(pos, bodyEnd));`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid string array');`,
+            `${indent}${prop} = arr; pos = bodyEnd;`,
+          ].join('\n');
+        case ProtoScalarType.BYTES:
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendBytesArrBody(prev, body, false);`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid bytes array');`,
+            `${indent}${prop} = arr; pos = nextPos;`,
+          ].join('\n');
+        case ProtoScalarType.BOOL:
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendBoolArrBody(prev, body);`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid bool array');`,
+            `${indent}${prop} = arr; pos = nextPos;`,
+          ].join('\n');
+        case ProtoScalarType.UINT32:
+          return [
+            `${indent}if (pos >= n) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}const lb = buf[pos]!;`,
+            `${indent}let bodyLen = 0;`,
+            `${indent}if ((lb & 1) !== 0) {`,
+            `${indent}  bodyLen = lb >>> 1;`,
+            `${indent}  pos += 1;`,
+            `${indent}} else if ((lb & 2) !== 0) {`,
+            `${indent}  if (pos + 2 > n) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}  bodyLen = (lb | (buf[pos + 1]! << 8)) >>> 2;`,
+            `${indent}  pos += 2;`,
+            `${indent}} else {`,
+            `${indent}  const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}  const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}  const [arr, ok] = appendUint32ArrBody(prev, body);`,
+            `${indent}  if (!ok) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}  ${prop} = arr as any; pos = nextPos;`,
+            `${indent}  break;`,
+            `${indent}}`,
+            `${indent}const bodyEnd = pos + bodyLen;`,
+            `${indent}if (bodyLen < 2 || bodyEnd > n) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}if (buf[pos]! === 0 && (buf[pos + 1]! & 1) !== 0) {`,
+            `${indent}  const count = buf[pos + 1]! >>> 1;`,
+            `${indent}  let p = pos + 2;`,
+            `${indent}  if (count > bodyEnd - p) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}  let dst = ${prop} as number[];`,
+            `${indent}  if (!Array.isArray(dst)) { dst = []; ${prop} = dst as any; } else if (!alreadySeen) { dst.length = 0; }`,
+            `${indent}  for (let i = 0; i < count; i++) {`,
+            `${indent}    if (p >= bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}    const vb = buf[p]!;`,
+            `${indent}    if ((vb & 1) !== 0) {`,
+            `${indent}      dst.push(vb >>> 1);`,
+            `${indent}      p += 1;`,
+            `${indent}    } else if ((vb & 2) !== 0) {`,
+            `${indent}      if (p + 2 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}      dst.push((vb | (buf[p + 1]! << 8)) >>> 2);`,
+            `${indent}      p += 2;`,
+            `${indent}    } else if ((vb & 4) !== 0) {`,
+            `${indent}      if (p + 4 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}      dst.push(((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0);`,
+            `${indent}      p += 4;`,
+            `${indent}    } else {`,
+            `${indent}      if (vb !== 0 || p + 9 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}      dst.push((buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>> 0);`,
+            `${indent}      p += 9;`,
+            `${indent}    }`,
+            `${indent}  }`,
+            `${indent}  if (p !== bodyEnd) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}  pos = bodyEnd;`,
+            `${indent}  break;`,
+            `${indent}}`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendUint32ArrBody(prev, buf.subarray(pos, bodyEnd));`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid uint32 array');`,
+            `${indent}${prop} = arr as any; pos = bodyEnd;`,
+          ].join('\n');
+        case ProtoScalarType.ENUM:
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendEnumArrBody(prev, body);`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid enum array');`,
+            `${indent}${prop} = arr as any; pos = nextPos;`,
+          ].join('\n');
+        case ProtoScalarType.UINT64:
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendUintArrAutoBody(prev, body);`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid uint64 array');`,
+            `${indent}${prop} = arr; pos = nextPos;`,
+          ].join('\n');
+        case ProtoScalarType.INT32:
+        case ProtoScalarType.SINT32:
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendSint32ArrBody(prev, body);`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid sint32 array');`,
+            `${indent}${prop} = arr as any; pos = nextPos;`,
+          ].join('\n');
+        case ProtoScalarType.INT64:
+        case ProtoScalarType.SINT64:
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendSintArrAutoBody(prev, body);`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid sint array');`,
+            `${indent}${prop} = arr as any; pos = nextPos;`,
+          ].join('\n');
+        case ProtoScalarType.FLOAT:
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const startLen = prev.length;`,
+            `${indent}const [arr, ok] = appendFloat32ArrBody(prev, body);`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid float32 array');`,
+            `${indent}for (let i = startLen; i < arr.length; i++) arr[i] = roundFloat32Shortest(arr[i]!);`,
+            `${indent}${prop} = arr; pos = nextPos;`,
+          ].join('\n');
+        case ProtoScalarType.DOUBLE:
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}const [arr, ok] = appendFloat64ArrBody(prev, body);`,
+            `${indent}if (!ok) throw new Error('omnibuf: invalid float64 array');`,
+            `${indent}${prop} = arr; pos = nextPos;`,
+          ].join('\n');
+        case ProtoScalarType.FIXED32:
+        case ProtoScalarType.SFIXED32: {
+          const expElemType = f.type === ProtoScalarType.SFIXED32 ? 6 : 4;
+          const castOp = f.type === ProtoScalarType.SFIXED32 ? '| 0' : '>>> 0';
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const [elemType, c, startP, ok] = parseArrayHeader(body);`,
+            `${indent}if (!ok || elemType !== ${expElemType} || body.length - startP !== c * 4) throw new Error('omnibuf: invalid fixed32 array');`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}for (let i = 0; i < c; i++) {`,
+            `${indent}  const off = startP + i * 4;`,
+            `${indent}  prev.push((body[off]! | (body[off + 1]! << 8) | (body[off + 2]! << 16) | (body[off + 3]! << 24)) ${castOp});`,
+            `${indent}}`,
+            `${indent}${prop} = prev; pos = nextPos;`,
+          ].join('\n');
+        }
+        case ProtoScalarType.FIXED64:
+        case ProtoScalarType.SFIXED64: {
+          const isSigned = f.type === ProtoScalarType.SFIXED64;
+          const expElemType = isSigned ? 7 : 5;
+          return [
+            `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}const [elemType, c, startP, ok] = parseArrayHeader(body);`,
+            `${indent}if (!ok || elemType !== ${expElemType} || body.length - startP !== c * 8) throw new Error('omnibuf: invalid fixed64 array');`,
+            `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}for (let i = 0; i < c; i++) {`,
+            `${indent}  const off = startP + i * 8;`,
+            `${indent}  let u64 = 0n; for (let b = 7; b >= 0; b--) u64 = (u64 << 8n) | BigInt(body[off + b]!);`,
+            isSigned
+              ? `${indent}  const s64 = BigInt.asIntN(64, u64); prev.push(s64 >= -9007199254740991n && s64 <= 9007199254740991n ? Number(s64) : s64);`
+              : `${indent}  prev.push(u64 <= 9007199254740991n ? Number(u64) : u64);`,
+            `${indent}}`,
+            `${indent}${prop} = prev; pos = nextPos;`,
+          ].join('\n');
+        }
+        case ProtoScalarType.MESSAGE: {
+          const sub = f.subMsgSymbol!;
+          return [
+            `${indent}if (pos >= n) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}let arrLen = 0;`,
+            `${indent}const lb = buf[pos]!;`,
+            `${indent}if ((lb & 1) !== 0) {`,
+            `${indent}  arrLen = lb >>> 1;`,
+            `${indent}  pos += 1;`,
+            `${indent}} else if ((lb & 2) !== 0) {`,
+            `${indent}  if (pos + 2 > n) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}  arrLen = (lb | (buf[pos + 1]! << 8)) >>> 2;`,
+            `${indent}  pos += 2;`,
+            `${indent}} else {`,
+            `${indent}  const [arrPayload, nextPos] = readLenSlice(buf, pos, 2, n);`,
+            `${indent}  const [elemCount, ok] = countSubMsgArrElems(arrPayload);`,
+            `${indent}  if (!ok) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}  const elems = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}  let [, , p] = parseArrayHeader(arrPayload);`,
+            `${indent}  for (let i = 0; i < elemCount; i++) {`,
+            `${indent}    const [el, en] = decodeVarintBigInt(arrPayload, p);`,
+            `${indent}    p += en;`,
+            `${indent}    const elNum = Number(el);`,
+            `${indent}    elems.push(decode${sub}(arrPayload, undefined, depth + 2, options, p, p + elNum));`,
+            `${indent}    p += elNum;`,
+            `${indent}  }`,
+            `${indent}  ${prop} = elems; pos = nextPos;`,
+            `${indent}  break;`,
+            `${indent}}`,
+            `${indent}const arrEnd = pos + arrLen;`,
+            `${indent}if (arrLen < 2 || arrEnd > n) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}if (buf[pos]! === 12 && (buf[pos + 1]! & 1) !== 0) {`,
+            `${indent}  const elemCount = buf[pos + 1]! >>> 1;`,
+            `${indent}  let p = pos + 2;`,
+            `${indent}  if (elemCount > arrEnd - p) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}  let elems = ${prop};`,
+            `${indent}  if (!Array.isArray(elems)) { elems = []; ${prop} = elems; } else if (!alreadySeen) { elems.length = 0; }`,
+            `${indent}  for (let i = 0; i < elemCount; i++) {`,
+            `${indent}    if (p >= arrEnd) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}    let elNum = 0;`,
+            `${indent}    const eb0 = buf[p]!;`,
+            `${indent}    if ((eb0 & 1) !== 0) {`,
+            `${indent}      elNum = eb0 >>> 1;`,
+            `${indent}      p += 1;`,
+            `${indent}    } else if ((eb0 & 2) !== 0) {`,
+            `${indent}      if (p + 2 > arrEnd) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}      elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;`,
+            `${indent}      p += 2;`,
+            `${indent}    } else {`,
+            `${indent}      const [el, en] = decodeVarintBigInt(buf, p, arrEnd);`,
+            `${indent}      if (en === 0 || el > BigInt(arrEnd - (p + en))) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}      p += en;`,
+            `${indent}      elNum = Number(el);`,
+            `${indent}    }`,
+            `${indent}    if (p + elNum > arrEnd) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}    elems.push(decode${sub}(buf, undefined, depth + 2, options, p, p + elNum));`,
+            `${indent}    p += elNum;`,
+            `${indent}  }`,
+            `${indent}  if (p !== arrEnd) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}  pos = arrEnd;`,
+            `${indent}  break;`,
+            `${indent}}`,
+            `${indent}const arrPayload = buf.subarray(pos, arrEnd);`,
+            `${indent}const [elemCount, ok] = countSubMsgArrElems(arrPayload);`,
+            `${indent}if (!ok) throw new Error('omnibuf: corrupt submsg array');`,
+            `${indent}const elems = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
+            `${indent}let [, , p] = parseArrayHeader(arrPayload);`,
+            `${indent}for (let i = 0; i < elemCount; i++) {`,
+            `${indent}  const [el, en] = decodeVarintBigInt(arrPayload, p);`,
+            `${indent}  p += en;`,
+            `${indent}  const elNum = Number(el);`,
+            `${indent}  elems.push(decode${sub}(arrPayload, undefined, depth + 2, options, p, p + elNum));`,
+            `${indent}  p += elNum;`,
+            `${indent}}`,
+            `${indent}${prop} = elems; pos = arrEnd;`,
+          ].join('\n');
+        }
+        default:
+          return '';
       }
-      case ProtoScalarType.FIXED64:
-      case ProtoScalarType.SFIXED64: {
-        const isSigned = f.type === ProtoScalarType.SFIXED64;
-        const expElemType = isSigned ? 7 : 5;
-        return [
-          `${indent}const [body, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}const [elemType, c, startP, ok] = parseArrayHeader(body);`,
-          `${indent}if (!ok || elemType !== ${expElemType} || body.length - startP !== c * 8) throw new Error('omnibuf: invalid fixed64 array');`,
-          `${indent}const prev = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}for (let i = 0; i < c; i++) {`,
-          `${indent}  const off = startP + i * 8;`,
-          `${indent}  let u64 = 0n; for (let b = 7; b >= 0; b--) u64 = (u64 << 8n) | BigInt(body[off + b]!);`,
-          isSigned
-            ? `${indent}  const s64 = BigInt.asIntN(64, u64); prev.push(s64 >= -9007199254740991n && s64 <= 9007199254740991n ? Number(s64) : s64);`
-            : `${indent}  prev.push(u64 <= 9007199254740991n ? Number(u64) : u64);`,
-          `${indent}}`,
-          `${indent}${prop} = prev; pos = nextPos;`,
-        ].join('\n');
-      }
-      case ProtoScalarType.MESSAGE: {
-        const sub = f.subMsgSymbol!;
-        return [
-          `${indent}if (pos >= n) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}let arrLen = 0;`,
-          `${indent}const lb = buf[pos]!;`,
-          `${indent}if ((lb & 1) !== 0) {`,
-          `${indent}  arrLen = lb >>> 1;`,
-          `${indent}  pos += 1;`,
-          `${indent}} else if ((lb & 2) !== 0) {`,
-          `${indent}  if (pos + 2 > n) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}  arrLen = (lb | (buf[pos + 1]! << 8)) >>> 2;`,
-          `${indent}  pos += 2;`,
-          `${indent}} else {`,
-          `${indent}  const [arrPayload, nextPos] = readLenSlice(buf, pos, 2, n);`,
-          `${indent}  const [elemCount, ok] = countSubMsgArrElems(arrPayload);`,
-          `${indent}  if (!ok) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}  const elems = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}  let [, , p] = parseArrayHeader(arrPayload);`,
-          `${indent}  for (let i = 0; i < elemCount; i++) {`,
-          `${indent}    const [el, en] = decodeVarintBigInt(arrPayload, p);`,
-          `${indent}    p += en;`,
-          `${indent}    const elNum = Number(el);`,
-          `${indent}    elems.push(decode${sub}(arrPayload, undefined, depth + 1, options, p, p + elNum));`,
-          `${indent}    p += elNum;`,
-          `${indent}  }`,
-          `${indent}  ${prop} = elems; pos = nextPos;`,
-          `${indent}  break;`,
-          `${indent}}`,
-          `${indent}const arrEnd = pos + arrLen;`,
-          `${indent}if (arrLen < 2 || arrEnd > n) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}if (buf[pos]! === 12 && (buf[pos + 1]! & 1) !== 0) {`,
-          `${indent}  const elemCount = buf[pos + 1]! >>> 1;`,
-          `${indent}  let p = pos + 2;`,
-          `${indent}  if (elemCount > arrEnd - p) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}  let elems = ${prop};`,
-          `${indent}  if (!Array.isArray(elems)) { elems = []; ${prop} = elems; } else if (!alreadySeen) { elems.length = 0; }`,
-          `${indent}  for (let i = 0; i < elemCount; i++) {`,
-          `${indent}    if (p >= arrEnd) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}    let elNum = 0;`,
-          `${indent}    const eb0 = buf[p]!;`,
-          `${indent}    if ((eb0 & 1) !== 0) {`,
-          `${indent}      elNum = eb0 >>> 1;`,
-          `${indent}      p += 1;`,
-          `${indent}    } else if ((eb0 & 2) !== 0) {`,
-          `${indent}      if (p + 2 > arrEnd) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}      elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;`,
-          `${indent}      p += 2;`,
-          `${indent}    } else {`,
-          `${indent}      const [el, en] = decodeVarintBigInt(buf, p, arrEnd);`,
-          `${indent}      if (en === 0 || el > BigInt(arrEnd - (p + en))) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}      p += en;`,
-          `${indent}      elNum = Number(el);`,
-          `${indent}    }`,
-          `${indent}    if (p + elNum > arrEnd) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}    elems.push(decode${sub}(buf, undefined, depth + 1, options, p, p + elNum));`,
-          `${indent}    p += elNum;`,
-          `${indent}  }`,
-          `${indent}  if (p !== arrEnd) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}  pos = arrEnd;`,
-          `${indent}  break;`,
-          `${indent}}`,
-          `${indent}const arrPayload = buf.subarray(pos, arrEnd);`,
-          `${indent}const [elemCount, ok] = countSubMsgArrElems(arrPayload);`,
-          `${indent}if (!ok) throw new Error('omnibuf: corrupt submsg array');`,
-          `${indent}const elems = alreadySeen && Array.isArray(${prop}) ? ${prop} : [];`,
-          `${indent}let [, , p] = parseArrayHeader(arrPayload);`,
-          `${indent}for (let i = 0; i < elemCount; i++) {`,
-          `${indent}  const [el, en] = decodeVarintBigInt(arrPayload, p);`,
-          `${indent}  p += en;`,
-          `${indent}  const elNum = Number(el);`,
-          `${indent}  elems.push(decode${sub}(arrPayload, undefined, depth + 1, options, p, p + elNum));`,
-          `${indent}  p += elNum;`,
-          `${indent}}`,
-          `${indent}${prop} = elems; pos = arrEnd;`,
-        ].join('\n');
-      }
-      default:
-        return '';
-    }
+    })();
+    return bodyCode ? depthGuard + bodyCode : '';
   }
 
   switch (f.type) {
@@ -1097,7 +1108,7 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
         `${indent}} else {`,
         `${indent}  const [v, vn] = decodeVarintBigInt(buf, pos, n);`,
         `${indent}  if (vn === 0) throw new Error('omnibuf: truncated int32/enum');`,
-        `${indent}  i32Val = decodeZigZag(v) | 0;`,
+        `${indent}  i32Val = decodeZigZag32(v);`,
         `${indent}  pos += vn;`,
         `${indent}}`,
         `${indent}${emitAssignDecodedField(f, 'i32Val as any')}`,
@@ -1405,6 +1416,11 @@ export function generateFileCode(
   allFiles?: FileDescriptorProtoJSON[],
 ): GeneratedFile {
   const fileName = file.name ?? 'messages.proto';
+  const safeFileComment = fileName.replace(/[\r\n]+/g, ' ');
+  const isProto2 = file.syntax === 'proto2';
+  if ((file.extension?.length ?? 0) > 0) {
+    throw new Error(`omnibuf: proto2 extensions are not supported (${safeFileComment})`);
+  }
   const pkg = file.package ?? '';
   const registry = buildSymbolRegistry(allFiles ?? [file]);
 
@@ -1430,7 +1446,7 @@ export function generateFileCode(
     'decodeUTF8',
     'decodeVarintAuto',
     'decodeVarintBigInt',
-    'decodeZigZag',
+    'decodeZigZag32',
     'decodeZigZagAuto',
     'defineMessage',
     'encodeField0SchemaMeta',
@@ -1477,6 +1493,7 @@ export function generateFileCode(
     'roundFloat32Shortest',
     'spliceFields',
     'validateMapTypes',
+    'validateMessage',
     'validateValue',
     'writeField0SchemaMeta',
     'BinaryReadOptions',
@@ -1609,12 +1626,20 @@ export function generateFileCode(
   for (const msgInfo of localMessages) {
     const msg = msgInfo.desc;
     const fullProtoName = msgInfo.fullProtoName;
+    if ((msg.extension?.length ?? 0) > 0) {
+      throw new Error(`omnibuf: proto2 extensions are not supported (${fullProtoName})`);
+    }
     const fields: ResolvedField[] = [];
     const oneofsMap = new Map<number, ResolvedOneof>();
     const usedInterfaceProps = new Set<string>([
       '$typeName',
       '$unknown',
+      '__proto__',
       'constructor',
+      'hasOwnProperty',
+      'isPrototypeOf',
+      'propertyIsEnumerable',
+      'toLocaleString',
       'toString',
       'toJSON',
       'valueOf',
@@ -1645,6 +1670,16 @@ export function generateFileCode(
     for (const f of msg.field ?? []) {
       const num = f.number ?? 0;
       const name = f.name ?? `field_${num}`;
+      if (!Number.isInteger(num) || num < 1 || num > 536870911) {
+        throw new Error(
+          `omnibuf: field number ${num} on ${fullProtoName}.${name} out of range (1..536870911)`,
+        );
+      }
+      if (num >= 19000 && num <= 19999) {
+        throw new Error(
+          `omnibuf: field number ${num} on ${fullProtoName}.${name} is in Protobuf reserved range (19000..19999)`,
+        );
+      }
       let localName = safeObjectProperty(protoCamelCase(name));
       while (usedInterfaceProps.has(localName)) {
         localName = `${localName}$`;
@@ -1652,6 +1687,11 @@ export function generateFileCode(
       usedInterfaceProps.add(localName);
 
       const type = parseFieldDescriptorType(f.type);
+      if (type === ProtoScalarType.GROUP) {
+        throw new Error(
+          `omnibuf: proto2 groups (TYPE_GROUP) are not supported (${fullProtoName}.${name})`,
+        );
+      }
       const rep = isRepeated(f.label);
 
       const mapEntry =
@@ -1663,7 +1703,11 @@ export function generateFileCode(
         f.oneofIndex !== undefined && !f.proto3Optional ? oneofsMap.get(f.oneofIndex) : undefined;
       const oneofProtoName = oneofGroup?.protoName;
       const oneofLocalName = oneofGroup?.localName;
-      const explicitPresence = !oneofLocalName && Boolean(f.proto3Optional);
+      const explicitPresence =
+        !oneofLocalName &&
+        !rep &&
+        type !== ProtoScalarType.MESSAGE &&
+        (Boolean(f.proto3Optional) || isProto2);
 
       let rf: ResolvedField;
       if (type === ProtoScalarType.MESSAGE && mapEntry) {
@@ -1743,11 +1787,17 @@ export function generateFileCode(
 
     // Allocate Opaque<Message> member names (storage, getX/setX, and non-colliding shorthand methods)
     const usedOpaqueMembers = new Set<string>([
+      '__proto__',
       'constructor',
       '_raw',
       '_dirtyMask',
+      '_dirtySet',
       'raw',
       'marshal',
+      'hasOwnProperty',
+      'isPrototypeOf',
+      'propertyIsEnumerable',
+      'toLocaleString',
       'toString',
       'toJSON',
       'valueOf',
@@ -1792,7 +1842,7 @@ export function generateFileCode(
 
   const lines: string[] = [];
   lines.push('// Code generated by protoc-gen-omnibuf-es. DO NOT EDIT.');
-  lines.push(`// source: ${fileName}`);
+  lines.push(`// source: ${safeFileComment}`);
   lines.push('/* eslint-disable @typescript-eslint/no-unused-vars */');
   lines.push('');
   lines.push('import {');
@@ -1814,7 +1864,7 @@ export function generateFileCode(
   lines.push('  decodeUTF8,');
   lines.push('  decodeVarintAuto,');
   lines.push('  decodeVarintBigInt,');
-  lines.push('  decodeZigZag,');
+  lines.push('  decodeZigZag32,');
   lines.push('  decodeZigZagAuto,');
   lines.push('  defineMessage,');
   lines.push('  encodeField0SchemaMeta,');
@@ -1861,6 +1911,7 @@ export function generateFileCode(
   lines.push('  roundFloat32Shortest,');
   lines.push('  spliceFields,');
   lines.push('  validateMapTypes,');
+  lines.push('  validateMessage,');
   lines.push('  validateValue,');
   lines.push('  writeField0SchemaMeta,');
   lines.push('  type BinaryReadOptions,');
@@ -2077,14 +2128,25 @@ export function generateFileCode(
     lines.push('    if (!options?.merge) {');
     for (const oneof of oneofs) {
       for (const ofld of oneof.fields) {
-        lines.push(`      delete (out as any).${ofld.localName};`);
+        lines.push(
+          `      if (Object.hasOwn(out, ${JSON.stringify(ofld.localName)})) delete (out as any).${ofld.localName};`,
+        );
         if (ofld.emitNameAlias) {
-          lines.push(`      delete (out as any).${ofld.name};`);
+          lines.push(
+            `      if (Object.hasOwn(out, ${JSON.stringify(ofld.name)})) delete (out as any).${ofld.name};`,
+          );
         }
       }
     }
+    for (const f of fields) {
+      if (!f.oneofLocalName && f.emitNameAlias) {
+        lines.push(
+          `      if (Object.hasOwn(out, ${JSON.stringify(f.name)})) delete (out as any).${f.name};`,
+        );
+      }
+    }
     lines.push(`      Object.assign(out, new ${msgName}Msg());`);
-    lines.push('      delete (out as any).$unknown;');
+    lines.push("      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;");
     lines.push('    }');
     lines.push('  }');
     lines.push('  const n = endPos;');
@@ -2297,6 +2359,8 @@ export function generateFileCode(
     } else {
       lines.push('      this._dirtySet = null;');
     }
+    lines.push('    } else {');
+    lines.push('      validateMessage(this._raw);');
     lines.push('    }');
     lines.push('    if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {');
     lines.push(

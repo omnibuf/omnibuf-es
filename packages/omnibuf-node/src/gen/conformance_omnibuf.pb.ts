@@ -21,7 +21,7 @@ import {
   decodeUTF8,
   decodeVarintAuto,
   decodeVarintBigInt,
-  decodeZigZag,
+  decodeZigZag32,
   decodeZigZagAuto,
   defineMessage,
   encodeField0SchemaMeta,
@@ -68,6 +68,7 @@ import {
   roundFloat32Shortest,
   spliceFields,
   validateMapTypes,
+  validateMessage,
   validateValue,
   writeField0SchemaMeta,
   type BinaryReadOptions,
@@ -211,8 +212,8 @@ export function encodeConformanceRequest(
 ): void {
   enc.writeString(1, msg.testName ?? msg.test_name ?? '');
   enc.writeString(2, msg.messageType ?? msg.message_type ?? '');
-  enc.writeInt(3, msg.tier ?? 0);
-  enc.writeInt(4, msg.requestedOutputFormat ?? msg.requested_output_format ?? 0);
+  enc.writeInt(3, Number(msg.tier ?? 0) | 0);
+  enc.writeInt(4, Number(msg.requestedOutputFormat ?? msg.requested_output_format ?? 0) | 0);
   enc.writeBytes(5, msg.omnibufPayload ?? msg.omnibuf_payload ?? new Uint8Array(0));
   enc.writeString(6, msg.jsonPayload ?? msg.json_payload ?? '');
   enc.writeBool(7, Boolean(msg.selfDescribing ?? msg.self_describing));
@@ -261,8 +262,18 @@ export function decodeConformanceRequest(
       Object.setPrototypeOf(out, ConformanceRequestMsg.prototype);
     }
     if (!options?.merge) {
+      if (Object.hasOwn(out, 'test_name')) delete (out as any).test_name;
+      if (Object.hasOwn(out, 'message_type')) delete (out as any).message_type;
+      if (Object.hasOwn(out, 'requested_output_format'))
+        delete (out as any).requested_output_format;
+      if (Object.hasOwn(out, 'omnibuf_payload')) delete (out as any).omnibuf_payload;
+      if (Object.hasOwn(out, 'json_payload')) delete (out as any).json_payload;
+      if (Object.hasOwn(out, 'self_describing')) delete (out as any).self_describing;
+      if (Object.hasOwn(out, 'test_opaque_splice')) delete (out as any).test_opaque_splice;
+      if (Object.hasOwn(out, 'test_opaque_splice_shrink'))
+        delete (out as any).test_opaque_splice_shrink;
       Object.assign(out, new ConformanceRequestMsg());
-      delete (out as any).$unknown;
+      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
@@ -396,7 +407,7 @@ export function decodeConformanceRequest(
         } else {
           const [v, vn] = decodeVarintBigInt(buf, pos, n);
           if (vn === 0) throw new Error('omnibuf: truncated int32/enum');
-          i32Val = decodeZigZag(v) | 0;
+          i32Val = decodeZigZag32(v);
           pos += vn;
         }
         out.tier = i32Val as any;
@@ -439,7 +450,7 @@ export function decodeConformanceRequest(
         } else {
           const [v, vn] = decodeVarintBigInt(buf, pos, n);
           if (vn === 0) throw new Error('omnibuf: truncated int32/enum');
-          i32Val = decodeZigZag(v) | 0;
+          i32Val = decodeZigZag32(v);
           pos += vn;
         }
         out.requestedOutputFormat = i32Val as any;
@@ -801,14 +812,17 @@ export class OpaqueConformanceRequest {
           }
           case 3: {
             const msg = { tier: this._tier! } as Partial<ConformanceRequest>;
-            enc.writeInt(3, msg.tier ?? 0);
+            enc.writeInt(3, Number(msg.tier ?? 0) | 0);
             break;
           }
           case 4: {
             const msg = {
               requestedOutputFormat: this._requestedOutputFormat!,
             } as Partial<ConformanceRequest>;
-            enc.writeInt(4, msg.requestedOutputFormat ?? msg.requested_output_format ?? 0);
+            enc.writeInt(
+              4,
+              Number(msg.requestedOutputFormat ?? msg.requested_output_format ?? 0) | 0,
+            );
             break;
           }
           case 5: {
@@ -843,6 +857,8 @@ export class OpaqueConformanceRequest {
         }
       });
       this._dirtyMask = 0;
+    } else {
+      validateMessage(this._raw);
     }
     if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
       const f0 = encodeField0SchemaMeta(
@@ -994,8 +1010,13 @@ export function decodeConformanceResponse(
       Object.setPrototypeOf(out, ConformanceResponseMsg.prototype);
     }
     if (!options?.merge) {
+      if (Object.hasOwn(out, 'parse_error')) delete (out as any).parse_error;
+      if (Object.hasOwn(out, 'serialize_error')) delete (out as any).serialize_error;
+      if (Object.hasOwn(out, 'runtime_error')) delete (out as any).runtime_error;
+      if (Object.hasOwn(out, 'omnibuf_payload')) delete (out as any).omnibuf_payload;
+      if (Object.hasOwn(out, 'json_payload')) delete (out as any).json_payload;
       Object.assign(out, new ConformanceResponseMsg());
-      delete (out as any).$unknown;
+      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
@@ -1412,6 +1433,8 @@ export class OpaqueConformanceResponse {
         }
       });
       this._dirtyMask = 0;
+    } else {
+      validateMessage(this._raw);
     }
     if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
       const f0 = encodeField0SchemaMeta(
@@ -1521,7 +1544,7 @@ export function decodeAllTypesSubMsg(
     }
     if (!options?.merge) {
       Object.assign(out, new AllTypesSubMsgMsg());
-      delete (out as any).$unknown;
+      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
@@ -1817,6 +1840,8 @@ export class OpaqueAllTypesSubMsg {
         }
       });
       this._dirtyMask = 0;
+    } else {
+      validateMessage(this._raw);
     }
     if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
       const f0 = encodeField0SchemaMeta(
@@ -2052,7 +2077,7 @@ export function encodeTestAllTypes(
 ): void {
   enc.writeUint(1, Number(msg.f1Uint32 ?? msg.f1_uint32 ?? 0) >>> 0);
   enc.writeUint(2, msg.f2Uint64 ?? msg.f2_uint64 ?? 0);
-  enc.writeInt(3, msg.f3Sint32 ?? msg.f3_sint32 ?? 0);
+  enc.writeInt(3, Number(msg.f3Sint32 ?? msg.f3_sint32 ?? 0) | 0);
   enc.writeInt(4, msg.f4Sint64 ?? msg.f4_sint64 ?? 0);
   enc.writeBool(5, Boolean(msg.f5Bool ?? msg.f5_bool));
   enc.writeString(6, msg.f6String ?? msg.f6_string ?? '');
@@ -2072,7 +2097,7 @@ export function encodeTestAllTypes(
     enc.beginSubMsgArr(11);
     for (let i = 0; i < arr.length; i++) {
       enc.beginSubMsgElem();
-      encodeAllTypesSubMsg(enc, arr[i]!, options);
+      if (arr[i] !== null && arr[i] !== undefined) encodeAllTypesSubMsg(enc, arr[i]!, options);
       enc.endSubMsgElem();
     }
     enc.endSubMsgArr();
@@ -2093,7 +2118,7 @@ export function encodeTestAllTypes(
   }
   enc.writeFloat32(13, msg.f13Float32 ?? msg.f13_float32 ?? 0);
   enc.writeFloat64(14, msg.f14Float64 ?? msg.f14_float64 ?? 0);
-  enc.writeFixed32(15, msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0);
+  enc.writeFixed32(15, Number(msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0) >>> 0);
   enc.writeFixed64(16, msg.f16Fixed64 ?? msg.f16_fixed64 ?? 0);
   enc.writeString(20, msg.f20OverflowStr ?? msg.f20_overflow_str ?? '');
   if (options?.writeUnknownFields && Array.isArray((msg as any).$unknown)) {
@@ -2139,8 +2164,25 @@ export function decodeTestAllTypes(
       Object.setPrototypeOf(out, TestAllTypesMsg.prototype);
     }
     if (!options?.merge) {
+      if (Object.hasOwn(out, 'f1_uint32')) delete (out as any).f1_uint32;
+      if (Object.hasOwn(out, 'f2_uint64')) delete (out as any).f2_uint64;
+      if (Object.hasOwn(out, 'f3_sint32')) delete (out as any).f3_sint32;
+      if (Object.hasOwn(out, 'f4_sint64')) delete (out as any).f4_sint64;
+      if (Object.hasOwn(out, 'f5_bool')) delete (out as any).f5_bool;
+      if (Object.hasOwn(out, 'f6_string')) delete (out as any).f6_string;
+      if (Object.hasOwn(out, 'f7_bytes')) delete (out as any).f7_bytes;
+      if (Object.hasOwn(out, 'f8_sub_msg')) delete (out as any).f8_sub_msg;
+      if (Object.hasOwn(out, 'f9_string_arr')) delete (out as any).f9_string_arr;
+      if (Object.hasOwn(out, 'f10_uint32_arr')) delete (out as any).f10_uint32_arr;
+      if (Object.hasOwn(out, 'f11_sub_msg_arr')) delete (out as any).f11_sub_msg_arr;
+      if (Object.hasOwn(out, 'f12_map_str_uint')) delete (out as any).f12_map_str_uint;
+      if (Object.hasOwn(out, 'f13_float32')) delete (out as any).f13_float32;
+      if (Object.hasOwn(out, 'f14_float64')) delete (out as any).f14_float64;
+      if (Object.hasOwn(out, 'f15_fixed32')) delete (out as any).f15_fixed32;
+      if (Object.hasOwn(out, 'f16_fixed64')) delete (out as any).f16_fixed64;
+      if (Object.hasOwn(out, 'f20_overflow_str')) delete (out as any).f20_overflow_str;
       Object.assign(out, new TestAllTypesMsg());
-      delete (out as any).$unknown;
+      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
@@ -2309,7 +2351,7 @@ export function decodeTestAllTypes(
         } else {
           const [v, vn] = decodeVarintBigInt(buf, pos, n);
           if (vn === 0) throw new Error('omnibuf: truncated int32/enum');
-          i32Val = decodeZigZag(v) | 0;
+          i32Val = decodeZigZag32(v);
           pos += vn;
         }
         out.f3Sint32 = i32Val as any;
@@ -2473,6 +2515,10 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
+        if (depth + 1 > maxDepth)
+          throw new Error(
+            `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
+          );
         if (pos >= n) throw new Error('omnibuf: invalid string array');
         const lb = buf[pos]!;
         let bodyLen = 0;
@@ -2550,6 +2596,10 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
+        if (depth + 1 > maxDepth)
+          throw new Error(
+            `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
+          );
         if (pos >= n) throw new Error('omnibuf: invalid uint32 array');
         const lb = buf[pos]!;
         let bodyLen = 0;
@@ -2633,6 +2683,10 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
+        if (depth + 1 > maxDepth)
+          throw new Error(
+            `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
+          );
         if (pos >= n) throw new Error('omnibuf: corrupt submsg array');
         let arrLen = 0;
         const lb = buf[pos]!;
@@ -2654,7 +2708,7 @@ export function decodeTestAllTypes(
             p += en;
             const elNum = Number(el);
             elems.push(
-              decodeAllTypesSubMsg(arrPayload, undefined, depth + 1, options, p, p + elNum),
+              decodeAllTypesSubMsg(arrPayload, undefined, depth + 2, options, p, p + elNum),
             );
             p += elNum;
           }
@@ -2694,7 +2748,7 @@ export function decodeTestAllTypes(
               elNum = Number(el);
             }
             if (p + elNum > arrEnd) throw new Error('omnibuf: corrupt submsg array');
-            elems.push(decodeAllTypesSubMsg(buf, undefined, depth + 1, options, p, p + elNum));
+            elems.push(decodeAllTypesSubMsg(buf, undefined, depth + 2, options, p, p + elNum));
             p += elNum;
           }
           if (p !== arrEnd) throw new Error('omnibuf: corrupt submsg array');
@@ -2710,7 +2764,7 @@ export function decodeTestAllTypes(
           const [el, en] = decodeVarintBigInt(arrPayload, p);
           p += en;
           const elNum = Number(el);
-          elems.push(decodeAllTypesSubMsg(arrPayload, undefined, depth + 1, options, p, p + elNum));
+          elems.push(decodeAllTypesSubMsg(arrPayload, undefined, depth + 2, options, p, p + elNum));
           p += elNum;
         }
         out.f11SubMsgArr = elems;
@@ -2732,10 +2786,15 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
+        if (depth + 1 > maxDepth)
+          throw new Error(
+            `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
+          );
         const [body, nextPos] = readLenSlice(buf, pos, 3, n);
         const keyWT = body[0]!;
         const valWT = body[1]!;
         validateMapTypes(keyWT, valWT);
+        if (keyWT !== 10 || valWT !== 0) throw new Error('omnibuf: WireMap header mismatch');
         const [count, cn] = decodeVarintBigInt(body, 2);
         if (cn === 0 || count > BigInt(Math.floor((body.length - (2 + cn)) / 2)))
           throw new Error('omnibuf: invalid map count');
@@ -3332,7 +3391,7 @@ export class OpaqueTestAllTypes {
           }
           case 3: {
             const msg = { f3Sint32: this._f3Sint32! } as Partial<TestAllTypes>;
-            enc.writeInt(3, msg.f3Sint32 ?? msg.f3_sint32 ?? 0);
+            enc.writeInt(3, Number(msg.f3Sint32 ?? msg.f3_sint32 ?? 0) | 0);
             break;
           }
           case 4: {
@@ -3384,7 +3443,8 @@ export class OpaqueTestAllTypes {
               enc.beginSubMsgArr(11);
               for (let i = 0; i < arr.length; i++) {
                 enc.beginSubMsgElem();
-                encodeAllTypesSubMsg(enc, arr[i]!, options);
+                if (arr[i] !== null && arr[i] !== undefined)
+                  encodeAllTypesSubMsg(enc, arr[i]!, options);
                 enc.endSubMsgElem();
               }
               enc.endSubMsgArr();
@@ -3421,7 +3481,7 @@ export class OpaqueTestAllTypes {
           }
           case 15: {
             const msg = { f15Fixed32: this._f15Fixed32! } as Partial<TestAllTypes>;
-            enc.writeFixed32(15, msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0);
+            enc.writeFixed32(15, Number(msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0) >>> 0);
             break;
           }
           case 16: {
@@ -3437,6 +3497,8 @@ export class OpaqueTestAllTypes {
         }
       });
       this._dirtyMask = 0;
+    } else {
+      validateMessage(this._raw);
     }
     if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
       const f0 = encodeField0SchemaMeta(

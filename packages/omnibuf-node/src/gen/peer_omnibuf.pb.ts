@@ -21,7 +21,7 @@ import {
   decodeUTF8,
   decodeVarintAuto,
   decodeVarintBigInt,
-  decodeZigZag,
+  decodeZigZag32,
   decodeZigZagAuto,
   defineMessage,
   encodeField0SchemaMeta,
@@ -68,6 +68,7 @@ import {
   roundFloat32Shortest,
   spliceFields,
   validateMapTypes,
+  validateMessage,
   validateValue,
   writeField0SchemaMeta,
   type BinaryReadOptions,
@@ -175,7 +176,7 @@ export function decodeLocation(
     }
     if (!options?.merge) {
       Object.assign(out, new LocationMsg());
-      delete (out as any).$unknown;
+      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
@@ -577,6 +578,8 @@ export class OpaqueLocation {
         }
       });
       this._dirtyMask = 0;
+    } else {
+      validateMessage(this._raw);
     }
     if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
       const f0 = encodeField0SchemaMeta(
@@ -694,8 +697,10 @@ export function decodeNeighbor(
       Object.setPrototypeOf(out, NeighborMsg.prototype);
     }
     if (!options?.merge) {
+      if (Object.hasOwn(out, 'peer_asn')) delete (out as any).peer_asn;
+      if (Object.hasOwn(out, 'latency_us')) delete (out as any).latency_us;
       Object.assign(out, new NeighborMsg());
-      delete (out as any).$unknown;
+      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
@@ -1019,6 +1024,8 @@ export class OpaqueNeighbor {
         }
       });
       this._dirtyMask = 0;
+    } else {
+      validateMessage(this._raw);
     }
     if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
       const f0 = encodeField0SchemaMeta(
@@ -1126,7 +1133,7 @@ export function encodePeerUpdate(
   enc.writeString(2, msg.routerId ?? msg.router_id ?? '');
   enc.writeBool(3, Boolean(msg.active));
   enc.writeUint(4, msg.uptimeSec ?? msg.uptime_sec ?? 0);
-  enc.writeInt(5, msg.rssiDbm ?? msg.rssi_dbm ?? 0);
+  enc.writeInt(5, Number(msg.rssiDbm ?? msg.rssi_dbm ?? 0) | 0);
   enc.writeFloat64(6, msg.cpuLoad ?? msg.cpu_load ?? 0);
   enc.writeStringArr(7, msg.tags ?? []);
   enc.writeUint32Arr(8, msg.prefixes ?? []);
@@ -1143,7 +1150,7 @@ export function encodePeerUpdate(
     enc.beginSubMsgArr(10);
     for (let i = 0; i < arr.length; i++) {
       enc.beginSubMsgElem();
-      encodeNeighbor(enc, arr[i]!, options);
+      if (arr[i] !== null && arr[i] !== undefined) encodeNeighbor(enc, arr[i]!, options);
       enc.endSubMsgElem();
     }
     enc.endSubMsgArr();
@@ -1192,8 +1199,12 @@ export function decodePeerUpdate(
       Object.setPrototypeOf(out, PeerUpdateMsg.prototype);
     }
     if (!options?.merge) {
+      if (Object.hasOwn(out, 'router_id')) delete (out as any).router_id;
+      if (Object.hasOwn(out, 'uptime_sec')) delete (out as any).uptime_sec;
+      if (Object.hasOwn(out, 'rssi_dbm')) delete (out as any).rssi_dbm;
+      if (Object.hasOwn(out, 'cpu_load')) delete (out as any).cpu_load;
       Object.assign(out, new PeerUpdateMsg());
-      delete (out as any).$unknown;
+      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
@@ -1410,7 +1421,7 @@ export function decodePeerUpdate(
         } else {
           const [v, vn] = decodeVarintBigInt(buf, pos, n);
           if (vn === 0) throw new Error('omnibuf: truncated int32/enum');
-          i32Val = decodeZigZag(v) | 0;
+          i32Val = decodeZigZag32(v);
           pos += vn;
         }
         out.rssiDbm = i32Val as any;
@@ -1451,6 +1462,10 @@ export function decodePeerUpdate(
           break;
         }
         seenMask |= bit;
+        if (depth + 1 > maxDepth)
+          throw new Error(
+            `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
+          );
         if (pos >= n) throw new Error('omnibuf: invalid string array');
         const lb = buf[pos]!;
         let bodyLen = 0;
@@ -1528,6 +1543,10 @@ export function decodePeerUpdate(
           break;
         }
         seenMask |= bit;
+        if (depth + 1 > maxDepth)
+          throw new Error(
+            `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
+          );
         if (pos >= n) throw new Error('omnibuf: invalid uint32 array');
         const lb = buf[pos]!;
         let bodyLen = 0;
@@ -1665,6 +1684,10 @@ export function decodePeerUpdate(
           break;
         }
         seenMask |= bit;
+        if (depth + 1 > maxDepth)
+          throw new Error(
+            `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
+          );
         if (pos >= n) throw new Error('omnibuf: corrupt submsg array');
         let arrLen = 0;
         const lb = buf[pos]!;
@@ -1685,7 +1708,7 @@ export function decodePeerUpdate(
             const [el, en] = decodeVarintBigInt(arrPayload, p);
             p += en;
             const elNum = Number(el);
-            elems.push(decodeNeighbor(arrPayload, undefined, depth + 1, options, p, p + elNum));
+            elems.push(decodeNeighbor(arrPayload, undefined, depth + 2, options, p, p + elNum));
             p += elNum;
           }
           out.neighbors = elems;
@@ -1724,7 +1747,7 @@ export function decodePeerUpdate(
               elNum = Number(el);
             }
             if (p + elNum > arrEnd) throw new Error('omnibuf: corrupt submsg array');
-            elems.push(decodeNeighbor(buf, undefined, depth + 1, options, p, p + elNum));
+            elems.push(decodeNeighbor(buf, undefined, depth + 2, options, p, p + elNum));
             p += elNum;
           }
           if (p !== arrEnd) throw new Error('omnibuf: corrupt submsg array');
@@ -1740,7 +1763,7 @@ export function decodePeerUpdate(
           const [el, en] = decodeVarintBigInt(arrPayload, p);
           p += en;
           const elNum = Number(el);
-          elems.push(decodeNeighbor(arrPayload, undefined, depth + 1, options, p, p + elNum));
+          elems.push(decodeNeighbor(arrPayload, undefined, depth + 2, options, p, p + elNum));
           p += elNum;
         }
         out.neighbors = elems;
@@ -2092,7 +2115,7 @@ export class OpaquePeerUpdate {
           }
           case 5: {
             const msg = { rssiDbm: this._rssiDbm! } as Partial<PeerUpdate>;
-            enc.writeInt(5, msg.rssiDbm ?? msg.rssi_dbm ?? 0);
+            enc.writeInt(5, Number(msg.rssiDbm ?? msg.rssi_dbm ?? 0) | 0);
             break;
           }
           case 6: {
@@ -2129,7 +2152,7 @@ export class OpaquePeerUpdate {
               enc.beginSubMsgArr(10);
               for (let i = 0; i < arr.length; i++) {
                 enc.beginSubMsgElem();
-                encodeNeighbor(enc, arr[i]!, options);
+                if (arr[i] !== null && arr[i] !== undefined) encodeNeighbor(enc, arr[i]!, options);
                 enc.endSubMsgElem();
               }
               enc.endSubMsgArr();
@@ -2144,6 +2167,8 @@ export class OpaquePeerUpdate {
         }
       });
       this._dirtyMask = 0;
+    } else {
+      validateMessage(this._raw);
     }
     if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
       const f0 = encodeField0SchemaMeta(

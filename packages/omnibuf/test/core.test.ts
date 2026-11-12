@@ -1185,4 +1185,163 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     });
     expect(readUint(splicedBigInt, 50000)).toEqual([999, true]);
   });
+
+  it('enforces Spec §10 container nesting depth, 64-bit vs 32-bit ZigZag semantics, reserved field numbers, proto2 rules, and defensive copies', () => {
+    // 1. Spec §10 nesting depth: array/map containers at depth+1, submsg elements at depth+2
+    const LeafSchema = defineMessage<{ vals: number[]; labels: Record<string, number> }>(
+      'test.Leaf',
+      {
+        vals: { fieldNum: 1, type: 'uint32[]' },
+        labels: { fieldNum: 2, type: 'map', mapKey: 'string', mapVal: 'uint32' },
+      },
+    );
+    const NodeSchema: ReturnType<typeof defineMessage<any>> = defineMessage('test.Node', {
+      id: { fieldNum: 1, type: 'uint32' },
+      next: { fieldNum: 2, type: 'submsg', optional: true, subSchema: () => NodeSchema },
+      leaf: { fieldNum: 3, type: 'submsg', optional: true, subSchema: () => LeafSchema },
+      children: { fieldNum: 4, type: 'submsg[]', subSchema: () => NodeSchema },
+    });
+
+    // Build chain of depth 32 with a scalar array at leaf (container depth 33 > 32)
+    let deepArrNode: any = { id: 99, next: null, leaf: { vals: [1], labels: {} }, children: [] };
+    for (let i = 0; i < 31; i++) {
+      deepArrNode = { id: i + 1, next: deepArrNode, leaf: null, children: [] };
+    }
+    // Root (0) -> 31 next hops (31) -> leaf submsg (32) -> vals WireArray (33 > 32)
+    const deepArrPkt = NodeSchema.encode(deepArrNode);
+    assert.throws(() => NodeSchema.decode(deepArrPkt), /nesting depth/);
+    assert.throws(() => decodeBlind(deepArrPkt), /nesting depth/);
+
+    // Unknown field validation at depth 32 containing WireArray (container depth 33 > 32)
+    const EmptyRoot = defineMessage<Record<string, never>>('test.EmptyRoot', {});
+    assert.throws(() => EmptyRoot.decode(deepArrPkt), /nesting depth/);
+
+    // Submsg inside WireArray increments by +2 (array at d+1, elem at d+2)
+    // At recursionLimit = 1: root (0) -> children WireArray (1) -> child Node submsg (2 > 1) must reject!
+    const oneChildPkt = NodeSchema.encode({
+      id: 1,
+      next: null,
+      leaf: null,
+      children: [{ id: 2, next: null, leaf: null, children: [] }],
+    });
+    assert.throws(
+      () => NodeSchema.decode(oneChildPkt, undefined, 0, { recursionLimit: 1 }),
+      /nesting depth/,
+    );
+
+    // SchemaMeta children map enforces MaxNestingDepth across nested schemas and maps
+    let deepMeta: SchemaMeta = { typeName: 'Leaf', fields: { 1: 'x' } };
+    for (let i = 0; i < 33; i++) {
+      deepMeta = { typeName: `M${i}`, children: { 1: deepMeta } };
+    }
+    const deepField0 = encodeField0SchemaMeta(deepMeta);
+    assert.throws(() => decodeBlind(deepField0), /nesting depth/);
+    expect(readField0SchemaMeta(deepField0)[1]).toBe(false);
+
+    // 2. decodeZigZag preserves full float64 range (> 2^53) while readInt32 / int32 schema wraps low 32 bits accurately
+    const bigSigned = (1n << 54n) + 5n; // > MAX_SAFE_INTEGER; low 32 bits = 5
+    const zzBig = encodeZigZag(bigSigned);
+    expect(decodeZigZag(zzBig)).toBe(Number(bigSigned));
+    const zzEnc = new Encoder();
+    zzEnc.writeTag(1, WireSint);
+    zzEnc.writeRawVarint(zzBig);
+    const zzPkt = zzEnc.finish();
+    expect(readInt32(zzPkt, 1)).toEqual([5, true]);
+    const Int32Single = defineMessage<{ v: number }>('test.Int32Single', {
+      v: { fieldNum: 1, type: 'int32' },
+    });
+    expect(Int32Single.decode(zzPkt).v).toBe(5);
+
+    // 3. Reserved Protobuf field numbers 19000..19999 rejected
+    assert.throws(
+      () => defineMessage('test.Reserved', { bad: { fieldNum: 19000, type: 'uint32' } }),
+      /reserved/,
+    );
+    assert.throws(
+      () => defineMessage('test.ReservedEnd', { bad: { fieldNum: 19999, type: 'uint32' } }),
+      /reserved/,
+    );
+
+    // 4. Proto2 explicit presence, TYPE_GROUP rejection, and extension rejection in DescriptorRegistry
+    const proto2Reg = new DescriptorRegistry({
+      file: [
+        {
+          name: 'p2.proto',
+          package: 'p2',
+          syntax: 'proto2',
+          messageType: [
+            {
+              name: 'Config',
+              field: [{ name: 'port', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' }],
+            },
+          ],
+        },
+      ],
+    });
+    const p2Schema = proto2Reg.getSchemaOrThrow('p2.Config');
+    expect(p2Schema.create().port).toBe(undefined);
+    const p2ZeroBytes = p2Schema.encode({ port: 0 });
+    expect(p2ZeroBytes.length > 0).toBe(true);
+    expect(p2Schema.decode(new Uint8Array(0)).port).toBe(undefined);
+    expect(p2Schema.decode(p2ZeroBytes).port).toBe(0);
+
+    assert.throws(
+      () =>
+        new DescriptorRegistry({
+          file: [
+            {
+              name: 'grp.proto',
+              syntax: 'proto2',
+              messageType: [
+                {
+                  name: 'WithGroup',
+                  field: [{ name: 'g', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_GROUP' }],
+                },
+              ],
+            },
+          ],
+        }),
+      /TYPE_GROUP|group/i,
+    );
+
+    assert.throws(
+      () =>
+        new DescriptorRegistry({
+          file: [
+            {
+              name: 'ext.proto',
+              syntax: 'proto2',
+              extension: [
+                { name: 'ext_f', number: 100, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' },
+              ],
+              messageType: [{ name: 'Base', field: [] }],
+            },
+          ],
+        }),
+      /extension/i,
+    );
+
+    // 5. NaN equals NaN, getField0Bytes returns defensive copy, target decode clears stale altKey, decodeBlindJSON empty pretty object
+    const FloatSchema = defineMessage<{ f: number; userName: string }>('test.FloatMsg', {
+      f: { fieldNum: 1, type: 'float64' },
+      userName: { fieldNum: 2, name: 'user_name', type: 'string' },
+    });
+    expect(
+      FloatSchema.equals(
+        FloatSchema.create({ f: Number.NaN, userName: 'a' }),
+        FloatSchema.create({ f: Number.NaN, userName: 'a' }),
+      ),
+    ).toBe(true);
+
+    const f0Copy = FloatSchema.getField0Bytes(true);
+    const origByte0 = f0Copy[0]!;
+    f0Copy[0] = 0xff;
+    expect(FloatSchema.getField0Bytes(true)[0]).toBe(origByte0);
+
+    const dirtyTarget: any = { f: 1, userName: 'old', user_name: 'stale-snake' };
+    FloatSchema.decode(FloatSchema.encode({ f: 2, userName: 'fresh' }), dirtyTarget);
+    expect(Object.hasOwn(dirtyTarget, 'user_name')).toBe(false);
+
+    expect(decodeBlindJSON(new Uint8Array(0), { indent: 2 })).toBe('{}');
+  });
 });

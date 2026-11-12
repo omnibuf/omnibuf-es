@@ -418,18 +418,28 @@ export function decodeZigZagBigInt(u: number | bigint): bigint {
 }
 
 /**
- * Maps a ZigZag-encoded unsigned integer back to a signed JS number (when safe)
- * or bigint (when outside Number.MAX_SAFE_INTEGER).
+ * Maps a ZigZag-encoded unsigned integer back to a signed JS number.
  */
 export function decodeZigZag(u: number | bigint): number {
   if (typeof u === 'number' && u <= 0xffffffff) {
-    return (u >>> 1) ^ -(u & 1);
+    const res = (u >>> 1) ^ -(u & 1);
+    return res === 0 ? 0 : res;
   }
-  const b = decodeZigZagBigInt(u);
-  if (b >= -9007199254740991n && b <= 9007199254740991n) {
-    return Number(b);
+  const n = Number(decodeZigZagBigInt(u));
+  return n === 0 ? 0 : n;
+}
+
+/**
+ * Maps a ZigZag-encoded unsigned integer back to a signed 32-bit JS number,
+ * retaining the exact low 32 bits even when the wire value exceeds 2^53.
+ */
+export function decodeZigZag32(u: number | bigint): number {
+  if (typeof u === 'number' && u <= 0xffffffff) {
+    const res = (u >>> 1) ^ -(u & 1);
+    return res === 0 ? 0 : res;
   }
-  return Number(BigInt.asIntN(32, b));
+  const n = Number(BigInt.asIntN(32, decodeZigZagBigInt(u)));
+  return n === 0 ? 0 : n;
 }
 
 /**

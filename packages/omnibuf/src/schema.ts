@@ -45,7 +45,7 @@ import {
   decodeVarint,
   decodeVarintAuto,
   decodeVarintBigInt,
-  decodeZigZag,
+  decodeZigZag32,
   decodeZigZagAuto,
   decodeZigZagBigInt,
   encodeZigZag,
@@ -552,6 +552,11 @@ export class MessageSchema<
       if (!Number.isInteger(spec.fieldNum) || spec.fieldNum < 1 || spec.fieldNum > 536870911) {
         throw new Error(
           `omnibuf: field number ${spec.fieldNum} on ${typeName}.${propKey} out of range (1..536870911)`,
+        );
+      }
+      if (spec.fieldNum >= 19000 && spec.fieldNum <= 19999) {
+        throw new Error(
+          `omnibuf: field number ${spec.fieldNum} on ${typeName}.${propKey} is in Protobuf reserved range (19000..19999)`,
         );
       }
       if (this.byNum.has(spec.fieldNum)) {
@@ -1079,7 +1084,7 @@ export class MessageSchema<
 
     for (const f of this.fields) {
       fieldsMap[f.fieldNum] = f.name;
-      if (f.resolveSubSchema && depth < MaxNestingDepth) {
+      if (f.resolveSubSchema && depth + 2 < MaxNestingDepth) {
         const sub = f.resolveSubSchema();
         if (!sub) continue;
 
@@ -1151,18 +1156,21 @@ export class MessageSchema<
     return meta;
   }
 
+  private getCachedField0Det(): Uint8Array {
+    if (!this.cachedField0Det) {
+      this.cachedField0Det = encodeField0SchemaMeta(this.getSchemaMeta(0), true);
+    }
+    return this.cachedField0Det;
+  }
+
   /**
    * Returns pre-encoded deterministic Field #0 bytes.
    */
   getField0Bytes(deterministic = true): Uint8Array {
-    if (deterministic && this.cachedField0Det) {
-      return this.cachedField0Det;
-    }
-    const bytes = encodeField0SchemaMeta(this.getSchemaMeta(0), deterministic);
     if (deterministic) {
-      this.cachedField0Det = bytes;
+      return this.getCachedField0Det().slice();
     }
-    return bytes;
+    return encodeField0SchemaMeta(this.getSchemaMeta(0), false);
   }
 
   /**
@@ -1192,7 +1200,7 @@ export class MessageSchema<
     const writeUnknown = options?.writeUnknownFields ?? false;
     if (options?.selfDescribing) {
       if (deterministic && !this.isCyclicOrDeep()) {
-        enc.writeRaw(this.getField0Bytes(true));
+        enc.writeRaw(this.getCachedField0Det());
       } else {
         writeField0SchemaMeta(
           enc,
@@ -1316,6 +1324,12 @@ export class MessageSchema<
         }
         for (let i = 0; i < this.fields.length; i++) {
           const f = this.fields[i]!;
+          if (f.altKey && !f.altInObjectProto && Object.hasOwn(out, f.altKey)) {
+            const desc = Object.getOwnPropertyDescriptor(out, f.altKey);
+            if (desc && 'value' in desc) {
+              delete out[f.altKey];
+            }
+          }
           if (f.oneof) continue;
           if (f.explicitPresence) {
             setFieldOnObj(out, f, undefined);
@@ -1323,7 +1337,9 @@ export class MessageSchema<
             setFieldOnObj(out, f, defaultFieldValue(f, nextCreating));
           }
         }
-        delete out.$unknown;
+        if (Object.hasOwn(out, '$unknown')) {
+          delete out.$unknown;
+        }
       }
     }
     const n = data.length;
@@ -1402,10 +1418,30 @@ export class MessageSchema<
         if (cur !== undefined) {
           box[f.propKey] = cur;
         }
-        pos = decodeCompiledFieldValue(data, pos, wt, f, box, alreadySeen, depth, options);
+        pos = decodeCompiledFieldValue(
+          data,
+          pos,
+          wt,
+          f,
+          box,
+          alreadySeen,
+          depth,
+          maxDepth,
+          options,
+        );
         setFieldOnObj(out, f, box[f.propKey]);
       } else {
-        pos = decodeCompiledFieldValue(data, pos, wt, f, out, alreadySeen, depth, options);
+        pos = decodeCompiledFieldValue(
+          data,
+          pos,
+          wt,
+          f,
+          out,
+          alreadySeen,
+          depth,
+          maxDepth,
+          options,
+        );
       }
     }
 
@@ -1594,6 +1630,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 
 function scalarValuesEqual(a: any, b: any): boolean {
   if (a === b) return true;
+  if (Number.isNaN(a) && Number.isNaN(b)) return true;
   if (
     (typeof a === 'number' || typeof a === 'bigint') &&
     (typeof b === 'number' || typeof b === 'bigint')
@@ -2017,10 +2054,14 @@ function decodeCompiledFieldValue(
   out: Record<string, any>,
   alreadySeen: boolean,
   depth: number,
+  maxDepth: number,
   options?: BinaryReadOptions,
 ): number {
   const key = f.propKey;
   const n = data.length;
+  if ((wt === WireArray || wt === WireMap) && depth + 1 > maxDepth) {
+    throw new Error(`omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`);
+  }
 
   switch (f.effectiveType) {
     case 'uint32': {
@@ -2047,12 +2088,12 @@ function decodeCompiledFieldValue(
       if (pos < n && (data[pos]! & 7) !== 0) {
         const [v, vn] = decodeVarint(data, pos);
         if (vn === 0) throw new Error(`omnibuf: truncated int32 at ${pos}`);
-        out[key] = decodeZigZag(v) | 0;
+        out[key] = decodeZigZag32(v);
         return pos + vn;
       }
       const [v, vn] = decodeVarintBigInt(data, pos);
       if (vn === 0) throw new Error(`omnibuf: truncated int32 at ${pos}`);
-      out[key] = decodeZigZag(v) | 0;
+      out[key] = decodeZigZag32(v);
       return pos + vn;
     }
     case 'sint64':
@@ -2320,7 +2361,7 @@ function decodeCompiledFieldValue(
         const elemObj = subSchema.decode(
           arrPayload.subarray(p, p + elNum),
           subSchema.create(),
-          depth + 1,
+          depth + 2,
           options,
         );
         elems.push(elemObj);
@@ -2331,7 +2372,7 @@ function decodeCompiledFieldValue(
     }
     case 'map': {
       const [body, nextPos] = readLenSlice(data, pos, 3);
-      decodeMapFieldBody(f, out, body, alreadySeen, depth, options);
+      decodeMapFieldBody(f, out, body, alreadySeen, depth + 1, options);
       return nextPos;
     }
   }
