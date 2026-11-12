@@ -1020,4 +1020,101 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     expect(locateField(badEmptyMapPkt, 1).ok).toBe(false);
     assert.throws(() => spliceFields(badEmptyMapPkt, 2, 2, () => {}), /invalid map header/);
   });
+
+  it('prevents __proto__ prototype pollution and field loss in MessageSchema and DescriptorRegistry', () => {
+    const ChildSchema = defineMessage<{ polluted: string }>('omnibuf.test.PolluteChild', {
+      polluted: { fieldNum: 1, type: 'string' },
+    });
+
+    // JSON-parsed field spec map where '__proto__' is an own enumerable key
+    const jsonSpecs = JSON.parse('{"__proto__": {"fieldNum": 1, "type": "submsg"}}');
+    Object.getOwnPropertyDescriptor(jsonSpecs, '__proto__')!.value.subSchema = () => ChildSchema;
+    const DangerousSubSchema = defineMessage<Record<string, any>>(
+      'omnibuf.test.DangerousSub',
+      jsonSpecs,
+    );
+
+    const enc = new Encoder();
+    enc.beginSubMsg(1);
+    enc.writeString(1, 'pwned');
+    enc.endSubMsg();
+    const subPkt = enc.finish();
+
+    try {
+      const decoded = DangerousSubSchema.decode(subPkt);
+      expect(({} as any).polluted).toBe(undefined);
+      expect(Object.getPrototypeOf(decoded)).toBe(Object.prototype);
+      expect(Object.hasOwn(decoded, '__proto__')).toBe(true);
+      expect(Object.getOwnPropertyDescriptor(decoded, '__proto__')?.value.polluted).toBe('pwned');
+
+      const cloned = DangerousSubSchema.clone(decoded);
+      expect(Object.getPrototypeOf(cloned)).toBe(Object.prototype);
+      expect(Object.getOwnPropertyDescriptor(cloned, '__proto__')?.value.polluted).toBe('pwned');
+
+      const reEncoded = DangerousSubSchema.encode(cloned);
+      const decodedAgain = DangerousSubSchema.decode(reEncoded);
+      expect(Object.getOwnPropertyDescriptor(decodedAgain, '__proto__')?.value.polluted).toBe(
+        'pwned',
+      );
+    } finally {
+      delete (Object.prototype as any).polluted;
+    }
+
+    // Also test WireMap field named '__proto__' with merge: true (cannot pollute Object.prototype)
+    const jsonMapSpecs = JSON.parse(
+      '{"__proto__": {"fieldNum": 1, "type": "map", "mapKey": "string", "mapVal": "string"}}',
+    );
+    const DangerousMapSchema = defineMessage<Record<string, any>>(
+      'omnibuf.test.DangerousMap',
+      jsonMapSpecs,
+    );
+    const mapEnc = new Encoder();
+    mapEnc.writeTag(1, WireMap);
+    mapEnc.beginContainer();
+    mapEnc.writeByte(WireString);
+    mapEnc.writeByte(WireString);
+    mapEnc.writeRawVarint(1);
+    mapEnc.writeRawStringPayload('pollutedMapKey');
+    mapEnc.writeRawStringPayload('bad');
+    mapEnc.endContainer();
+    const mapPkt = mapEnc.finish();
+    try {
+      const mergedMap = DangerousMapSchema.decode(mapPkt, undefined, 0, { merge: true });
+      expect(({} as any).pollutedMapKey).toBe(undefined);
+      expect(Object.getPrototypeOf(mergedMap)).toBe(Object.prototype);
+      expect(Object.hasOwn(mergedMap, '__proto__')).toBe(true);
+      expect(Object.getOwnPropertyDescriptor(mergedMap, '__proto__')?.value.pollutedMapKey).toBe(
+        'bad',
+      );
+    } finally {
+      delete (Object.prototype as any).pollutedMapKey;
+    }
+
+    // DescriptorRegistry with a .proto field named '__proto__' must preserve it instead of dropping it
+    const reg = new DescriptorRegistry({
+      file: [
+        {
+          name: 'proto_field.proto',
+          package: 'omnibuf.test',
+          syntax: 'proto3',
+          messageType: [
+            {
+              name: 'ProtoFieldMsg',
+              field: [
+                { name: '__proto__', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+                { name: 'constructor', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const regSchema = reg.getSchemaOrThrow('omnibuf.test.ProtoFieldMsg');
+    expect(regSchema.getField(1)?.name).toBe('__proto__');
+    expect(regSchema.getField(2)?.name).toBe('constructor');
+    const regCreated = regSchema.create({});
+    expect(Object.getPrototypeOf(regCreated)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(regCreated, '__proto__')?.value).toBe('');
+    expect(Object.getOwnPropertyDescriptor(regCreated, 'constructor')?.value).toBe('');
+  });
 });

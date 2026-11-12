@@ -39,14 +39,15 @@ export {
 export const NodeBufferStringCodec: StringCodec = {
   encode(str: string): Uint8Array {
     if (str.length === 0) return new Uint8Array(0);
-    const b = Buffer.from(str, 'utf8');
-    return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+    return new Uint8Array(Buffer.from(str, 'utf8'));
   },
   decode(bytes: Uint8Array, start = 0, end = bytes.length): string {
-    if (end <= start) return '';
-    const ascii = fastDecodeShortASCII(bytes, start, end);
+    const s = start < 0 ? 0 : start > bytes.byteLength ? bytes.byteLength : start;
+    const e = end > bytes.byteLength ? bytes.byteLength : end;
+    if (e <= s) return '';
+    const ascii = fastDecodeShortASCII(bytes, s, e);
     if (ascii !== null) return ascii;
-    const buf = Buffer.from(bytes.buffer, bytes.byteOffset + start, end - start);
+    const buf = Buffer.from(bytes.buffer, bytes.byteOffset + s, e - s);
     if (!isUtf8(buf)) throw new Error('omnibuf: invalid UTF-8 string');
     return buf.toString('utf8');
   },
@@ -54,7 +55,9 @@ export const NodeBufferStringCodec: StringCodec = {
     return Buffer.byteLength(str, 'utf8');
   },
   encodeInto(str: string, dst: Uint8Array, offset: number): number {
-    const buf = Buffer.from(dst.buffer, dst.byteOffset + offset, dst.byteLength - offset);
+    if (str.length === 0 || offset >= dst.byteLength) return 0;
+    const off = offset < 0 ? 0 : offset;
+    const buf = Buffer.from(dst.buffer, dst.byteOffset + off, dst.byteLength - off);
     return buf.write(str, 0, buf.length, 'utf8');
   },
 };

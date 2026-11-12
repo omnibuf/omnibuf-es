@@ -193,6 +193,8 @@ const sharedTextDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: tru
  * Returns `null` if any byte is non-ASCII (`>= 0x80`) or if `end - start > 64`.
  */
 export function fastDecodeShortASCII(bytes: Uint8Array, start: number, end: number): string | null {
+  if (start < 0) start = 0;
+  if (end > bytes.length) end = bytes.length;
   const len = end - start;
   if (len <= 0) return '';
   if (len > 64) return null;

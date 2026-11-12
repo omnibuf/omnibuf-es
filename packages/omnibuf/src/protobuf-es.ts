@@ -244,7 +244,7 @@ export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
     if (existing) return existing;
 
     building.add(d.typeName);
-    const specs: Record<string, FieldSpec> = {};
+    const specs: Record<string, FieldSpec> = Object.create(null);
 
     for (const f of d.fields) {
       // Support both @bufbuild/protobuf v2 (`localName` + `name`) and v1 (`name` + `protoName`)
@@ -446,7 +446,7 @@ export class DescriptorRegistry {
       if (existing) return existing;
 
       building.add(fullName);
-      const specs: Record<string, FieldSpec> = {};
+      const specs: Record<string, FieldSpec> = Object.create(null);
 
       for (const f of desc.field ?? []) {
         const num = f.number ?? 0;

@@ -68,6 +68,19 @@ describe('@omnibuf/node - NodeBufferStringCodec & Node Streams Framing', () => {
     const buf = new Uint8Array(len);
     expect(NodeBufferStringCodec.encodeInto!(text, buf, 0)).toBe(len);
     expect(NodeBufferStringCodec.decode(buf, 0, len)).toBe(text);
+
+    // Out-of-bounds start/end on a subarray of a larger slab must clamp to the view bounds
+    const slab = Buffer.from('SECRET_PREFIX_🚀hello🚀_SECRET_SUFFIX', 'utf8');
+    const innerStart = Buffer.byteLength('SECRET_PREFIX_', 'utf8');
+    const innerLen = Buffer.byteLength('🚀hello🚀', 'utf8');
+    const view = new Uint8Array(slab.buffer, slab.byteOffset + innerStart, innerLen);
+    expect(NodeBufferStringCodec.decode(view, -10, 999)).toBe('🚀hello🚀');
+    expect(NodeBufferStringCodec.decode(view, 999, 1005)).toBe('');
+
+    // encode() must not expose a shared Node Buffer pool slab via .buffer
+    const encoded = NodeBufferStringCodec.encode('isolated');
+    expect(encoded.byteOffset).toBe(0);
+    expect(encoded.buffer.byteLength).toBe(encoded.byteLength);
   });
 
   it('frames and deframes packets over Node Readable/Writable streams', async () => {

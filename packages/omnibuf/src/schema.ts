@@ -166,7 +166,45 @@ export function protoSnakeCase(lowerCamelCase: string): string {
   return lowerCamelCase.replace(/[A-Z]/g, (letter) => '_' + letter.toLowerCase());
 }
 
-const RESERVED_OBJECT_PROPERTIES = new Set(['constructor', 'toString', 'toJSON', 'valueOf']);
+const RESERVED_OBJECT_PROPERTIES = new Set([
+  '__proto__',
+  'constructor',
+  'hasOwnProperty',
+  'isPrototypeOf',
+  'propertyIsEnumerable',
+  'toLocaleString',
+  'toString',
+  'toJSON',
+  'valueOf',
+]);
+
+function getOwnProp(obj: Record<string, any>, key: string): any {
+  const desc = Object.getOwnPropertyDescriptor(obj, key);
+  if (!desc) return undefined;
+  return desc.get ? desc.get.call(obj) : desc.value;
+}
+
+function setOwnProp(obj: Record<string, any>, key: string, value: any): void {
+  const desc = Object.getOwnPropertyDescriptor(obj, key);
+  if (desc?.set) {
+    desc.set.call(obj, value);
+    return;
+  }
+  Object.defineProperty(obj, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function setFieldOnObj(obj: Record<string, any>, f: CompiledField, value: any): void {
+  if (f.isProtoKey) {
+    setOwnProp(obj, f.propKey, value);
+  } else {
+    obj[f.propKey] = value;
+  }
+}
 
 /**
  * Escapes field names that collide with built-in JavaScript `Object.prototype` properties.
@@ -310,6 +348,10 @@ export interface CompiledField {
   readonly oneof?: string;
   readonly oneofProtoName?: string;
   readonly useBigInt: boolean;
+  readonly isProtoKey?: boolean;
+  readonly inObjectProto?: boolean;
+  readonly altInObjectProto?: boolean;
+  readonly oneofProtoInObjectProto?: boolean;
   mapKeyType?: ScalarFieldType;
   mapValType?: ScalarFieldType | 'submsg';
   mapKeyWT?: number;
@@ -549,6 +591,10 @@ export class MessageSchema<
         oneof: oneofLocal,
         oneofProtoName: oneofProto,
         useBigInt: spec.useBigInt ?? false,
+        isProtoKey: propKey === '__proto__',
+        inObjectProto: propKey in Object.prototype,
+        altInObjectProto: altKey !== undefined && altKey in Object.prototype,
+        oneofProtoInObjectProto: oneofProto !== undefined && oneofProto in Object.prototype,
         resolveSubSchema,
       };
 
@@ -620,17 +666,22 @@ export class MessageSchema<
       });
     }
     for (const oneof of this.oneofs) {
-      if (!(oneof.localName in obj) || obj[oneof.localName] === undefined) {
-        obj[oneof.localName] = { case: undefined };
+      if (!Object.hasOwn(obj, oneof.localName) || getOwnProp(obj, oneof.localName) === undefined) {
+        setOwnProp(obj, oneof.localName, { case: undefined });
       }
-      if (oneof.protoName !== oneof.localName && !(oneof.protoName in obj)) {
+      if (oneof.protoName !== oneof.localName && !Object.hasOwn(obj, oneof.protoName)) {
         const ln = oneof.localName;
+        const isProtoLn = ln === '__proto__';
         Object.defineProperty(obj, oneof.protoName, {
           get() {
-            return this[ln];
+            return isProtoLn ? getOwnProp(this, ln) : this[ln];
           },
           set(v: any) {
-            this[ln] = v;
+            if (isProtoLn) {
+              setOwnProp(this, ln, v);
+            } else {
+              this[ln] = v;
+            }
           },
           enumerable: false,
           configurable: true,
@@ -643,7 +694,7 @@ export class MessageSchema<
         const caseName = f.localName;
         const altCaseName = f.name;
         const propDesc = Object.getOwnPropertyDescriptor(obj, f.propKey);
-        if (!(f.propKey in obj) || (propDesc && 'value' in propDesc)) {
+        if (!propDesc || 'value' in propDesc) {
           const initialPlainVal = propDesc?.value;
           Object.defineProperty(obj, f.propKey, {
             get() {
@@ -678,14 +729,19 @@ export class MessageSchema<
             obj[oneofKey] = { case: caseName, value: initialPlainVal };
           }
         }
-        if (f.altKey && !(f.altKey in obj)) {
+        if (f.altKey && !Object.hasOwn(obj, f.altKey)) {
           const pk = f.propKey;
+          const isProtoPk = Boolean(f.isProtoKey);
           Object.defineProperty(obj, f.altKey, {
             get() {
-              return this[pk];
+              return isProtoPk ? getOwnProp(this, pk) : this[pk];
             },
             set(v: any) {
-              this[pk] = v;
+              if (isProtoPk) {
+                setOwnProp(this, pk, v);
+              } else {
+                this[pk] = v;
+              }
             },
             enumerable: false,
             configurable: true,
@@ -693,14 +749,19 @@ export class MessageSchema<
         }
         continue;
       }
-      if (f.altKey && !(f.altKey in obj)) {
+      if (f.altKey && !Object.hasOwn(obj, f.altKey)) {
         const pk = f.propKey;
+        const isProtoPk = Boolean(f.isProtoKey);
         Object.defineProperty(obj, f.altKey, {
           get() {
-            return this[pk];
+            return isProtoPk ? getOwnProp(this, pk) : this[pk];
           },
           set(v: any) {
-            this[pk] = v;
+            if (isProtoPk) {
+              setOwnProp(this, pk, v);
+            } else {
+              this[pk] = v;
+            }
           },
           enumerable: false,
           configurable: true,
@@ -750,22 +811,31 @@ export class MessageSchema<
         const f = this.fields[i]!;
         if (f.oneof) continue;
         if (f.explicitPresence) {
-          if (!(f.propKey in obj)) {
-            obj[f.propKey] = undefined;
+          if (f.inObjectProto ? !Object.hasOwn(obj, f.propKey) : !(f.propKey in obj)) {
+            setFieldOnObj(obj, f, undefined);
           }
           continue;
         }
-        if (obj[f.propKey] === undefined) {
-          obj[f.propKey] = defaultFieldValue(f, nextCreating);
+        const cur = f.inObjectProto ? getOwnProp(obj, f.propKey) : obj[f.propKey];
+        if (cur === undefined) {
+          setFieldOnObj(obj, f, defaultFieldValue(f, nextCreating));
         }
       }
     }
 
     if (init) {
       for (const oneof of this.oneofs) {
-        const initOneof =
-          (init as any)[oneof.localName] ??
-          (oneof.protoName !== oneof.localName ? (init as any)[oneof.protoName] : undefined);
+        const localVal =
+          oneof.localName in Object.prototype
+            ? getOwnProp(init as any, oneof.localName)
+            : (init as any)[oneof.localName];
+        const protoVal =
+          oneof.protoName !== oneof.localName
+            ? oneof.protoName in Object.prototype
+              ? getOwnProp(init as any, oneof.protoName)
+              : (init as any)[oneof.protoName]
+            : undefined;
+        const initOneof = localVal ?? protoVal;
         if (initOneof && typeof initOneof === 'object' && 'case' in initOneof) {
           if (initOneof.case === undefined) {
             obj[oneof.localName] = { case: undefined };
@@ -786,11 +856,16 @@ export class MessageSchema<
         }
       }
       for (const f of this.fields) {
+        const pVal = f.inObjectProto
+          ? getOwnProp(init as any, f.propKey)
+          : (init as any)[f.propKey];
         const initVal =
-          (init as any)[f.propKey] !== undefined
-            ? (init as any)[f.propKey]
+          pVal !== undefined
+            ? pVal
             : f.altKey !== undefined
-              ? (init as any)[f.altKey]
+              ? f.altInObjectProto
+                ? getOwnProp(init as any, f.altKey)
+                : (init as any)[f.altKey]
               : undefined;
         if (initVal !== undefined) {
           if (f.oneof) {
@@ -799,7 +874,7 @@ export class MessageSchema<
               value: initFieldValue(f, initVal),
             };
           } else {
-            obj[f.propKey] = initFieldValue(f, initVal);
+            setFieldOnObj(obj, f, initFieldValue(f, initVal));
           }
         }
       }
@@ -849,10 +924,10 @@ export class MessageSchema<
       return;
     }
     if (f.explicitPresence) {
-      (msg as any)[f.propKey] = undefined;
+      setFieldOnObj(msg as any, f, undefined);
       return;
     }
-    (msg as any)[f.propKey] = defaultFieldValue(f);
+    setFieldOnObj(msg as any, f, defaultFieldValue(f));
   }
 
   /**
@@ -871,9 +946,9 @@ export class MessageSchema<
           };
         }
       } else if (f.explicitPresence) {
-        out[f.propKey] = val === undefined ? undefined : cloneFieldValue(f, val);
+        setFieldOnObj(out, f, val === undefined ? undefined : cloneFieldValue(f, val));
       } else {
-        out[f.propKey] = cloneFieldValue(f, val);
+        setFieldOnObj(out, f, cloneFieldValue(f, val));
       }
     }
     if (Array.isArray(src.$unknown) && src.$unknown.length > 0) {
@@ -1243,9 +1318,9 @@ export class MessageSchema<
           const f = this.fields[i]!;
           if (f.oneof) continue;
           if (f.explicitPresence) {
-            out[f.propKey] = undefined;
+            setFieldOnObj(out, f, undefined);
           } else {
-            out[f.propKey] = defaultFieldValue(f, nextCreating);
+            setFieldOnObj(out, f, defaultFieldValue(f, nextCreating));
           }
         }
         delete out.$unknown;
@@ -1321,7 +1396,17 @@ export class MessageSchema<
         seenSet.add(fieldNum);
       }
 
-      pos = decodeCompiledFieldValue(data, pos, wt, f, out, alreadySeen, depth, options);
+      if (f.inObjectProto) {
+        const box: Record<string, any> = Object.create(null);
+        const cur = getOwnProp(out, f.propKey);
+        if (cur !== undefined) {
+          box[f.propKey] = cur;
+        }
+        pos = decodeCompiledFieldValue(data, pos, wt, f, box, alreadySeen, depth, options);
+        setFieldOnObj(out, f, box[f.propKey]);
+      } else {
+        pos = decodeCompiledFieldValue(data, pos, wt, f, out, alreadySeen, depth, options);
+      }
     }
 
     if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {
@@ -1340,7 +1425,13 @@ export class MessageSchema<
 function getFieldFromMsg(msg: Record<string, any> | null | undefined, f: CompiledField): any {
   if (!msg) return undefined;
   if (f.oneof) {
-    const group = msg[f.oneof] ?? (f.oneofProtoName ? msg[f.oneofProtoName] : undefined);
+    const group =
+      msg[f.oneof] ??
+      (f.oneofProtoName
+        ? f.oneofProtoInObjectProto
+          ? getOwnProp(msg, f.oneofProtoName)
+          : msg[f.oneofProtoName]
+        : undefined);
     if (group && typeof group === 'object' && 'case' in group) {
       if (group.case === f.localName || group.case === f.name || group.case === f.propKey) {
         return group.value;
@@ -1348,9 +1439,11 @@ function getFieldFromMsg(msg: Record<string, any> | null | undefined, f: Compile
       return undefined;
     }
   }
-  const v = msg[f.propKey];
+  const v = f.inObjectProto ? getOwnProp(msg, f.propKey) : msg[f.propKey];
   if (v !== undefined) return v;
-  if (f.altKey !== undefined) return msg[f.altKey];
+  if (f.altKey !== undefined) {
+    return f.altInObjectProto ? getOwnProp(msg, f.altKey) : msg[f.altKey];
+  }
   return undefined;
 }
 
@@ -2474,7 +2567,7 @@ export function omnibufField(fieldNum: number, options: DecoratorFieldOptions = 
       if (contextOrPropKey.metadata) {
         const metaObj = contextOrPropKey.metadata as Record<symbol, any>;
         if (!metaObj[PENDING_FIELDS_SYMBOL]) {
-          metaObj[PENDING_FIELDS_SYMBOL] = {};
+          metaObj[PENDING_FIELDS_SYMBOL] = Object.create(null);
         }
         metaObj[PENDING_FIELDS_SYMBOL][propKey] = spec;
       }
@@ -2485,7 +2578,7 @@ export function omnibufField(fieldNum: number, options: DecoratorFieldOptions = 
           if (ctor) {
             let map = classPendingFields.get(ctor);
             if (!map) {
-              map = {};
+              map = Object.create(null) as Record<string, FieldSpec>;
               classPendingFields.set(ctor, map);
             }
             map[propKey] = spec;
@@ -2501,7 +2594,7 @@ export function omnibufField(fieldNum: number, options: DecoratorFieldOptions = 
     if (ctor) {
       let map = classPendingFields.get(ctor);
       if (!map) {
-        map = {};
+        map = Object.create(null) as Record<string, FieldSpec>;
         classPendingFields.set(ctor, map);
       }
       map[propKey] = spec;
@@ -2528,7 +2621,7 @@ export function omnibufMessage(typeName?: string): any {
     if (metadataFields) {
       let map = classPendingFields.get(target);
       if (!map) {
-        map = {};
+        map = Object.create(null) as Record<string, FieldSpec>;
         classPendingFields.set(target, map);
       }
       Object.assign(map, metadataFields);
