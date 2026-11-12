@@ -82,7 +82,7 @@ export function parseArrayHeader(
     countNum = (cb | (body[start + 2]! << 8)) >>> 2;
     cn = 2;
   } else {
-    const [count64, cBytes] = decodeVarintBigInt(body, start + 1);
+    const [count64, cBytes] = decodeVarintBigInt(body, start + 1, end);
     if (cBytes === 0 || count64 > BigInt(end - (start + 1 + cBytes))) {
       return [0, 0, 0, false];
     }
@@ -160,7 +160,7 @@ export function parseMapHeader(
     countNum = (cb | (body[start + 3]! << 8)) >>> 2;
     cn = 2;
   } else {
-    const [count64, cBytes] = decodeVarintBigInt(body, start + 2);
+    const [count64, cBytes] = decodeVarintBigInt(body, start + 2, end);
     if (cBytes === 0 || count64 > BigInt(Math.floor((end - (start + 2 + cBytes)) / 2))) {
       return [0, 0, 0, 0, false];
     }
@@ -972,7 +972,11 @@ const NOT_FOUND: LocateFieldResult = {
  * using TZCNT length prefixes (without parsing inside preceding strings, sub-messages, or arrays).
  * Scans all field headers in the message and returns the last matching occurrence ("last write wins").
  */
-export function locateField(packet: Uint8Array, targetField: number): LocateFieldResult {
+export function locateField(
+  packet: Uint8Array,
+  targetField: number,
+  expMask = 0xffff,
+): LocateFieldResult {
   let pos = 0;
   const n = packet.length;
   let lastPos = -1;
@@ -1006,7 +1010,7 @@ export function locateField(packet: Uint8Array, targetField: number): LocateFiel
       return NOT_FOUND;
     }
 
-    if (fnum === targetField) {
+    if (fnum === targetField && ((expMask >>> wt) & 1) !== 0) {
       lastPos = pos;
       lastWT = wt;
     }
@@ -1078,8 +1082,8 @@ export function nextContainerField(
       return { body: new Uint8Array(0), nextPos: 0, matched: false, valid: false };
     }
 
-    if (fnum === targetField) {
-      if (wt !== expWT || pos >= n) {
+    if (fnum === targetField && wt === expWT) {
+      if (pos >= n) {
         return { body: new Uint8Array(0), nextPos: 0, matched: false, valid: false };
       }
       let lenNum = 0;
@@ -1115,11 +1119,11 @@ export function nextContainerField(
       };
     }
 
-    try {
-      pos = skipValue(packet, pos, wt);
-    } catch {
+    const nextPos = skipValidatedValue(packet, pos, wt);
+    if (nextPos < 0) {
       return { body: new Uint8Array(0), nextPos: 0, matched: false, valid: false };
     }
+    pos = nextPos;
   }
   return { body: new Uint8Array(0), nextPos: n, matched: false, valid: true };
 }

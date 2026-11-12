@@ -74,9 +74,22 @@ import {
   readUint32Arr,
   readUintBigInt,
   activeOneofSlice,
+  countedArrLen,
+  lookupMapStringUint,
   nextContainerField,
+  parseArrayHeader,
+  parseMapHeader,
+  readElem,
+  readSubMsgArrDecoded,
+  readTypedMap,
   spliceFields,
   subMsgArrLen,
+  WireArray,
+  WireMap,
+  WireSint,
+  WireString,
+  WireSubMsg,
+  WireUint,
   toBinary,
   unmarshal,
   unmarshalProto,
@@ -847,5 +860,142 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     const mapBytes = BigKeyMapSchema.encode({ m: new Map([[42n, 99n]]) });
     const decodedMap = BigKeyMapSchema.decode(mapBytes);
     expect(decodedMap.m.get(42n)).toBe(99n);
+  });
+
+  it('validates remaining container/packet bytes, concatenated counts, wrong-wire-type skips, and typed map headers in readers', () => {
+    // 1. readElem must reject trailing bytes or truncated trailing elements after index
+    const validArrBody = new Uint8Array([WireSubMsg, 0x05, 0x05, 0x21, 0x03, 0x05, 0x21, 0x05]); // count=2, two 2B submsgs
+    expect(readElem(validArrBody, 0)).toEqual([new Uint8Array([0x21, 0x03]), true]);
+    const trailingArrBody = new Uint8Array([
+      WireSubMsg,
+      0x05,
+      0x05,
+      0x21,
+      0x03,
+      0x05,
+      0x21,
+      0x05,
+      0x99,
+    ]);
+    expect(readElem(trailingArrBody, 0)[1]).toBe(false);
+    const truncatedSecondElem = new Uint8Array([WireSubMsg, 0x05, 0x05, 0x21, 0x03, 0x09, 0x21]);
+    expect(readElem(truncatedSecondElem, 0)[1]).toBe(false);
+
+    // 2. readSubMsgArrElem must reject corrupt trailing packet bytes and corrupt second concatenated segments
+    const seg1Enc = new Encoder();
+    seg1Enc.beginSubMsgArr(11);
+    seg1Enc.beginSubMsgElem();
+    seg1Enc.writeUint(1, 10);
+    seg1Enc.endSubMsgElem();
+    seg1Enc.endSubMsgArr();
+    const seg1 = seg1Enc.finish();
+    expect(readSubMsgArrElem(seg1, 11, 0)[1]).toBe(true);
+    const corruptTailPkt = concatMessages(seg1, new Uint8Array([0x55])); // truncated WireString
+    expect(readSubMsgArrElem(corruptTailPkt, 11, 0)[1]).toBe(false);
+    const badSeg2 = new Uint8Array([0xba, 0x02, 0x09, WireSubMsg, 0x03, 0x13, 0x21]); // field 11 WireArray(WireSubMsg), count=1, elem ByteLen=9 > remaining
+    // Fix tag to field 11 ((11<<4)|13 = 189 -> 2-byte prefix varint: (189<<2)|2 = 758 = 0xf6, 0x02)
+    badSeg2[0] = 0xf6;
+    badSeg2[1] = 0x02;
+    expect(readSubMsgArrElem(concatMessages(seg1, badSeg2), 11, 0)[1]).toBe(false);
+
+    // 3. countedArrLen must sum across concatenated WireArray occurrences and check WireArray elemType
+    const arrA = new Encoder();
+    arrA.writeUintArr(10, [1, 2]);
+    const arrB = new Encoder();
+    arrB.writeUintArr(10, [3, 4, 5]);
+    const concatArr = concatMessages(arrA.finish(), arrB.finish());
+    expect(countedArrLen(concatArr, 10, WireUint)).toBe(5);
+    expect(countedArrLen(concatArr, 10, WireArray)).toBe(0);
+
+    // 4. Scalar, container, and merged submsg readers must skip known field numbers with mismatched wire types
+    const baseEnc = new Encoder();
+    baseEnc.writeUint(1, 11);
+    baseEnc.writeBool(5, true);
+    baseEnc.writeString(6, 'keep');
+    baseEnc.beginSubMsg(8);
+    baseEnc.writeUint(1, 77);
+    baseEnc.endSubMsg();
+    baseEnc.writeStringArr(9, ['a']);
+    const basePkt = baseEnc.finish();
+
+    const wrongWtEnc = new Encoder();
+    wrongWtEnc.writeString(1, 'wrong');
+    wrongWtEnc.writeUint(5, 0);
+    wrongWtEnc.writeBytes(6, new Uint8Array([0xff]));
+    wrongWtEnc.writeBytes(8, new Uint8Array(0));
+    wrongWtEnc.writeString(9, 'wrong-arr');
+    const mixedPkt = concatMessages(basePkt, wrongWtEnc.finish());
+
+    expect(readUint32(mixedPkt, 1)).toEqual([11, true]);
+    expect(readBool(mixedPkt, 5)).toEqual([true, true]);
+    expect(readString(mixedPkt, 6)).toEqual(['keep', true]);
+    expect(readSubMsg(mixedPkt, 8)[1]).toBe(true);
+    expect(readSubMsgMerged(mixedPkt, 8, (sub) => ({ id: readUint32(sub, 1)[0] }))).toEqual([
+      { id: 77 },
+      true,
+    ]);
+    expect(readStringArr(mixedPkt, 9)).toEqual([['a'], true]);
+
+    const oneofSlice = activeOneofSlice(mixedPkt, 1, [
+      [1, 1 << WireUint],
+      [2, 1 << WireString],
+    ]);
+    expect(oneofSlice !== null && readUint32(oneofSlice, 1)[0]).toBe(11);
+
+    // 5. readTypedMap must enforce keyWT/valWT, preserve low 32 bits of >2^53 sint values, and return [{}, false] on corrupt bytes
+    const uintStrMapEnc = new Encoder();
+    uintStrMapEnc.writeTag(12, WireMap);
+    uintStrMapEnc.beginContainer();
+    uintStrMapEnc.writeByte(WireUint);
+    uintStrMapEnc.writeByte(WireString);
+    uintStrMapEnc.writeRawVarint(1);
+    uintStrMapEnc.writeRawVarint(1);
+    uintStrMapEnc.writeRawStringPayload('wrong-types');
+    uintStrMapEnc.endContainer();
+    expect(readTypedMap(uintStrMapEnc.finish(), 12, 'string', 'uint64')).toEqual([{}, false]);
+
+    const bigInt32MapEnc = new Encoder();
+    bigInt32MapEnc.writeTag(12, WireMap);
+    bigInt32MapEnc.beginContainer();
+    bigInt32MapEnc.writeByte(WireString);
+    bigInt32MapEnc.writeByte(WireSint);
+    bigInt32MapEnc.writeRawVarint(1);
+    bigInt32MapEnc.writeRawStringPayload('k');
+    bigInt32MapEnc.writeRawVarint(encodeZigZag((1n << 54n) + 7n));
+    bigInt32MapEnc.endContainer();
+    expect(readTypedMap(bigInt32MapEnc.finish(), 12, 'string', 'int32')).toEqual([{ k: 7 }, true]);
+
+    // 6. Invalid UTF-8 or corrupt inner submessages must return [default, false] without throwing
+    const badStrArrPkt = new Uint8Array([0xba, 0x02, 0x09, WireString, 0x03, 0x03, 0xff]); // field 9 WireArray(WireString), count=1, [0xff]
+    expect(readStringArr(badStrArrPkt, 9)).toEqual([[], false]);
+    const badMapUtf8Pkt = new Uint8Array([
+      0xc5,
+      0x03,
+      0x0d,
+      WireString,
+      WireUint,
+      0x03,
+      0x03,
+      0xff,
+      0x03,
+    ]); // field 12 WireMap(str,uint), key=[0xff]
+    expect(lookupMapStringUint(badMapUtf8Pkt, 12, 'a')).toEqual([0, false]);
+    expect(readTypedMap(badMapUtf8Pkt, 12, 'string', 'uint64')).toEqual([{}, false]);
+    expect(
+      readSubMsgMerged(basePkt, 8, () => {
+        throw new Error('corrupt inner');
+      }),
+    ).toEqual([null, false]);
+    expect(
+      readSubMsgArrDecoded(seg1, 11, () => {
+        throw new Error('corrupt elem');
+      }),
+    ).toEqual([[], false]);
+
+    // 7. parseArrayHeader and parseMapHeader must honor explicit end < body.length on 4B count varints
+    const paddedArrHeader = new Uint8Array([WireUint, 0x04, 0x00, 0x00, 0x00]); // 4B count=0 (5 bytes total)
+    expect(parseArrayHeader(paddedArrHeader, 0, 3)[3]).toBe(false);
+    const paddedMapHeader = new Uint8Array([WireString, WireUint, 0x04, 0x00, 0x00, 0x00]); // 4B count=0 (6 bytes total)
+    expect(parseMapHeader(paddedMapHeader, 0, 4)[4]).toBe(false);
   });
 });
