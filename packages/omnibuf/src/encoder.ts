@@ -497,7 +497,7 @@ export class Encoder {
   }
 
   /**
-   * Writes a ZigZag-encoded signed integer field (`WireSint = 12`).
+   * Writes a ZigZag-encoded signed integer field (`WireSint = 1`).
    */
   writeInt(fieldNum: number, v: number | bigint): void {
     if (
@@ -542,7 +542,7 @@ export class Encoder {
   }
 
   /**
-   * Writes a boolean field using 0 payload bytes (`WireBoolTrue = 2` or `WireBoolFalse = 1`).
+   * Writes a boolean field using 0 payload bytes (`WireBoolTrue = 3` or `WireBoolFalse = 2`).
    */
   writeBool(fieldNum: number, v: boolean): void {
     const wt = v ? WireBoolTrue : WireBoolFalse;
@@ -924,7 +924,7 @@ export class Encoder {
   }
 
   /**
-   * Writes a `map<string, uint64>` (`WireMap = 9`) with keys sorted in lexicographical order.
+   * Writes a `map<string, uint64>` (`WireMap = 14`) with keys sorted in lexicographical order.
    */
   writeMapStringUintDeterministic(
     fieldNum: number,

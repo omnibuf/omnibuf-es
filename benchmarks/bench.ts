@@ -109,7 +109,7 @@ const peerFileProto = createBufMsg(FileDescriptorProtoSchema, {
         { name: 'router_id', number: 2, label: 1, type: 9, jsonName: 'routerId' },
         { name: 'active', number: 3, label: 1, type: 8, jsonName: 'active' },
         { name: 'uptime_sec', number: 4, label: 1, type: 4, jsonName: 'uptimeSec' },
-        { name: 'rssi_dbm', number: 5, label: 1, type: 5, jsonName: 'rssiDbm' },
+        { name: 'rssi_dbm', number: 5, label: 1, type: 17, jsonName: 'rssiDbm' },
         { name: 'cpu_load', number: 6, label: 1, type: 1, jsonName: 'cpuLoad' },
         { name: 'tags', number: 7, label: 3, type: 9, jsonName: 'tags' },
         { name: 'prefixes', number: 8, label: 3, type: 13, jsonName: 'prefixes' },
@@ -169,7 +169,7 @@ const pbjsRoot = protobufjs.Root.fromJSON({
                 routerId: { type: 'string', id: 2 },
                 active: { type: 'bool', id: 3 },
                 uptimeSec: { type: 'uint64', id: 4 },
-                rssiDbm: { type: 'int32', id: 5 },
+                rssiDbm: { type: 'sint32', id: 5 },
                 cpuLoad: { type: 'double', id: 6 },
                 tags: { rule: 'repeated', type: 'string', id: 7 },
                 prefixes: { rule: 'repeated', type: 'uint32', id: 8, options: { packed: true } },
@@ -196,7 +196,7 @@ function encodeGoogleProtobuf(
   if (msg.routerId.length > 0) writer.writeString(2, msg.routerId);
   if (msg.active) writer.writeBool(3, msg.active);
   if (msg.uptimeSec !== 0) writer.writeUint64(4, Number(msg.uptimeSec));
-  if (msg.rssiDbm !== 0) writer.writeInt32(5, msg.rssiDbm);
+  if (msg.rssiDbm !== 0) writer.writeSint32(5, msg.rssiDbm);
   if (msg.cpuLoad !== 0) writer.writeDouble(6, msg.cpuLoad);
   if (msg.tags.length > 0) writer.writeRepeatedString(7, msg.tags);
   if (msg.prefixes.length > 0) writer.writePackedUint32(8, msg.prefixes);
@@ -254,7 +254,7 @@ function decodeGoogleProtobuf(bytes: Uint8Array): PeerUpdate {
         out.uptimeSec = reader.readUint64();
         break;
       case 5:
-        out.rssiDbm = reader.readInt32();
+        out.rssiDbm = reader.readSint32();
         break;
       case 6:
         out.cpuLoad = reader.readDouble();

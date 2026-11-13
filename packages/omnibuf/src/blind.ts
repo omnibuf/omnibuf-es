@@ -399,7 +399,7 @@ export function decodeSchemaMeta(data: Uint8Array, depth = 0, limit = MaxNesting
 }
 
 /**
- * Decodes and merges all Field #0 (`Tag = 0x0B`, `WireSubMsg = 5`) SchemaMeta blocks in `packet`.
+ * Decodes and merges all Field #0 (`Tag = 0x19`, `WireSubMsg = 12`) SchemaMeta blocks in `packet`.
  */
 export function readField0SchemaMeta(packet: Uint8Array): [meta: SchemaMeta | null, ok: boolean] {
   let merged: SchemaMeta | null = null;
@@ -425,7 +425,7 @@ export interface DecodeBlindOptions {
    */
   bytesAsBase64?: boolean;
   /**
-   * When true (default), `WireFixed32` values are rounded to their shortest 32-bit IEEE-754 decimal representation.
+   * When true (default), `WireFloat32` values are rounded to their shortest 32-bit IEEE-754 decimal representation.
    */
   roundFloat32?: boolean;
   /**
@@ -468,7 +468,7 @@ function blindChildSchema(schema: BlindSchema | null, fieldNum: number): BlindSc
 
 /**
  * Decodes any OmniBuf packet without a compile-time schema.
- * If Field #0 (`Tag = 0x0B`, `WireSubMsg = 5`, `omnibuf.v1.SchemaMeta`) is present, its field names
+ * If Field #0 (`Tag = 0x19`, `WireSubMsg = 12`, `omnibuf.v1.SchemaMeta`) is present, its field names
  * (and any nested children schemas) are used to decode human-readable keys.
  * Otherwise, synthetic field names (`"field_1"`, `"field_2"`, ...) are used.
  */

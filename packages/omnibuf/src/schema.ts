@@ -274,7 +274,7 @@ export type WireOverride =
   | 'map';
 
 export interface FieldSpec {
-  /** Field number (1..4294967295). */
+  /** Field number (1..536870911). */
   fieldNum: number;
   /** Field type. */
   type: FieldType;
@@ -317,7 +317,7 @@ export interface MarshalOptions {
    */
   deterministic?: boolean;
   /**
-   * Emits Field #0 (`Tag = 0x0B`, `WireSubMsg = 5`, `omnibuf.v1.SchemaMeta`)
+   * Emits Field #0 (`Tag = 0x19`, `WireSubMsg = 12`, `omnibuf.v1.SchemaMeta`)
    * at byte 0 of the root message with field names and nested children schemas.
    */
   selfDescribing?: boolean;
