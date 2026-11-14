@@ -1040,7 +1040,7 @@ export class MessageSchema<
     const visiting = new Set<MessageSchema<any>>();
     const visited = new Set<MessageSchema<any>>();
     const dfs = (node: MessageSchema<any>, depth: number): boolean => {
-      if (depth > MaxNestingDepth) return true;
+      if (1 + depth * 2 > MaxNestingDepth) return true;
       if (visiting.has(node)) return true;
       if (visited.has(node)) return false;
       visiting.add(node);
@@ -1069,11 +1069,18 @@ export class MessageSchema<
     depth = 0,
     msg?: Record<string, any>,
     ancestors?: Set<MessageSchema<any>>,
+    baseContainerDepth = 1,
   ): SchemaMeta {
-    if (depth === 0 && !msg && this.cachedMeta) {
+    if (depth === 0 && baseContainerDepth === 1 && !msg && this.cachedMeta) {
       return this.cachedMeta;
     }
-    if (depth === 0 && msg && !this.isCyclicOrDeep() && this.cachedMeta) {
+    if (
+      depth === 0 &&
+      baseContainerDepth === 1 &&
+      msg &&
+      !this.isCyclicOrDeep() &&
+      this.cachedMeta
+    ) {
       return this.cachedMeta;
     }
     const fieldsMap: Record<number, string> = {};
@@ -1082,9 +1089,10 @@ export class MessageSchema<
     const nextAncestors = new Set(pathAncestors);
     nextAncestors.add(this);
 
+    const schemaDepth = baseContainerDepth + depth * 2;
     for (const f of this.fields) {
       fieldsMap[f.fieldNum] = f.name;
-      if (f.resolveSubSchema && depth + 2 < MaxNestingDepth) {
+      if (f.resolveSubSchema && schemaDepth + 3 <= MaxNestingDepth) {
         const sub = f.resolveSubSchema();
         if (!sub) continue;
 
@@ -1092,9 +1100,19 @@ export class MessageSchema<
           const rawVal = getFieldFromMsg(msg, f);
           if (f.effectiveType === 'submsg') {
             if (rawVal && typeof rawVal === 'object') {
-              childrenMap[f.fieldNum] = sub.getSchemaMeta(depth + 1, rawVal, nextAncestors);
+              childrenMap[f.fieldNum] = sub.getSchemaMeta(
+                depth + 1,
+                rawVal,
+                nextAncestors,
+                baseContainerDepth,
+              );
             } else if (!pathAncestors.has(sub)) {
-              childrenMap[f.fieldNum] = sub.getSchemaMeta(depth + 1, undefined, nextAncestors);
+              childrenMap[f.fieldNum] = sub.getSchemaMeta(
+                depth + 1,
+                undefined,
+                nextAncestors,
+                baseContainerDepth,
+              );
             }
           } else if (f.effectiveType === 'submsg[]') {
             if (Array.isArray(rawVal) && rawVal.length > 0) {
@@ -1104,7 +1122,7 @@ export class MessageSchema<
                 if (elem && typeof elem === 'object') {
                   merged = mergeSchemaMeta(
                     merged,
-                    sub.getSchemaMeta(depth + 1, elem, nextAncestors),
+                    sub.getSchemaMeta(depth + 1, elem, nextAncestors, baseContainerDepth),
                   );
                 }
               }
@@ -1112,7 +1130,12 @@ export class MessageSchema<
                 childrenMap[f.fieldNum] = merged;
               }
             } else if (!pathAncestors.has(sub)) {
-              childrenMap[f.fieldNum] = sub.getSchemaMeta(depth + 1, undefined, nextAncestors);
+              childrenMap[f.fieldNum] = sub.getSchemaMeta(
+                depth + 1,
+                undefined,
+                nextAncestors,
+                baseContainerDepth,
+              );
             }
           } else if (f.effectiveType === 'map' && f.mapValType === 'submsg') {
             const vals =
@@ -1126,18 +1149,31 @@ export class MessageSchema<
               for (let i = 0; i < vals.length; i++) {
                 const v = vals[i];
                 if (v && typeof v === 'object') {
-                  merged = mergeSchemaMeta(merged, sub.getSchemaMeta(depth + 1, v, nextAncestors));
+                  merged = mergeSchemaMeta(
+                    merged,
+                    sub.getSchemaMeta(depth + 1, v, nextAncestors, baseContainerDepth),
+                  );
                 }
               }
               if (merged) {
                 childrenMap[f.fieldNum] = merged;
               }
             } else if (!pathAncestors.has(sub)) {
-              childrenMap[f.fieldNum] = sub.getSchemaMeta(depth + 1, undefined, nextAncestors);
+              childrenMap[f.fieldNum] = sub.getSchemaMeta(
+                depth + 1,
+                undefined,
+                nextAncestors,
+                baseContainerDepth,
+              );
             }
           }
         } else if (!pathAncestors.has(sub)) {
-          childrenMap[f.fieldNum] = sub.getSchemaMeta(depth + 1, undefined, nextAncestors);
+          childrenMap[f.fieldNum] = sub.getSchemaMeta(
+            depth + 1,
+            undefined,
+            nextAncestors,
+            baseContainerDepth,
+          );
         } else {
           childrenMap[f.fieldNum] = sub.getShallowSchemaMeta();
         }
@@ -1150,7 +1186,7 @@ export class MessageSchema<
     if (Object.keys(childrenMap).length > 0) {
       meta.children = childrenMap;
     }
-    if (depth === 0 && !msg) {
+    if (depth === 0 && baseContainerDepth === 1 && !msg) {
       this.cachedMeta = meta;
     }
     return meta;
@@ -1198,22 +1234,32 @@ export class MessageSchema<
   encodeInto(enc: Encoder, msg: T, options?: BinaryWriteOptions): void {
     const deterministic = options?.deterministic ?? false;
     const writeUnknown = options?.writeUnknownFields ?? false;
-    if (options?.selfDescribing) {
+    const selfDescribing = Boolean(options?.selfDescribing);
+    if (selfDescribing) {
       if (deterministic && !this.isCyclicOrDeep()) {
         enc.writeRaw(this.getCachedField0Det());
       } else {
         writeField0SchemaMeta(
           enc,
-          this.getSchemaMeta(0, msg as Record<string, any>),
+          this.getSchemaMeta(0, msg as Record<string, any>, undefined, 1),
           deterministic,
         );
       }
     }
-    if (this.generatedHooks?.encode) {
+    if (this.generatedHooks?.encode && (!selfDescribing || !this.isCyclicOrDeep())) {
       this.generatedHooks.encode(enc, msg, options);
       return;
     }
-    this.encodeBody(enc, msg as Record<string, any>, deterministic, writeUnknown);
+    const rootCoveredHops = Math.floor((MaxNestingDepth - 2) / 2);
+    this.encodeBody(
+      enc,
+      msg as Record<string, any>,
+      deterministic,
+      writeUnknown,
+      selfDescribing,
+      0,
+      rootCoveredHops,
+    );
   }
 
   /**
@@ -1224,8 +1270,17 @@ export class MessageSchema<
     msg: Record<string, any>,
     deterministic: boolean,
     writeUnknown = false,
+    selfDescribing = false,
+    msgDepth = 0,
+    coveredHops = 0,
   ): void {
-    if (this.generatedHooks?.encode) {
+    let activeCovered = coveredHops;
+    if (selfDescribing && activeCovered < 0 && msgDepth + 2 <= MaxNestingDepth) {
+      const baseDepth = msgDepth + 1;
+      writeField0SchemaMeta(enc, this.getSchemaMeta(0, msg, undefined, baseDepth), deterministic);
+      activeCovered = Math.floor((MaxNestingDepth - baseDepth - 1) / 2);
+    }
+    if (this.generatedHooks?.encode && (!selfDescribing || !this.isCyclicOrDeep())) {
       this.generatedHooks.encode(enc, msg as Partial<T>, {
         deterministic,
         writeUnknownFields: writeUnknown,
@@ -1255,9 +1310,25 @@ export class MessageSchema<
         }
         enc.beginSubMsg(f.fieldNum);
         if (rawVal) {
-          subSchema.encodeBody(enc, rawVal, deterministic, writeUnknown);
+          subSchema.encodeBody(
+            enc,
+            rawVal,
+            deterministic,
+            writeUnknown,
+            selfDescribing,
+            msgDepth + 1,
+            activeCovered - 1,
+          );
         } else if (!f.optional) {
-          subSchema.encodeBody(enc, subSchema.create(), deterministic, writeUnknown);
+          subSchema.encodeBody(
+            enc,
+            subSchema.create(),
+            deterministic,
+            writeUnknown,
+            selfDescribing,
+            msgDepth + 1,
+            activeCovered - 1,
+          );
         }
         enc.endSubMsg();
         continue;
@@ -1267,7 +1338,16 @@ export class MessageSchema<
         continue;
       }
 
-      encodeFieldValue(enc, f, rawVal, deterministic, writeUnknown);
+      encodeFieldValue(
+        enc,
+        f,
+        rawVal,
+        deterministic,
+        writeUnknown,
+        selfDescribing,
+        msgDepth,
+        activeCovered,
+      );
     }
 
     if (writeUnknown && msg && Array.isArray(msg.$unknown)) {
@@ -1784,6 +1864,9 @@ function isFieldValueEmpty(f: CompiledField, val: any): boolean {
       const sub = f.resolveSubSchema?.();
       return sub ? sub.isEmptyInstance(val) : true;
     }
+    case 'float32':
+    case 'float64':
+      return Object.is(val, 0);
     default:
       return val === 0 || val === 0n;
   }
@@ -1795,6 +1878,9 @@ function encodeFieldValue(
   rawVal: any,
   deterministic: boolean,
   writeUnknown = false,
+  selfDescribing = false,
+  msgDepth = 0,
+  coveredHops = 0,
 ): void {
   const fnum = f.fieldNum;
   switch (f.effectiveType) {
@@ -1900,7 +1986,15 @@ function encodeFieldValue(
       for (let i = 0; i < items.length; i++) {
         enc.beginSubMsgElem();
         if (items[i] !== null && items[i] !== undefined) {
-          subSchema.encodeBody(enc, items[i], deterministic, writeUnknown);
+          subSchema.encodeBody(
+            enc,
+            items[i],
+            deterministic,
+            writeUnknown,
+            selfDescribing,
+            msgDepth + 2,
+            coveredHops - 1,
+          );
         }
         enc.endSubMsgElem();
       }
@@ -1908,7 +2002,16 @@ function encodeFieldValue(
       break;
     }
     case 'map': {
-      encodeMapField(enc, f, rawVal, deterministic, writeUnknown);
+      encodeMapField(
+        enc,
+        f,
+        rawVal,
+        deterministic,
+        writeUnknown,
+        selfDescribing,
+        msgDepth,
+        coveredHops,
+      );
       break;
     }
   }
@@ -2006,6 +2109,9 @@ function encodeMapField(
   rawVal: any,
   deterministic: boolean,
   writeUnknown = false,
+  selfDescribing = false,
+  msgDepth = 0,
+  coveredHops = 0,
 ): void {
   const keyWT = f.mapKeyWT ?? WireString;
   const valWT = f.mapValWT ?? WireUint;
@@ -2036,7 +2142,15 @@ function encodeMapField(
     if (valType === 'submsg') {
       enc.beginContainer();
       if (v && subSchema) {
-        subSchema.encodeBody(enc, v, deterministic, writeUnknown);
+        subSchema.encodeBody(
+          enc,
+          v,
+          deterministic,
+          writeUnknown,
+          selfDescribing,
+          msgDepth + 2,
+          coveredHops - 1,
+        );
       }
       enc.endContainer();
     } else {

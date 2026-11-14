@@ -2,7 +2,9 @@
 // Header-Scanning Field Readers (O(1) Per-Field Skip) & Wire Splicing (Opaque API)
 // ============================================================================
 
+import { decodeSchemaMeta } from './blind.js';
 import { Encoder } from './encoder.js';
+import { validateMessage, validateValue } from './validation.js';
 import {
   WireArray,
   WireBoolFalse,
@@ -33,9 +35,10 @@ import {
   nextContainerField,
   parseArrayHeader,
   parseMapHeader,
+  readLenSlice,
   roundFloat32Shortest,
   skipValidatedValue,
-  skipValue,
+  validateField0At,
 } from './wire.js';
 
 // ============================================================================
@@ -312,6 +315,11 @@ export function readSubMsg(
   let off = 0;
   for (let i = 0; i < chunks.length; i++) {
     const c = chunks[i]!;
+    try {
+      validateMessage(c, 1);
+    } catch {
+      return [new Uint8Array(0), false];
+    }
     merged.set(c, off);
     off += c.length;
   }
@@ -501,6 +509,95 @@ export function readArrNestedString(
 // Packed & Counted Array Readers
 // ============================================================================
 
+function validateCountedArrBody(
+  body: Uint8Array,
+  elemType: number,
+  count: number,
+  startP: number,
+): boolean {
+  const n = body.length;
+  let p = startP;
+  switch (elemType) {
+    case WireBoolFalse: {
+      if (n - p !== count) return false;
+      for (let i = 0; i < count; i++) {
+        const b = body[p + i]!;
+        if (b !== 0 && b !== 1) return false;
+      }
+      return true;
+    }
+    case WireFixed32:
+    case WireSfixed32:
+    case WireFloat32:
+      return n - p === count * 4;
+    case WireFixed64:
+    case WireSfixed64:
+    case WireFloat64:
+      return n - p === count * 8;
+    case WireString: {
+      for (let i = 0; i < count; i++) {
+        if (p >= n) return false;
+        const [sLen, sn] = decodeVarintBigInt(body, p);
+        if (sn === 0 || sLen > BigInt(n - (p + sn))) return false;
+        p += sn;
+        const end = p + Number(sLen);
+        try {
+          decodeUTF8(body, p, end);
+        } catch {
+          return false;
+        }
+        p = end;
+      }
+      return p === n;
+    }
+    case WireBytes: {
+      for (let i = 0; i < count; i++) {
+        if (p >= n) return false;
+        const [bLen, bn] = decodeVarintBigInt(body, p);
+        if (bn === 0 || bLen > BigInt(n - (p + bn))) return false;
+        p += bn + Number(bLen);
+      }
+      return p === n;
+    }
+    case WireUint:
+    case WireSint: {
+      for (let i = 0; i < count; i++) {
+        if (p >= n) return false;
+        const [, vn] = decodeVarintBigInt(body, p);
+        if (vn === 0) return false;
+        p += vn;
+      }
+      return p === n;
+    }
+    case WireSubMsg: {
+      for (let i = 0; i < count; i++) {
+        if (p >= n) return false;
+        const [sLen, sn] = decodeVarintBigInt(body, p);
+        if (sn === 0 || sLen > BigInt(n - (p + sn))) return false;
+        p += sn;
+        const end = p + Number(sLen);
+        try {
+          validateMessage(body.subarray(p, end), 1);
+        } catch {
+          return false;
+        }
+        p = end;
+      }
+      return p === n;
+    }
+    default: {
+      for (let i = 0; i < count; i++) {
+        try {
+          p = validateValue(body, p, elemType, 1);
+        } catch {
+          return false;
+        }
+      }
+      return p === n;
+    }
+  }
+}
+
 export function countedArrLen(packet: Uint8Array, fieldNum: number, expElemWT?: number): number {
   let total = 0;
   let pos = 0;
@@ -515,9 +612,12 @@ export function countedArrLen(packet: Uint8Array, fieldNum: number, expElemWT?: 
     if (!valid) return 0;
     if (!matched) return total;
     pos = nextPos;
-    const [elemType, c, , headerOk] = parseArrayHeader(body);
+    const [elemType, c, startP, headerOk] = parseArrayHeader(body);
     if (!headerOk) return 0;
     if (expElemWT !== undefined && elemType !== expElemWT) {
+      return 0;
+    }
+    if (!validateCountedArrBody(body, elemType, c, startP)) {
       return 0;
     }
     total += c;
@@ -1126,7 +1226,12 @@ export function readSubMsgMerged<T>(
       pos += tn;
     }
 
-    if (fnum === 0 && wt !== WireSubMsg) return [null, false];
+    if (fnum === 0) {
+      const f0End = validateField0At(packet, pos, wt, 0);
+      if (f0End < 0) return [null, false];
+      pos = f0End;
+      continue;
+    }
 
     if (fnum === fieldNum && wt === WireSubMsg) {
       if (pos >= n) return [null, false];
@@ -1485,8 +1590,13 @@ export function activeOneofSlice(
       pos += tn;
     }
 
-    if (fnum === 0 && wt !== WireSubMsg) {
-      return null;
+    if (fnum === 0) {
+      const f0End = validateField0At(packet, pos, wt, 0);
+      if (f0End < 0) {
+        return null;
+      }
+      pos = f0End;
+      continue;
     }
 
     for (let i = 0; i < oneofSpecs.length; i++) {
@@ -1566,6 +1676,7 @@ export function spliceFields(
   if (maxField <= 30 && (typeof dirtyMask === 'number' || typeof dirtyMask === 'bigint')) {
     const mask32 = typeof dirtyMask === 'bigint' ? Number(dirtyMask & 0x7fffffffn) : dirtyMask | 0;
     if (mask32 === 0) {
+      validateMessage(raw, 0);
       if (enc !== undefined) {
         enc.detachIfOverlaps(raw, 0);
         enc.writeRaw(raw);
@@ -1610,10 +1721,16 @@ export function spliceFields(
         }
         const fnum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);
         const wt = tag & 0x0f;
-        if (fnum === 0 && wt !== WireSubMsg) {
-          throw new Error('omnibuf: invalid Field #0 wire type');
+        if (fnum === 0) {
+          if (wt !== WireSubMsg) {
+            throw new Error('omnibuf: invalid Field #0 wire type');
+          }
+          const [f0Body, f0End] = readLenSlice(raw, pos, 0);
+          decodeSchemaMeta(f0Body, 1);
+          pos = f0End;
+        } else {
+          pos = validateValue(raw, pos, wt, 0);
         }
-        pos = skipValue(raw, pos, wt);
         const fieldEnd = pos;
 
         const bit = fnum >= 1 && fnum <= maxField ? 1 << fnum : 0;
@@ -1659,6 +1776,7 @@ export function spliceFields(
         );
 
   if (dirtySet.size === 0) {
+    validateMessage(raw, 0);
     if (enc !== undefined) {
       enc.detachIfOverlaps(raw, 0);
       enc.writeRaw(raw);
@@ -1696,10 +1814,16 @@ export function spliceFields(
     }
     const fnum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);
     const wt = tag & 0x0f;
-    if (fnum === 0 && wt !== WireSubMsg) {
-      throw new Error('omnibuf: invalid Field #0 wire type');
+    if (fnum === 0) {
+      if (wt !== WireSubMsg) {
+        throw new Error('omnibuf: invalid Field #0 wire type');
+      }
+      const [f0Body, f0End] = readLenSlice(raw, pos, 0);
+      decodeSchemaMeta(f0Body, 1);
+      pos = f0End;
+    } else {
+      pos = validateValue(raw, pos, wt, 0);
     }
-    pos = skipValue(raw, pos, wt);
     const fieldEnd = pos;
 
     if (fnum >= 1 && fnum <= maxField && dirtySet.has(fnum)) {

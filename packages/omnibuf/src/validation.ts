@@ -18,6 +18,7 @@ import {
   WireUint,
   decodeVarintBigInt,
   parseArrayHeader,
+  parseMapHeader,
   readLenSlice,
   skipValue,
 } from './wire.js';
@@ -82,7 +83,7 @@ export function validateValue(
     const [body, end] = readLenSlice(data, pos, 2);
     const [elemType, count, startP, ok] = parseArrayHeader(body);
     if (!ok) {
-      throw new Error('omnibuf: invalid WireArray header');
+      throw new Error('omnibuf: invalid array header');
     }
     let p = startP;
     if (elemType === WireBoolFalse) {
@@ -118,15 +119,13 @@ export function validateValue(
   if (wt === WireMap) {
     if (depth + 1 > limit) throw new Error(`omnibuf: nesting depth exceeds ${limit}`);
     const [body, end] = readLenSlice(data, pos, 3);
-    const key = body[0]!;
-    const value = body[1]!;
-    validateMapTypes(key, value);
-    const [count, width] = decodeVarintBigInt(body, 2);
-    let p = 2 + width;
-    if (!width || count > BigInt(Math.floor((body.length - p) / 2))) {
-      throw new Error('omnibuf: invalid WireMap count');
+    const [key, value, count, startP, ok] = parseMapHeader(body);
+    if (!ok) {
+      throw new Error('omnibuf: invalid map header');
     }
-    for (let i = 0; i < Number(count); i++) {
+    validateMapTypes(key, value);
+    let p = startP;
+    for (let i = 0; i < count; i++) {
       p = validateContainerEntry(body, p, key, depth + 1, limit);
       p = validateContainerEntry(body, p, value, depth + 1, limit);
     }

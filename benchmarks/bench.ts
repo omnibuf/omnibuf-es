@@ -13,11 +13,12 @@ import { FileDescriptorProtoSchema } from '@bufbuild/protobuf/wkt';
 import { encode as msgpackEncode, decode as msgpackDecode } from '@msgpack/msgpack';
 import googleProtobuf from 'google-protobuf';
 import protobufjs from 'protobufjs';
-import { fromBinary, toBinary } from '../packages/omnibuf/src/index.js';
 import {
   OpaquePeerUpdate,
   PeerUpdateSchema,
   createPeerUpdate,
+  fromBinary,
+  toBinary,
   type PeerUpdate,
 } from '../packages/omnibuf-node/src/index.js';
 
@@ -71,6 +72,33 @@ function createSamplePeerUpdate(): PeerUpdate {
     ],
     sequence: 9876543210,
   });
+}
+
+function createLargeNestedPeerUpdate(): PeerUpdate {
+  const p = createSamplePeerUpdate();
+  p.location!.datacenter = 'd'.repeat(20480);
+  p.neighbors[0]!.router = 'n'.repeat(18432);
+  return p;
+}
+
+function createManyNeighborsPeerUpdate(): PeerUpdate {
+  const p = createSamplePeerUpdate();
+  const base = p.neighbors;
+  const expanded = [];
+  for (let r = 0; r < 8; r++) {
+    for (let i = 0; i < base.length; i++) {
+      const nb = base[i]!;
+      expanded.push({
+        $typeName: 'omnibuf.bench.Neighbor' as const,
+        peerAsn: nb.peerAsn,
+        router: nb.router,
+        latencyUs: nb.latencyUs,
+        established: nb.established,
+      });
+    }
+  }
+  p.neighbors = expanded;
+  return p;
 }
 
 // ============================================================================
@@ -438,32 +466,90 @@ function printTable(title: string, results: BenchResult[], baselineIdx = 0): voi
 // 4. Execute Benchmarks
 // ============================================================================
 
+export let benchSink = 0;
+
+function consumeBytes(out: Uint8Array): void {
+  const len = out.byteLength;
+  benchSink = (benchSink + len + (len > 0 ? out[0]! + out[len - 1]! : 0)) | 0;
+}
+
+function u64Low(v: unknown): number {
+  if (typeof v === 'number') return v | 0;
+  if (typeof v === 'bigint') return Number(v & 0x7fffffffn) | 0;
+  return Number(v) | 0;
+}
+
+function consumeDecodedPeer(m: any): void {
+  let acc = ((m.asn | 0) + m.routerId.length + (m.active ? 1 : 0)) | 0;
+  acc = (acc + u64Low(m.uptimeSec) + (m.rssiDbm | 0) + ((m.cpuLoad * 1000) | 0)) | 0;
+  const tags = m.tags;
+  for (let i = 0; i < tags.length; i++) {
+    acc = (acc + tags[i].length) | 0;
+  }
+  const prefixes = m.prefixes;
+  for (let i = 0; i < prefixes.length; i++) {
+    acc = (acc + (prefixes[i] | 0)) | 0;
+  }
+  const loc = m.location;
+  if (loc) {
+    acc =
+      (acc +
+        loc.region.length +
+        loc.datacenter.length +
+        loc.city.length +
+        (loc.rack | 0) +
+        ((loc.latitude * 100) | 0) +
+        ((loc.longitude * 100) | 0)) |
+      0;
+  }
+  const neighbors = m.neighbors;
+  for (let i = 0; i < neighbors.length; i++) {
+    const nb = neighbors[i];
+    acc =
+      (acc + (nb.peerAsn | 0) + nb.router.length + (nb.latencyUs | 0) + (nb.established ? 1 : 0)) |
+      0;
+  }
+  acc = (acc + u64Low(m.sequence)) | 0;
+  benchSink = (benchSink + acc) | 0;
+}
+
+function toBufPeerUpdate(p: PeerUpdate) {
+  return createBufMsg(BufPeerUpdateDesc, {
+    asn: p.asn,
+    routerId: p.routerId,
+    active: p.active,
+    uptimeSec: BigInt(p.uptimeSec),
+    rssiDbm: p.rssiDbm,
+    cpuLoad: p.cpuLoad,
+    tags: [...p.tags],
+    prefixes: [...p.prefixes],
+    location: {
+      region: p.location!.region,
+      datacenter: p.location!.datacenter,
+      city: p.location!.city,
+      rack: p.location!.rack,
+      latitude: p.location!.latitude,
+      longitude: p.location!.longitude,
+    },
+    neighbors: p.neighbors.map((n) => ({
+      peerAsn: n.peerAsn,
+      router: n.router,
+      latencyUs: n.latencyUs,
+      established: n.established,
+    })),
+    sequence: BigInt(p.sequence),
+  });
+}
+
 const sample = createSamplePeerUpdate();
-const bufSample = createBufMsg(BufPeerUpdateDesc, {
-  asn: sample.asn,
-  routerId: sample.routerId,
-  active: sample.active,
-  uptimeSec: BigInt(sample.uptimeSec),
-  rssiDbm: sample.rssiDbm,
-  cpuLoad: sample.cpuLoad,
-  tags: [...sample.tags],
-  prefixes: [...sample.prefixes],
-  location: {
-    region: sample.location!.region,
-    datacenter: sample.location!.datacenter,
-    city: sample.location!.city,
-    rack: sample.location!.rack,
-    latitude: sample.location!.latitude,
-    longitude: sample.location!.longitude,
-  },
-  neighbors: sample.neighbors.map((n) => ({
-    peerAsn: n.peerAsn,
-    router: n.router,
-    latencyUs: n.latencyUs,
-    established: n.established,
-  })),
-  sequence: BigInt(sample.sequence),
-});
+const bufSample = toBufPeerUpdate(sample);
+
+const largeSample = createLargeNestedPeerUpdate();
+const bufLargeSample = toBufPeerUpdate(largeSample);
+
+const manyNeighborsSample = createManyNeighborsPeerUpdate();
+const bufManyNeighborsSample = toBufPeerUpdate(manyNeighborsSample);
+const grownDC = 'd'.repeat(20480);
 
 const gpbWriter = new googleProtobuf.BinaryWriter();
 const textEncoder = new TextEncoder();
@@ -476,6 +562,44 @@ const gpbBytes = encodeGoogleProtobuf(sample);
 const msgpackBytes = msgpackEncode(sample);
 const jsonBytes = textEncoder.encode(JSON.stringify(sample));
 
+const largeOmnibufBytes = toBinary(PeerUpdateSchema, largeSample);
+const largeProtobufEsBytes = bufToBinary(BufPeerUpdateDesc, bufLargeSample);
+const largePbjsBytes = PbjsPeerUpdate.encode(largeSample).finish();
+const largeGpbBytes = encodeGoogleProtobuf(largeSample);
+const largeMsgpackBytes = msgpackEncode(largeSample);
+const largeJsonBytes = textEncoder.encode(JSON.stringify(largeSample));
+
+const manyOmnibufBytes = toBinary(PeerUpdateSchema, manyNeighborsSample);
+const manyProtobufEsBytes = bufToBinary(BufPeerUpdateDesc, bufManyNeighborsSample);
+const manyPbjsBytes = PbjsPeerUpdate.encode(manyNeighborsSample).finish();
+const manyGpbBytes = encodeGoogleProtobuf(manyNeighborsSample);
+const manyMsgpackBytes = msgpackEncode(manyNeighborsSample);
+const manyJsonBytes = textEncoder.encode(JSON.stringify(manyNeighborsSample));
+
+// Verify every decoder materializes the exact same 11-field checksum before timing
+{
+  const decodedSamples = [
+    fromBinary(PeerUpdateSchema, omnibufBytes, { readUnknownFields: false }),
+    PbjsPeerUpdate.decode(pbjsBytes),
+    bufFromBinary(BufPeerUpdateDesc, protobufEsBytes),
+    decodeGoogleProtobuf(gpbBytes),
+    msgpackDecode(msgpackBytes),
+    JSON.parse(textDecoder.decode(jsonBytes)),
+  ];
+  benchSink = 0;
+  consumeDecodedPeer(decodedSamples[0]);
+  const expectedChecksum = benchSink;
+  for (let i = 1; i < decodedSamples.length; i++) {
+    benchSink = 0;
+    consumeDecodedPeer(decodedSamples[i]);
+    if (benchSink !== expectedChecksum) {
+      throw new Error(
+        `Decoded PeerUpdate checksum mismatch at codec ${i}: got ${benchSink}, expected ${expectedChecksum}`,
+      );
+    }
+  }
+}
+
 const cpuModel = cpus()[0]?.model ?? 'unknown';
 logLine('============================================================================');
 logLine(
@@ -484,109 +608,214 @@ logLine(
 logLine('Workload: Canonical PeerUpdate (nested submessage, 4 neighbors, arrays, scalars)');
 logLine('============================================================================');
 
-// 1. Full Message Encode
+// 1. Full Message Encode Speed
 const marshalResults: BenchResult[] = [
-  runBench('OmniBuf', () => toBinary(PeerUpdateSchema, sample), { bytes: omnibufBytes.byteLength }),
-  runBench('protobufjs', () => PbjsPeerUpdate.encode(sample).finish(), {
+  runBench('OmniBuf', () => consumeBytes(toBinary(PeerUpdateSchema, sample)), {
+    bytes: omnibufBytes.byteLength,
+  }),
+  runBench('protobufjs', () => consumeBytes(PbjsPeerUpdate.encode(sample).finish()), {
     bytes: pbjsBytes.byteLength,
   }),
-  runBench('@bufbuild/protobuf (protobuf-es)', () => bufToBinary(BufPeerUpdateDesc, bufSample), {
-    bytes: protobufEsBytes.byteLength,
-  }),
-  runBench('google-protobuf', () => encodeGoogleProtobuf(sample, gpbWriter), {
+  runBench(
+    '@bufbuild/protobuf (protobuf-es)',
+    () => consumeBytes(bufToBinary(BufPeerUpdateDesc, bufSample)),
+    { bytes: protobufEsBytes.byteLength },
+  ),
+  runBench('google-protobuf', () => consumeBytes(encodeGoogleProtobuf(sample, gpbWriter)), {
     bytes: gpbBytes.byteLength,
   }),
-  runBench('@msgpack/msgpack', () => msgpackEncode(sample), { bytes: msgpackBytes.byteLength }),
-  runBench('JSON', () => textEncoder.encode(JSON.stringify(sample)), {
+  runBench('@msgpack/msgpack', () => consumeBytes(msgpackEncode(sample)), {
+    bytes: msgpackBytes.byteLength,
+  }),
+  runBench('JSON', () => consumeBytes(textEncoder.encode(JSON.stringify(sample))), {
     bytes: jsonBytes.byteLength,
   }),
 ];
-printTable('1. Full Message Encode Speed (PeerUpdate)', marshalResults, 0);
+printTable('1. Full Message Encode Speed', marshalResults, 0);
 
-// 2. Full Message Decode
+// 2. Full Message Decode Speed
 const unmarshalResults: BenchResult[] = [
   runBench('OmniBuf', () =>
-    fromBinary(PeerUpdateSchema, omnibufBytes, { readUnknownFields: false }),
+    consumeDecodedPeer(fromBinary(PeerUpdateSchema, omnibufBytes, { readUnknownFields: false })),
   ),
-  runBench('protobufjs', () => PbjsPeerUpdate.decode(pbjsBytes)),
+  runBench('protobufjs', () => consumeDecodedPeer(PbjsPeerUpdate.decode(pbjsBytes))),
   runBench('@bufbuild/protobuf (protobuf-es)', () =>
-    bufFromBinary(BufPeerUpdateDesc, protobufEsBytes),
+    consumeDecodedPeer(bufFromBinary(BufPeerUpdateDesc, protobufEsBytes)),
   ),
-  runBench('google-protobuf', () => decodeGoogleProtobuf(gpbBytes)),
-  runBench('@msgpack/msgpack', () => msgpackDecode(msgpackBytes)),
-  runBench('JSON', () => JSON.parse(textDecoder.decode(jsonBytes))),
+  runBench('google-protobuf', () => consumeDecodedPeer(decodeGoogleProtobuf(gpbBytes))),
+  runBench('@msgpack/msgpack', () => consumeDecodedPeer(msgpackDecode(msgpackBytes))),
+  runBench('JSON', () => consumeDecodedPeer(JSON.parse(textDecoder.decode(jsonBytes)))),
 ];
-printTable('2. Full Message Decode Speed (PeerUpdate)', unmarshalResults, 0);
+printTable('2. Full Message Decode Speed', unmarshalResults, 0);
 
-// 3. Read a Single Nested Field: peer.location.city
+// 3. Read a Single Nested Field
 const lookupCityResults: BenchResult[] = [
   runBench('OmniBuf', () => {
     const view = new OpaquePeerUpdate(omnibufBytes);
     const city = view.location()?.city;
     if (!city || city.length !== 9) throw new Error('lookup failed');
-    return city;
+    benchSink = (benchSink + city.length) | 0;
   }),
   runBench('protobufjs', () => {
     const m = PbjsPeerUpdate.decode(pbjsBytes) as any;
-    return m.location.city;
+    const city = m.location?.city as string | undefined;
+    if (!city || city.length !== 9) throw new Error('lookup failed');
+    benchSink = (benchSink + city.length) | 0;
   }),
   runBench('@bufbuild/protobuf (protobuf-es)', () => {
     const m = bufFromBinary(BufPeerUpdateDesc, protobufEsBytes) as any;
-    return m.location.city;
+    const city = m.location?.city as string | undefined;
+    if (!city || city.length !== 9) throw new Error('lookup failed');
+    benchSink = (benchSink + city.length) | 0;
   }),
   runBench('google-protobuf', () => {
     const m = decodeGoogleProtobuf(gpbBytes);
-    return m.location!.city;
+    const city = m.location?.city;
+    if (!city || city.length !== 9) throw new Error('lookup failed');
+    benchSink = (benchSink + city.length) | 0;
   }),
   runBench('@msgpack/msgpack', () => {
     const m = msgpackDecode(msgpackBytes) as any;
-    return m.location.city;
+    const city = m.location?.city as string | undefined;
+    if (!city || city.length !== 9) throw new Error('lookup failed');
+    benchSink = (benchSink + city.length) | 0;
   }),
   runBench('JSON', () => {
     const m = JSON.parse(textDecoder.decode(jsonBytes));
-    return m.location.city;
+    const city = m.location?.city as string | undefined;
+    if (!city || city.length !== 9) throw new Error('lookup failed');
+    benchSink = (benchSink + city.length) | 0;
   }),
 ];
-printTable('3. Read a Single Nested Field (peer.location.city)', lookupCityResults, 0);
+printTable('3. Read a Single Nested Field', lookupCityResults, 0);
 
-// 4. Selective Single-Field Mutation (increment sequence & re-serialize)
+// 4. Selective Single-Field Mutation
 const mutateResults: BenchResult[] = [
   runBench('OmniBuf', () => {
     const view = new OpaquePeerUpdate(omnibufBytes);
-    view.setSequence(9876543211);
-    return view.marshal();
+    if (view.getLocation()?.city === 'Frankfurt') {
+      view.setSequence(Number(view.getSequence()) + 1);
+    }
+    consumeBytes(view.marshal());
   }),
   runBench('protobufjs', () => {
     const m = PbjsPeerUpdate.decode(pbjsBytes) as any;
-    m.sequence = 9876543211;
-    return PbjsPeerUpdate.encode(m).finish();
+    if (m.location?.city === 'Frankfurt') {
+      m.sequence = Number(m.sequence) + 1;
+    }
+    consumeBytes(PbjsPeerUpdate.encode(m).finish());
   }),
   runBench('@bufbuild/protobuf (protobuf-es)', () => {
     const m = bufFromBinary(BufPeerUpdateDesc, protobufEsBytes) as any;
-    m.sequence = 9876543211n;
-    return bufToBinary(BufPeerUpdateDesc, m);
+    if (m.location?.city === 'Frankfurt') {
+      m.sequence = BigInt(m.sequence) + 1n;
+    }
+    consumeBytes(bufToBinary(BufPeerUpdateDesc, m));
   }),
   runBench('google-protobuf', () => {
     const m = decodeGoogleProtobuf(gpbBytes);
-    m.sequence = 9876543211;
-    return encodeGoogleProtobuf(m, gpbWriter);
+    if (m.location?.city === 'Frankfurt') {
+      m.sequence = Number(m.sequence) + 1;
+    }
+    consumeBytes(encodeGoogleProtobuf(m, gpbWriter));
   }),
   runBench('@msgpack/msgpack', () => {
     const m = msgpackDecode(msgpackBytes) as any;
-    m.sequence = 9876543211;
-    return msgpackEncode(m);
+    if (m.location?.city === 'Frankfurt') {
+      m.sequence = Number(m.sequence) + 1;
+    }
+    consumeBytes(msgpackEncode(m));
   }),
   runBench('JSON', () => {
     const m = JSON.parse(textDecoder.decode(jsonBytes));
-    m.sequence = 9876543211;
-    return textEncoder.encode(JSON.stringify(m));
+    if (m.location?.city === 'Frankfurt') {
+      m.sequence = Number(m.sequence) + 1;
+    }
+    consumeBytes(textEncoder.encode(JSON.stringify(m)));
   }),
 ];
-printTable(
-  '4. Selective Single-Field Mutation (update peer.sequence & re-serialize)',
-  mutateResults,
-  0,
-);
+printTable('4. Selective Single-Field Mutation', mutateResults, 0);
+
+// 5. Large Embedded Message Encode
+const largeEncodeResults: BenchResult[] = [
+  runBench('OmniBuf', () => consumeBytes(toBinary(PeerUpdateSchema, largeSample)), {
+    bytes: largeOmnibufBytes.byteLength,
+  }),
+  runBench('protobufjs', () => consumeBytes(PbjsPeerUpdate.encode(largeSample).finish()), {
+    bytes: largePbjsBytes.byteLength,
+  }),
+  runBench(
+    '@bufbuild/protobuf (protobuf-es)',
+    () => consumeBytes(bufToBinary(BufPeerUpdateDesc, bufLargeSample)),
+    { bytes: largeProtobufEsBytes.byteLength },
+  ),
+  runBench('google-protobuf', () => consumeBytes(encodeGoogleProtobuf(largeSample, gpbWriter)), {
+    bytes: largeGpbBytes.byteLength,
+  }),
+  runBench('@msgpack/msgpack', () => consumeBytes(msgpackEncode(largeSample)), {
+    bytes: largeMsgpackBytes.byteLength,
+  }),
+  runBench('JSON', () => consumeBytes(textEncoder.encode(JSON.stringify(largeSample))), {
+    bytes: largeJsonBytes.byteLength,
+  }),
+];
+printTable('5. Large Embedded Message Encode', largeEncodeResults, 0);
+
+// 6. Embedded Message Growth
+const embeddedGrowResults: BenchResult[] = [
+  runBench('OmniBuf', () => {
+    const view = new OpaquePeerUpdate(manyOmnibufBytes);
+    const loc = view.getLocation();
+    if (loc && loc.city === 'Frankfurt') {
+      view.setLocation({
+        $typeName: 'omnibuf.bench.Location',
+        region: loc.region,
+        datacenter: grownDC,
+        city: loc.city,
+        rack: loc.rack,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      });
+    }
+    consumeBytes(view.marshal());
+  }),
+  runBench('protobufjs', () => {
+    const m = PbjsPeerUpdate.decode(manyPbjsBytes) as any;
+    if (m.location?.city === 'Frankfurt') {
+      m.location.datacenter = grownDC;
+    }
+    consumeBytes(PbjsPeerUpdate.encode(m).finish());
+  }),
+  runBench('@bufbuild/protobuf (protobuf-es)', () => {
+    const m = bufFromBinary(BufPeerUpdateDesc, manyProtobufEsBytes) as any;
+    if (m.location?.city === 'Frankfurt') {
+      m.location.datacenter = grownDC;
+    }
+    consumeBytes(bufToBinary(BufPeerUpdateDesc, m));
+  }),
+  runBench('google-protobuf', () => {
+    const m = decodeGoogleProtobuf(manyGpbBytes);
+    if (m.location?.city === 'Frankfurt') {
+      m.location.datacenter = grownDC;
+    }
+    consumeBytes(encodeGoogleProtobuf(m, gpbWriter));
+  }),
+  runBench('@msgpack/msgpack', () => {
+    const m = msgpackDecode(manyMsgpackBytes) as any;
+    if (m.location?.city === 'Frankfurt') {
+      m.location.datacenter = grownDC;
+    }
+    consumeBytes(msgpackEncode(m));
+  }),
+  runBench('JSON', () => {
+    const m = JSON.parse(textDecoder.decode(manyJsonBytes));
+    if (m.location?.city === 'Frankfurt') {
+      m.location.datacenter = grownDC;
+    }
+    consumeBytes(textEncoder.encode(JSON.stringify(m)));
+  }),
+];
+printTable('6. Embedded Message Growth', embeddedGrowResults, 0);
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rawTxtPath = resolve(repoRoot, 'testdata/benchmarks.txt');
@@ -605,7 +834,7 @@ writeFileSync(
       categories: [
         {
           id: 'encode',
-          title: 'Full Message Encode Speed (PeerUpdate)',
+          title: 'Full Message Encode Speed',
           results: marshalResults.map((r) => ({
             name: r.name,
             nsPerOp: Math.round(r.nsPerOp),
@@ -615,7 +844,7 @@ writeFileSync(
         },
         {
           id: 'decode',
-          title: 'Full Message Decode Speed (PeerUpdate)',
+          title: 'Full Message Decode Speed',
           results: unmarshalResults.map((r) => ({
             name: r.name,
             nsPerOp: Math.round(r.nsPerOp),
@@ -624,7 +853,7 @@ writeFileSync(
         },
         {
           id: 'lookup_city',
-          title: 'Read a Single Nested Field (peer.location.city)',
+          title: 'Read a Single Nested Field',
           results: lookupCityResults.map((r) => ({
             name: r.name,
             nsPerOp: Math.round(r.nsPerOp),
@@ -633,8 +862,27 @@ writeFileSync(
         },
         {
           id: 'mutate_sequence',
-          title: 'Selective Single-Field Mutation (update peer.sequence & re-serialize)',
+          title: 'Selective Single-Field Mutation',
           results: mutateResults.map((r) => ({
+            name: r.name,
+            nsPerOp: Math.round(r.nsPerOp),
+            opsPerSec: Math.round(r.opsPerSec),
+          })),
+        },
+        {
+          id: 'encode_nested_shift',
+          title: 'Large Embedded Message Encode',
+          results: largeEncodeResults.map((r) => ({
+            name: r.name,
+            nsPerOp: Math.round(r.nsPerOp),
+            opsPerSec: Math.round(r.opsPerSec),
+            wireBytes: r.bytes,
+          })),
+        },
+        {
+          id: 'mutate_embedded_grow',
+          title: 'Embedded Message Growth',
+          results: embeddedGrowResults.map((r) => ({
             name: r.name,
             nsPerOp: Math.round(r.nsPerOp),
             opsPerSec: Math.round(r.opsPerSec),

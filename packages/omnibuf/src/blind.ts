@@ -2,7 +2,7 @@
 // Field #0 (omnibuf.v1.SchemaMeta) & Schema-Less Inspection (DecodeBlind)
 // ============================================================================
 
-import { validateMapTypes, validateValue } from './validation.js';
+import { validateMapTypes, validateMessage, validateValue } from './validation.js';
 import { Encoder } from './encoder.js';
 import {
   appendBoolArrBody,
@@ -365,7 +365,7 @@ export function decodeSchemaMeta(data: Uint8Array, depth = 0, limit = MaxNesting
         if (!ok || keyWT !== WireUint || valWT !== WireSubMsg) {
           throw new Error('omnibuf: invalid SchemaMeta children map header');
         }
-        if (!meta.children) meta.children = {};
+        const mapChildren: Record<number, SchemaMeta> = {};
         let p = startP;
         for (let i = 0; i < c; i++) {
           const [k64, kn] = decodeVarintBigInt(body, p);
@@ -374,15 +374,21 @@ export function decodeSchemaMeta(data: Uint8Array, depth = 0, limit = MaxNesting
           }
           p += kn;
           const [childBytes, nextP] = readLenSlice(body, p, 0);
-          const childMeta = decodeSchemaMeta(childBytes, depth + 1, limit);
-          const numK = Number(k64);
-          meta.children[numK] = mergeSchemaMeta(meta.children[numK], childMeta) ?? childMeta;
+          const childMeta = decodeSchemaMeta(childBytes, depth + 2, limit);
+          // Duplicate key inside a single WireMap replaces prior entry (Spec 6.6).
+          mapChildren[Number(k64)] = childMeta;
           p = nextP;
         }
         if (p !== body.length) {
           throw new Error(
             `omnibuf: SchemaMeta children map trailing bytes (parsed ${p}, body ${body.length})`,
           );
+        }
+        // Merge across separate children WireMap fields (Spec 8.2).
+        if (!meta.children) meta.children = {};
+        for (const [k, childMeta] of Object.entries(mapChildren)) {
+          const numK = Number(k);
+          meta.children[numK] = mergeSchemaMeta(meta.children[numK], childMeta) ?? childMeta;
         }
         break;
       }
@@ -410,7 +416,7 @@ export function readField0SchemaMeta(packet: Uint8Array): [meta: SchemaMeta | nu
     if (!matched) return [merged, merged !== null];
     pos = nextPos;
     try {
-      const m = decodeSchemaMeta(body, 0);
+      const m = decodeSchemaMeta(body, 1);
       merged = merged ? mergeSchemaMetaInPlace(merged, m) : m;
     } catch {
       return [null, false];
@@ -464,6 +470,122 @@ function blindChildSchema(schema: BlindSchema | null, fieldNum: number): BlindSc
       ? schema.local.children[fieldNum]
       : undefined;
   return wrapBlindSchema(child, parent);
+}
+
+interface BlindShape {
+  readonly wt: number;
+  readonly keyWT?: number;
+  readonly anyMap?: boolean;
+  readonly elem?: BlindShape | null;
+}
+
+function unifyBlindShapes(
+  a: BlindShape | null | undefined,
+  b: BlindShape | null | undefined,
+): [shape: BlindShape | null, ok: boolean] {
+  if (!a) return [b ?? null, true];
+  if (!b) return [a, true];
+  if (a.wt !== b.wt) return [null, false];
+  if (a.wt === WireMap) {
+    if (a.anyMap) return [b, true];
+    if (b.anyMap) return [a, true];
+    if (a.keyWT !== b.keyWT) return [null, false];
+  }
+  if (a.wt !== WireArray && a.wt !== WireMap) {
+    return [a, true];
+  }
+  const [u, ok] = unifyBlindShapes(a.elem, b.elem);
+  if (!ok) return [null, false];
+  return [{ wt: a.wt, keyWT: a.keyWT, elem: u }, true];
+}
+
+function parseBlindContainerShape(
+  data: Uint8Array,
+  pos: number,
+  wt: number,
+  depth: number,
+): [shape: BlindShape, nextPos: number] {
+  if (depth + 1 > MaxNestingDepth) {
+    throw new Error(
+      `omnibuf: container nesting depth ${depth + 1} exceeds MaxNestingDepth (${MaxNestingDepth})`,
+    );
+  }
+  if (wt === WireArray) {
+    const [body, nextPos] = readLenSlice(data, pos, 2);
+    const [elemWT, count, startP, ok] = parseArrayHeader(body);
+    if (!ok) {
+      throw new Error('omnibuf: invalid WireArray header');
+    }
+    if (elemWT !== WireArray && elemWT !== WireMap) {
+      return [{ wt: WireArray, elem: { wt: elemWT } }, nextPos];
+    }
+    if (count === 0) {
+      if (elemWT === WireArray) {
+        return [{ wt: WireArray, elem: { wt: WireArray } }, nextPos];
+      }
+      return [{ wt: WireArray, elem: { wt: WireMap, anyMap: true } }, nextPos];
+    }
+    let merged: BlindShape | null = null;
+    let p = startP;
+    for (let i = 0; i < count; i++) {
+      const [elemShape, nextP] = parseBlindContainerShape(body, p, elemWT, depth + 1);
+      const [u, compat] = unifyBlindShapes(merged, elemShape);
+      if (!compat) {
+        throw new Error('omnibuf: inconsistent nested container element shapes in WireArray');
+      }
+      merged = u;
+      p = nextP;
+    }
+    if (p !== body.length) {
+      throw new Error('omnibuf: WireArray count/length mismatch');
+    }
+    return [{ wt: WireArray, elem: merged }, nextPos];
+  }
+
+  const [body, nextPos] = readLenSlice(data, pos, 3);
+  const [keyWT, valWT, count, startP, ok] = parseMapHeader(body);
+  if (!ok) {
+    throw new Error(`omnibuf: invalid WireMap header at ${pos}`);
+  }
+  validateMapTypes(keyWT, valWT);
+  if (valWT !== WireArray && valWT !== WireMap) {
+    return [{ wt: WireMap, keyWT, elem: { wt: valWT } }, nextPos];
+  }
+  if (count === 0) {
+    if (valWT === WireArray) {
+      return [{ wt: WireMap, keyWT, elem: { wt: WireArray } }, nextPos];
+    }
+    return [{ wt: WireMap, keyWT, elem: { wt: WireMap, anyMap: true } }, nextPos];
+  }
+  let merged: BlindShape | null = null;
+  let p = startP;
+  for (let i = 0; i < count; i++) {
+    p = skipValue(body, p, keyWT);
+    const [valShape, nextP] = parseBlindContainerShape(body, p, valWT, depth + 1);
+    const [u, compat] = unifyBlindShapes(merged, valShape);
+    if (!compat) {
+      throw new Error('omnibuf: inconsistent nested container value shapes in WireMap');
+    }
+    merged = u;
+    p = nextP;
+  }
+  if (p !== body.length) {
+    throw new Error('omnibuf: WireMap count/length mismatch');
+  }
+  return [{ wt: WireMap, keyWT, elem: merged }, nextPos];
+}
+
+function parseBlindFieldShape(
+  data: Uint8Array,
+  pos: number,
+  wt: number,
+  depth: number,
+): BlindShape {
+  const normWT = wt === WireBoolTrue ? WireBoolFalse : wt;
+  if (normWT !== WireArray && normWT !== WireMap) {
+    return { wt: normWT };
+  }
+  return parseBlindContainerShape(data, pos, normWT, depth)[0];
 }
 
 /**
@@ -524,7 +646,7 @@ function decodeBlindWithSchema(
 
   const activeSchema = wrapBlindSchema(localSchema, inherited);
   const subPackets = new Map<number, Uint8Array[]>();
-  const fieldShapes = new Map<number, number>();
+  const fieldShapes = new Map<number, BlindShape>();
   const fieldNames = new Map<string, number>();
   let pos = 0;
 
@@ -546,17 +668,13 @@ function decodeBlindWithSchema(
       throw new Error(`omnibuf: fields ${previousField} and ${fieldNum} share name ${name}`);
     }
     fieldNames.set(name, fieldNum);
-    let shape = wt === WireBoolTrue ? WireBoolFalse : wt;
-    if (wt === WireArray || wt === WireMap) {
-      const [body] = readLenSlice(data, pos, wt === WireArray ? 2 : 3);
-      shape |= body[0]! << 8;
-      if (wt === WireMap) shape |= body[1]! << 16;
-    }
+    const shape = parseBlindFieldShape(data, pos, wt, depth);
     const previousShape = fieldShapes.get(fieldNum);
-    if (previousShape !== undefined && previousShape !== shape) {
+    const [unifiedShape, shapeOk] = unifyBlindShapes(previousShape, shape);
+    if (!shapeOk || !unifiedShape) {
       throw new Error(`omnibuf: field ${fieldNum} changes wire shape within one message`);
     }
-    fieldShapes.set(fieldNum, shape);
+    fieldShapes.set(fieldNum, unifiedShape);
     if (!Object.hasOwn(out, name) && wt !== WireSubMsg) setOwn(out, name, undefined);
 
     switch (wt) {
@@ -598,6 +716,7 @@ function decodeBlindWithSchema(
       }
       case WireSubMsg: {
         const [subBytes, nextPos] = readLenSlice(data, pos, 0);
+        validateMessage(subBytes, depth + 1);
         let chunks = subPackets.get(fieldNum);
         if (!chunks) {
           chunks = [];
@@ -1232,8 +1351,11 @@ export function stringifyBlindJSON(
   }
 
   const out = serialize(value, '');
-  if (hasNonFinite && fallbackOnNonFinite) {
-    return '{}';
+  if (hasNonFinite) {
+    if (fallbackOnNonFinite) {
+      return '{}';
+    }
+    throw new Error('omnibuf: non-finite float (NaN or Infinity) cannot be represented in JSON');
   }
   return out;
 }
@@ -1246,7 +1368,7 @@ export function decodeBlindJSON(
   options?: { indent?: number; fallbackOnNonFinite?: boolean },
 ): string {
   const m = decodeBlind(packet, { bytesAsBase64: true, roundFloat32: true });
-  return stringifyBlindJSON(m, options?.indent, options?.fallbackOnNonFinite ?? true);
+  return stringifyBlindJSON(m, options?.indent, options?.fallbackOnNonFinite ?? false);
 }
 
 function setOwn(object: Record<string, unknown>, key: string, value: unknown): void {

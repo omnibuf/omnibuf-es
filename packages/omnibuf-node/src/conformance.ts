@@ -678,16 +678,18 @@ export function handleConformanceRequest(
       }
 
       case TestTierPlugin: {
-        if (req.test_opaque_splice || req.test_opaque_splice_shrink) {
-          try {
-            checkSpliceAliasedPrefix(payload);
-          } catch (err) {
-            resp.runtime_error = err instanceof Error ? err.message : String(err);
-            return resp;
-          }
-        }
         switch (req.message_type) {
           case 'omnibuf.bench.PeerUpdate': {
+            if (req.test_opaque_splice || req.test_opaque_splice_shrink) {
+              try {
+                const probe = new OpaquePeerUpdate(payload);
+                probe.setSequence(1);
+                probe.marshal();
+              } catch (err) {
+                resp.parse_error = err instanceof Error ? err.message : String(err);
+                return resp;
+              }
+            }
             const msg = createPeerUpdate({
               asn: 999999,
               routerId: 'stale-router',
@@ -703,6 +705,14 @@ export function handleConformanceRequest(
             } catch (err) {
               resp.parse_error = err instanceof Error ? err.message : String(err);
               return resp;
+            }
+            if (req.test_opaque_splice || req.test_opaque_splice_shrink) {
+              try {
+                checkSpliceAliasedPrefix(payload);
+              } catch (err) {
+                resp.runtime_error = err instanceof Error ? err.message : String(err);
+                return resp;
+              }
             }
             const op = new OpaquePeerUpdate(payload);
             const opLoc = op.getLocation();
@@ -794,6 +804,16 @@ export function handleConformanceRequest(
           }
 
           case 'omnibuf.conformance.TestAllTypes': {
+            if (req.test_opaque_splice || req.test_opaque_splice_shrink) {
+              try {
+                const probe = new OpaqueTestAllTypes(payload);
+                probe.setF1Uint32(1);
+                probe.marshal();
+              } catch (err) {
+                resp.parse_error = err instanceof Error ? err.message : String(err);
+                return resp;
+              }
+            }
             const msg = createTestAllTypes({
               f1Uint32: 999999,
               f5Bool: true,
@@ -816,6 +836,14 @@ export function handleConformanceRequest(
             } catch (err) {
               resp.parse_error = err instanceof Error ? err.message : String(err);
               return resp;
+            }
+            if (req.test_opaque_splice || req.test_opaque_splice_shrink) {
+              try {
+                checkSpliceAliasedPrefix(payload);
+              } catch (err) {
+                resp.runtime_error = err instanceof Error ? err.message : String(err);
+                return resp;
+              }
             }
             const op = new OpaqueTestAllTypes(payload);
             void op.getF12MapStrUint();

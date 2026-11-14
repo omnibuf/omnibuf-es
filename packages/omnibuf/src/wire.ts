@@ -965,6 +965,240 @@ export function skipValue(b: Uint8Array, pos: number, wireType: number): number 
   return nextPos;
 }
 
+function validateUnknownEntryAt(
+  body: Uint8Array,
+  p: number,
+  wt: number,
+  depth: number,
+  limit: number,
+): number {
+  if (wt === WireBoolFalse) {
+    if (p >= body.length || (body[p]! !== 0 && body[p]! !== 1)) return -1;
+    return p + 1;
+  }
+  if (wt === WireSubMsg) {
+    if (p >= body.length) return -1;
+    const [bLen, bn] = decodeVarintBigInt(body, p);
+    if (bn === 0 || bLen > BigInt(body.length - (p + bn))) return -1;
+    const start = p + bn;
+    const end = start + Number(bLen);
+    if (!validateUnknownMessageBytes(body.subarray(start, end), depth + 1, limit)) return -1;
+    return end;
+  }
+  if (wt === WireArray || wt === WireMap) {
+    return validateUnknownValueAt(body, p, wt, depth, limit);
+  }
+  return skipValidatedValue(body, p, wt);
+}
+
+function validateUnknownValueAt(
+  data: Uint8Array,
+  pos: number,
+  wt: number,
+  depth: number,
+  limit: number,
+): number {
+  if (depth > limit) return -1;
+  if (wt === WireSubMsg) {
+    if (pos >= data.length) return -1;
+    const [bLen, bn] = decodeVarintBigInt(data, pos);
+    if (bn === 0 || bLen > BigInt(data.length - (pos + bn))) return -1;
+    const start = pos + bn;
+    const end = start + Number(bLen);
+    if (!validateUnknownMessageBytes(data.subarray(start, end), depth + 1, limit)) return -1;
+    return end;
+  }
+  if (wt === WireArray) {
+    if (depth + 1 > limit || pos >= data.length) return -1;
+    const [bLen, bn] = decodeVarintBigInt(data, pos);
+    if (bn === 0 || bLen < 2n || bLen > BigInt(data.length - (pos + bn))) return -1;
+    const end = pos + bn + Number(bLen);
+    const body = data.subarray(pos + bn, end);
+    const [elemType, count, startP, ok] = parseArrayHeader(body);
+    if (!ok) return -1;
+    let p = startP;
+    if (elemType === WireBoolFalse) {
+      if (body.length - p !== count) return -1;
+      for (let i = 0; i < count; i++) {
+        const b = body[p + i]!;
+        if (b !== 0 && b !== 1) return -1;
+      }
+      return end;
+    }
+    if (elemType === WireFixed32 || elemType === WireSfixed32 || elemType === WireFloat32) {
+      return body.length - p === count * 4 ? end : -1;
+    }
+    if (elemType === WireFixed64 || elemType === WireSfixed64 || elemType === WireFloat64) {
+      return body.length - p === count * 8 ? end : -1;
+    }
+    for (let i = 0; i < count; i++) {
+      p = validateUnknownEntryAt(body, p, elemType, depth + 1, limit);
+      if (p < 0) return -1;
+    }
+    return p === body.length ? end : -1;
+  }
+  if (wt === WireMap) {
+    if (depth + 1 > limit || pos >= data.length) return -1;
+    const [bLen, bn] = decodeVarintBigInt(data, pos);
+    if (bn === 0 || bLen < 3n || bLen > BigInt(data.length - (pos + bn))) return -1;
+    const end = pos + bn + Number(bLen);
+    const body = data.subarray(pos + bn, end);
+    const [keyWT, valWT, count, startP, ok] = parseMapHeader(body);
+    if (!ok) return -1;
+    let p = startP;
+    for (let i = 0; i < count; i++) {
+      p = validateUnknownEntryAt(body, p, keyWT, depth + 1, limit);
+      if (p < 0) return -1;
+      p = validateUnknownEntryAt(body, p, valWT, depth + 1, limit);
+      if (p < 0) return -1;
+    }
+    return p === body.length ? end : -1;
+  }
+  return skipValidatedValue(data, pos, wt);
+}
+
+function validateUnknownMessageBytes(
+  data: Uint8Array,
+  depth: number,
+  limit = MaxNestingDepth,
+): boolean {
+  if (depth > limit) return false;
+  let pos = 0;
+  while (pos < data.length) {
+    const [tag, tn] = decodeVarintBigInt(data, pos);
+    if (tn === 0 || tag >> 4n > 536870911n) return false;
+    pos += tn;
+    const fnum = Number(tag >> 4n);
+    const wt = Number(tag & 0x0fn);
+    if (fnum === 0) {
+      const nextPos = validateField0At(data, pos, wt, depth, limit);
+      if (nextPos < 0) return false;
+      pos = nextPos;
+    } else {
+      const nextPos = validateUnknownValueAt(data, pos, wt, depth, limit);
+      if (nextPos < 0) return false;
+      pos = nextPos;
+    }
+  }
+  return true;
+}
+
+/**
+ * Validates an `omnibuf.v1.SchemaMeta` payload at `depth`.
+ */
+export function validateSchemaMetaBytes(
+  data: Uint8Array,
+  depth: number,
+  limit = MaxNestingDepth,
+): boolean {
+  if (depth > limit) return false;
+  let pos = 0;
+  const n = data.length;
+  while (pos < n) {
+    const [tag, tn] = decodeVarintBigInt(data, pos);
+    if (tn === 0 || tag >> 4n > 536870911n) return false;
+    pos += tn;
+    const fnum = Number(tag >> 4n);
+    const wt = Number(tag & 0x0fn);
+    switch (fnum) {
+      case 1: {
+        if (wt !== WireString || pos >= n) return false;
+        const [sLen, sn] = decodeVarintBigInt(data, pos);
+        if (sn === 0 || sLen > BigInt(n - (pos + sn))) return false;
+        pos += sn;
+        const end = pos + Number(sLen);
+        try {
+          decodeUTF8(data, pos, end);
+        } catch {
+          return false;
+        }
+        pos = end;
+        break;
+      }
+      case 2: {
+        if (wt !== WireMap || depth + 1 > limit || pos >= n) return false;
+        const [bLen, bn] = decodeVarintBigInt(data, pos);
+        if (bn === 0 || bLen < 3n || bLen > BigInt(n - (pos + bn))) return false;
+        const bodyEnd = pos + bn + Number(bLen);
+        const body = data.subarray(pos + bn, bodyEnd);
+        pos = bodyEnd;
+        const [keyWT, valWT, count, startP, ok] = parseMapHeader(body);
+        if (!ok || keyWT !== WireUint || valWT !== WireString) return false;
+        let p = startP;
+        for (let i = 0; i < count; i++) {
+          const [k64, kn] = decodeVarintBigInt(body, p);
+          if (kn === 0 || k64 === 0n || k64 > 536870911n) return false;
+          p += kn;
+          const [sLen, sn] = decodeVarintBigInt(body, p);
+          if (sn === 0 || sLen > BigInt(body.length - (p + sn))) return false;
+          p += sn;
+          const sEnd = p + Number(sLen);
+          try {
+            decodeUTF8(body, p, sEnd);
+          } catch {
+            return false;
+          }
+          p = sEnd;
+        }
+        if (p !== body.length) return false;
+        break;
+      }
+      case 3: {
+        if (wt !== WireMap || depth + 1 > limit || pos >= n) return false;
+        const [bLen, bn] = decodeVarintBigInt(data, pos);
+        if (bn === 0 || bLen < 3n || bLen > BigInt(n - (pos + bn))) return false;
+        const bodyEnd = pos + bn + Number(bLen);
+        const body = data.subarray(pos + bn, bodyEnd);
+        pos = bodyEnd;
+        const [keyWT, valWT, count, startP, ok] = parseMapHeader(body);
+        if (!ok || keyWT !== WireUint || valWT !== WireSubMsg) return false;
+        let p = startP;
+        for (let i = 0; i < count; i++) {
+          const [k64, kn] = decodeVarintBigInt(body, p);
+          if (kn === 0 || k64 === 0n || k64 > 536870911n) return false;
+          p += kn;
+          const [cLen, cn] = decodeVarintBigInt(body, p);
+          if (cn === 0 || cLen > BigInt(body.length - (p + cn))) return false;
+          p += cn;
+          const cEnd = p + Number(cLen);
+          if (!validateSchemaMetaBytes(body.subarray(p, cEnd), depth + 2, limit)) return false;
+          p = cEnd;
+        }
+        if (p !== body.length) return false;
+        break;
+      }
+      default: {
+        if (fnum === 0) return false;
+        const nextPos = validateUnknownValueAt(data, pos, wt, depth, limit);
+        if (nextPos < 0) return false;
+        pos = nextPos;
+        break;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * Validates a `Field #0` (`omnibuf.v1.SchemaMeta`) entry starting at value offset `pos`.
+ * Returns the end offset after `Field #0`, or `-1` if invalid.
+ */
+export function validateField0At(
+  packet: Uint8Array,
+  pos: number,
+  wt: number,
+  depth = 0,
+  limit = MaxNestingDepth,
+): number {
+  if (wt !== WireSubMsg || pos < 0 || pos >= packet.length) return -1;
+  const [bLen, bn] = decodeVarintBigInt(packet, pos);
+  if (bn === 0 || bLen > BigInt(packet.length - (pos + bn))) return -1;
+  const start = pos + bn;
+  const end = start + Number(bLen);
+  if (!validateSchemaMetaBytes(packet.subarray(start, end), depth + 1, limit)) return -1;
+  return end;
+}
+
 export interface LocateFieldResult {
   valSlice: Uint8Array;
   valPos: number;
@@ -1018,8 +1252,17 @@ export function locateField(
       pos += tn;
     }
 
-    if (fnum === 0 && wt !== WireSubMsg) {
-      return NOT_FOUND;
+    if (fnum === 0) {
+      const f0End = validateField0At(packet, pos, wt, 0);
+      if (f0End < 0) {
+        return NOT_FOUND;
+      }
+      if (targetField === 0 && ((expMask >>> wt) & 1) !== 0) {
+        lastPos = pos;
+        lastWT = wt;
+      }
+      pos = f0End;
+      continue;
     }
 
     if (fnum === targetField && ((expMask >>> wt) & 1) !== 0) {
@@ -1088,6 +1331,15 @@ export function nextContainerField(
       fnum = Number(tag >> 4n);
       wt = Number(tag & 0x0fn);
       pos += tn;
+    }
+
+    if (fnum === 0 && targetField !== 0) {
+      const f0End = validateField0At(packet, pos, wt, 0);
+      if (f0End < 0) {
+        return { body: new Uint8Array(0), nextPos: 0, matched: false, valid: false };
+      }
+      pos = f0End;
+      continue;
     }
 
     if (fnum === 0 && wt !== WireSubMsg) {

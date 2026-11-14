@@ -320,17 +320,19 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
       expect(rawWire.byteLength).toBe(vec.wire_byte_len);
 
       // 1A. Blind tier
-      const blindResp = handleConformanceRequest({
-        test_name: `${vec.name}/Blind`,
-        message_type: vec.schema,
-        tier: TestTierBlind,
-        requested_output_format: WireFormatJSON,
-        omnibuf_payload: rawWire,
-      });
-      expect(blindResp.parse_error, `Blind parse_error on ${vec.name}`).toBe('');
-      expect(blindResp.runtime_error).toBe('');
-      if (vec.expected_blind) {
-        expect(JSON.parse(blindResp.json_payload)).toEqual(vec.expected_blind);
+      if (!vec.skip_blind) {
+        const blindResp = handleConformanceRequest({
+          test_name: `${vec.name}/Blind`,
+          message_type: vec.schema,
+          tier: TestTierBlind,
+          requested_output_format: WireFormatJSON,
+          omnibuf_payload: rawWire,
+        });
+        expect(blindResp.parse_error, `Blind parse_error on ${vec.name}`).toBe('');
+        expect(blindResp.runtime_error).toBe('');
+        if (vec.expected_blind) {
+          expect(JSON.parse(blindResp.json_payload)).toEqual(vec.expected_blind);
+        }
       }
 
       // 1B. Schema tiers
@@ -442,6 +444,26 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
             expect(shrunkDec.rssiDbm).toBe(-1);
             expect(shrunkDec.sequence).toBe(2);
           }
+        } else if (vec.schema === 'TreeNode' && tier === TestTierAnnotatedStruct) {
+          const respSD = handleConformanceRequest({
+            test_name: `${vec.name}/Tier_${tier}/SelfDescribing`,
+            message_type: canonicalType,
+            tier,
+            requested_output_format: WireFormatOmniBuf,
+            omnibuf_payload: rawWire,
+            self_describing: true,
+          });
+          expect(respSD.parse_error).toBe('');
+          expect(respSD.serialize_error).toBe('');
+          expect(respSD.runtime_error).toBe('');
+          const [meta, ok] = readField0SchemaMeta(respSD.omnibuf_payload);
+          expect(ok).toBe(true);
+          expect(meta?.fields?.[2]).toBe('name');
+          const blindTreeSD = decodeBlind(respSD.omnibuf_payload) as Record<string, any>;
+          expect(typeof blindTreeSD.name).toBe('string');
+          if (blindTreeSD.primary !== undefined) {
+            expect(typeof blindTreeSD.primary.name).toBe('string');
+          }
         } else if (vec.schema === 'TestAllTypes' && tier === TestTierPlugin) {
           const respSplice = handleConformanceRequest({
             test_name: `${vec.name}/Tier_${tier}/OpaqueSpliceGrow`,
@@ -489,24 +511,67 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
       const badBytes = new Uint8Array(Buffer.from(ic.wire_hex, 'hex'));
       expect(() => decodeBlind(badBytes), `expected decodeBlind to reject ${ic.name}`).toThrow();
 
+      const icSchema = ic.schema || 'TestAllTypes';
+      const icMsgType =
+        icSchema === 'PeerUpdate'
+          ? 'omnibuf.bench.PeerUpdate'
+          : icSchema === 'TreeNode'
+            ? 'omnibuf.conformance.TreeNode'
+            : icSchema === 'NestedCluster'
+              ? 'omnibuf.conformance.NestedCluster'
+              : 'omnibuf.conformance.TestAllTypes';
+
       const blindResp = handleConformanceRequest({
         test_name: `Invalid/${ic.name}/Blind`,
-        message_type: 'omnibuf.conformance.TestAllTypes',
+        message_type: icMsgType,
         tier: TestTierBlind,
         requested_output_format: WireFormatJSON,
         omnibuf_payload: badBytes,
       });
+      expect(blindResp.runtime_error, `unexpected Blind runtime_error on ${ic.name}`).toBe('');
       expect(blindResp.parse_error, `expected Blind parse_error on ${ic.name}`).not.toBe('');
 
-      for (const tier of [TestTierAnnotatedStruct, TestTierProtobufTypes, TestTierPlugin]) {
+      const icTiers =
+        icSchema === 'PeerUpdate' || icSchema === 'TestAllTypes'
+          ? [TestTierPlugin, TestTierProtobufTypes, TestTierAnnotatedStruct]
+          : [TestTierAnnotatedStruct];
+      const isNonField0UTF8 = ic.category === 'InvalidUTF8' && !ic.name.includes('field0');
+
+      for (const tier of icTiers) {
         const resp = handleConformanceRequest({
           test_name: `Invalid/${ic.name}/Tier_${tier}`,
-          message_type: 'omnibuf.bench.PeerUpdate',
+          message_type: icMsgType,
           tier,
           requested_output_format: WireFormatOmniBuf,
           omnibuf_payload: badBytes,
         });
         expect(resp.runtime_error, `unexpected runtime_error on ${ic.name}`).toBe('');
+        if (!ic.blind_only && resp.skipped === '') {
+          expect(resp.parse_error, `expected tier ${tier} parse_error on ${ic.name}`).not.toBe('');
+        }
+
+        if (
+          !ic.blind_only &&
+          !isNonField0UTF8 &&
+          tier === TestTierPlugin &&
+          (icSchema === 'TestAllTypes' || icSchema === 'PeerUpdate')
+        ) {
+          const respSplice = handleConformanceRequest({
+            test_name: `Invalid/${ic.name}/Tier_${tier}/OpaqueSplice`,
+            message_type: icMsgType,
+            tier,
+            requested_output_format: WireFormatOmniBuf,
+            omnibuf_payload: badBytes,
+            test_opaque_splice: true,
+          });
+          expect(respSplice.runtime_error, `unexpected splice runtime_error on ${ic.name}`).toBe(
+            '',
+          );
+          expect(
+            respSplice.parse_error !== '' || respSplice.serialize_error !== '',
+            `expected OpaqueSplice failure on ${ic.name}`,
+          ).toBe(true);
+        }
       }
     }
   });

@@ -670,3 +670,152 @@ it('decodes 1-byte Prefix-Varint odd lengths on submsg and array containers with
   assert.deepEqual(decoded.nums, [42]);
   assert.deepEqual(decoded.subs, [{ id: 300 }, { id: 7 }]);
 });
+
+it('enforces cold-review edge cases for SchemaMeta, decodeBlindJSON, nested arrays, and spliceFields', async () => {
+  const {
+    decodeBlindJSON,
+    countedArrLen,
+    readSubMsg,
+    locateField,
+    WireUint,
+    WireString,
+    WireSubMsg,
+    WireArray,
+    WireMap,
+    WireBoolFalse,
+  } = await import('../src/index.js');
+
+  // 1. decodeBlindJSON throws on NaN/Infinity by default, while fallbackOnNonFinite returns "{}"
+  const nanEnc = new Encoder(32);
+  nanEnc.writeFloat64(1, Number.NaN);
+  const nanPkt = nanEnc.finish();
+  assert.throws(() => decodeBlindJSON(nanPkt), /non-finite float/);
+  assert.equal(decodeBlindJSON(nanPkt, { fallbackOnNonFinite: true }), '{}');
+
+  const infEnc = new Encoder(32);
+  infEnc.writeFloat32(1, Number.POSITIVE_INFINITY);
+  const infPkt = infEnc.finish();
+  assert.throws(() => decodeBlindJSON(infPkt), /non-finite float/);
+  assert.equal(decodeBlindJSON(infPkt, { fallbackOnNonFinite: true }), '{}');
+
+  // 2. SchemaMeta.children duplicate key in single WireMap replaces, while two Field #0 blocks merge
+  const childOld = new Encoder(64);
+  childOld.writeTag(2, WireMap);
+  childOld.beginContainer();
+  childOld.writeByte(WireUint);
+  childOld.writeByte(WireString);
+  childOld.writeRawVarint(2);
+  childOld.writeRawVarint(1);
+  childOld.writeRawStringPayload('old_id');
+  childOld.writeRawVarint(2);
+  childOld.writeRawStringPayload('old_label');
+  childOld.endContainer();
+  const childOldBytes = childOld.finish();
+
+  const childNew = new Encoder(64);
+  childNew.writeTag(2, WireMap);
+  childNew.beginContainer();
+  childNew.writeByte(WireUint);
+  childNew.writeByte(WireString);
+  childNew.writeRawVarint(1);
+  childNew.writeRawVarint(1);
+  childNew.writeRawStringPayload('new_id');
+  childNew.endContainer();
+  const childNewBytes = childNew.finish();
+
+  const singleMapF0 = new Encoder(128);
+  singleMapF0.writeTag(0, WireSubMsg);
+  singleMapF0.beginContainer();
+  singleMapF0.writeTag(3, WireMap);
+  singleMapF0.beginContainer();
+  singleMapF0.writeByte(WireUint);
+  singleMapF0.writeByte(WireSubMsg);
+  singleMapF0.writeRawVarint(2);
+  singleMapF0.writeRawVarint(8);
+  singleMapF0.writeRawBytesPayload(childOldBytes);
+  singleMapF0.writeRawVarint(8);
+  singleMapF0.writeRawBytesPayload(childNewBytes);
+  singleMapF0.endContainer();
+  singleMapF0.endContainer();
+  singleMapF0.beginSubMsg(8);
+  singleMapF0.writeUint(1, 10);
+  singleMapF0.writeString(2, 'hi');
+  singleMapF0.endSubMsg();
+  assert.deepEqual(decodeBlind(singleMapF0.finish()), {
+    field_8: { new_id: 10, field_2: 'hi' },
+  });
+
+  const twoBlocksF0 = new Encoder(128);
+  for (const cb of [childOldBytes, childNewBytes]) {
+    twoBlocksF0.writeTag(0, WireSubMsg);
+    twoBlocksF0.beginContainer();
+    twoBlocksF0.writeTag(3, WireMap);
+    twoBlocksF0.beginContainer();
+    twoBlocksF0.writeByte(WireUint);
+    twoBlocksF0.writeByte(WireSubMsg);
+    twoBlocksF0.writeRawVarint(1);
+    twoBlocksF0.writeRawVarint(8);
+    twoBlocksF0.writeRawBytesPayload(cb);
+    twoBlocksF0.endContainer();
+    twoBlocksF0.endContainer();
+  }
+  twoBlocksF0.beginSubMsg(8);
+  twoBlocksF0.writeUint(1, 10);
+  twoBlocksF0.writeString(2, 'hi');
+  twoBlocksF0.endSubMsg();
+  assert.deepEqual(decodeBlind(twoBlocksF0.finish()), {
+    field_8: { new_id: 10, old_label: 'hi' },
+  });
+
+  // 3. Split mid-varint submessages rejected by readSubMsg, decodeBlind, and spliceFields
+  const splitSubPkt = new Uint8Array([
+    ((8 << 4) | WireSubMsg) * 2 + 1,
+    (2 << 1) | 1,
+    0x21,
+    0x02, // truncated 2B varint
+    ((8 << 4) | WireSubMsg) * 2 + 1,
+    (1 << 1) | 1,
+    0x00,
+  ]);
+  assert.equal(readSubMsg(splitSubPkt, 8)[1], false);
+  assert.throws(() => decodeBlind(splitSubPkt));
+  assert.throws(() => spliceFields(splitSubPkt, 1 << 1, 8, () => {}));
+
+  // 4. Corrupt Field #0 rejected by locateField and spliceFields
+  const corruptF0Pkt = new Uint8Array([0x19, 0x03, 0x25, 0x21, 0x0b]); // Field #0 containing truncated tag/string + field #1=5
+  assert.equal(locateField(corruptF0Pkt, 1).ok, false);
+  assert.throws(() => spliceFields(corruptF0Pkt, 1 << 1, 2, () => {}));
+
+  // 5. Invalid bool array byte 0x02 rejected by countedArrLen and spliceFields
+  const badBoolArrPkt = new Uint8Array([
+    (((1 << 4) | WireArray) << 1) | 1,
+    (3 << 1) | 1,
+    WireBoolFalse,
+    (1 << 1) | 1,
+    0x02,
+  ]);
+  assert.equal(countedArrLen(badBoolArrPkt, 1, WireBoolFalse), 0);
+  assert.throws(() => spliceFields(badBoolArrPkt, 1 << 2, 2, () => {}));
+
+  // 6. Nested WireArray(WireArray(...)) inner element wire-type conflict rejected by decodeBlind
+  const nestedArrConflict = new Uint8Array([
+    (((1 << 4) | WireArray) << 1) | 1,
+    (6 << 1) | 1,
+    WireArray,
+    (1 << 1) | 1,
+    (3 << 1) | 1,
+    WireUint,
+    (1 << 1) | 1,
+    (7 << 1) | 1,
+    (((1 << 4) | WireArray) << 1) | 1,
+    (7 << 1) | 1,
+    WireArray,
+    (1 << 1) | 1,
+    (4 << 1) | 1,
+    WireString,
+    (1 << 1) | 1,
+    (1 << 1) | 1,
+    0x61,
+  ]);
+  assert.throws(() => decodeBlind(nestedArrConflict), /changes wire shape/);
+});

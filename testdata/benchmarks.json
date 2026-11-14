@@ -7,100 +7,64 @@
   "categories": [
     {
       "id": "encode",
-      "title": "Full Message Encode Speed (PeerUpdate)",
+      "title": "Full Message Encode Speed",
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 1208,
-          "opsPerSec": 827724,
+          "nsPerOp": 1239,
+          "opsPerSec": 807242,
           "wireBytes": 366
         },
         {
           "name": "protobufjs",
-          "nsPerOp": 1628,
-          "opsPerSec": 614123,
+          "nsPerOp": 1663,
+          "opsPerSec": 601356,
           "wireBytes": 341
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 2812,
-          "opsPerSec": 355679,
+          "nsPerOp": 3065,
+          "opsPerSec": 326303,
           "wireBytes": 341
         },
         {
           "name": "google-protobuf",
-          "nsPerOp": 6055,
-          "opsPerSec": 165150,
+          "nsPerOp": 6619,
+          "opsPerSec": 151089,
           "wireBytes": 341
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 4934,
-          "opsPerSec": 202658,
+          "nsPerOp": 4583,
+          "opsPerSec": 218175,
           "wireBytes": 622
         },
         {
           "name": "JSON",
-          "nsPerOp": 2385,
-          "opsPerSec": 419367,
+          "nsPerOp": 2439,
+          "opsPerSec": 410052,
           "wireBytes": 791
         }
       ]
     },
     {
       "id": "decode",
-      "title": "Full Message Decode Speed (PeerUpdate)",
+      "title": "Full Message Decode Speed",
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 1147,
-          "opsPerSec": 872002
+          "nsPerOp": 1385,
+          "opsPerSec": 722273
         },
         {
           "name": "protobufjs",
-          "nsPerOp": 1550,
-          "opsPerSec": 645157
+          "nsPerOp": 2548,
+          "opsPerSec": 392432
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 3871,
-          "opsPerSec": 258321
-        },
-        {
-          "name": "google-protobuf",
-          "nsPerOp": 3452,
-          "opsPerSec": 289670
-        },
-        {
-          "name": "@msgpack/msgpack",
-          "nsPerOp": 3728,
-          "opsPerSec": 268272
-        },
-        {
-          "name": "JSON",
-          "nsPerOp": 2295,
-          "opsPerSec": 435806
-        }
-      ]
-    },
-    {
-      "id": "lookup_city",
-      "title": "Read a Single Nested Field (peer.location.city)",
-      "results": [
-        {
-          "name": "OmniBuf",
-          "nsPerOp": 398,
-          "opsPerSec": 2512498
-        },
-        {
-          "name": "protobufjs",
-          "nsPerOp": 1587,
-          "opsPerSec": 630277
-        },
-        {
-          "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 3802,
-          "opsPerSec": 263016
+          "nsPerOp": 4281,
+          "opsPerSec": 233604
         },
         {
           "name": "google-protobuf",
@@ -109,49 +73,163 @@
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 3697,
-          "opsPerSec": 270474
+          "nsPerOp": 3832,
+          "opsPerSec": 260973
         },
         {
           "name": "JSON",
-          "nsPerOp": 2304,
-          "opsPerSec": 433952
+          "nsPerOp": 2647,
+          "opsPerSec": 377826
+        }
+      ]
+    },
+    {
+      "id": "lookup_city",
+      "title": "Read a Single Nested Field",
+      "results": [
+        {
+          "name": "OmniBuf",
+          "nsPerOp": 399,
+          "opsPerSec": 2507169
+        },
+        {
+          "name": "protobufjs",
+          "nsPerOp": 1549,
+          "opsPerSec": 645519
+        },
+        {
+          "name": "@bufbuild/protobuf (protobuf-es)",
+          "nsPerOp": 4060,
+          "opsPerSec": 246330
+        },
+        {
+          "name": "google-protobuf",
+          "nsPerOp": 3319,
+          "opsPerSec": 301279
+        },
+        {
+          "name": "@msgpack/msgpack",
+          "nsPerOp": 3612,
+          "opsPerSec": 276825
+        },
+        {
+          "name": "JSON",
+          "nsPerOp": 2296,
+          "opsPerSec": 435596
         }
       ]
     },
     {
       "id": "mutate_sequence",
-      "title": "Selective Single-Field Mutation (update peer.sequence & re-serialize)",
+      "title": "Selective Single-Field Mutation",
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 542,
-          "opsPerSec": 1843789
+          "nsPerOp": 3377,
+          "opsPerSec": 296102
         },
         {
           "name": "protobufjs",
-          "nsPerOp": 3708,
-          "opsPerSec": 269708
+          "nsPerOp": 4045,
+          "opsPerSec": 247240
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 7335,
-          "opsPerSec": 136334
+          "nsPerOp": 7300,
+          "opsPerSec": 136979
         },
         {
           "name": "google-protobuf",
-          "nsPerOp": 9671,
-          "opsPerSec": 103403
+          "nsPerOp": 9815,
+          "opsPerSec": 101888
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 8131,
-          "opsPerSec": 122984
+          "nsPerOp": 8069,
+          "opsPerSec": 123926
         },
         {
           "name": "JSON",
-          "nsPerOp": 4953,
-          "opsPerSec": 201889
+          "nsPerOp": 4833,
+          "opsPerSec": 206891
+        }
+      ]
+    },
+    {
+      "id": "encode_nested_shift",
+      "title": "Large Embedded Message Encode",
+      "results": [
+        {
+          "name": "OmniBuf",
+          "nsPerOp": 30841,
+          "opsPerSec": 32425,
+          "wireBytes": 39256
+        },
+        {
+          "name": "protobufjs",
+          "nsPerOp": 22363,
+          "opsPerSec": 44716,
+          "wireBytes": 39227
+        },
+        {
+          "name": "@bufbuild/protobuf (protobuf-es)",
+          "nsPerOp": 30869,
+          "opsPerSec": 32395,
+          "wireBytes": 39227
+        },
+        {
+          "name": "google-protobuf",
+          "nsPerOp": 23821,
+          "opsPerSec": 41980,
+          "wireBytes": 39227
+        },
+        {
+          "name": "@msgpack/msgpack",
+          "nsPerOp": 118938,
+          "opsPerSec": 8408,
+          "wireBytes": 39504
+        },
+        {
+          "name": "JSON",
+          "nsPerOp": 35011,
+          "opsPerSec": 28562,
+          "wireBytes": 39669
+        }
+      ]
+    },
+    {
+      "id": "mutate_embedded_grow",
+      "title": "Embedded Message Growth",
+      "results": [
+        {
+          "name": "OmniBuf",
+          "nsPerOp": 23039,
+          "opsPerSec": 43405
+        },
+        {
+          "name": "protobufjs",
+          "nsPerOp": 29282,
+          "opsPerSec": 34150
+        },
+        {
+          "name": "@bufbuild/protobuf (protobuf-es)",
+          "nsPerOp": 37191,
+          "opsPerSec": 26888
+        },
+        {
+          "name": "google-protobuf",
+          "nsPerOp": 41997,
+          "opsPerSec": 23811
+        },
+        {
+          "name": "@msgpack/msgpack",
+          "nsPerOp": 106284,
+          "opsPerSec": 9409
+        },
+        {
+          "name": "JSON",
+          "nsPerOp": 35580,
+          "opsPerSec": 28106
         }
       ]
     }
