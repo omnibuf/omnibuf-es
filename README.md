@@ -1,10 +1,11 @@
 # OmniBuf for TypeScript & JavaScript (`omnibuf-es`)
 
 [![CI](https://github.com/omnibuf/omnibuf-es/actions/workflows/ci.yml/badge.svg)](https://github.com/omnibuf/omnibuf-es/actions/workflows/ci.yml)
+[![Wire Spec: v0.1](https://img.shields.io/badge/spec-v0.1-111111?style=flat&labelColor=111111&color=FF4F18)](https://omnibuf.com/spec)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Website](https://img.shields.io/badge/website-omnibuf.com-111111?style=flat&labelColor=111111&color=D4FF33)](https://omnibuf.com/es)
 
-TypeScript and ECMAScript implementation of the **OmniBuf** wire format specification.
+TypeScript and ECMAScript implementation of **[OmniBuf Wire Specification v0.1](https://omnibuf.com/spec)**.
 
 OmniBuf is a binary wire format and Protobuf encoding designed for the hardware instructions and memory hierarchies of modern CPUs:
 
