@@ -4,7 +4,7 @@
   "private": true,
   "description": "TypeScript implementation of the OmniBuf binary wire format for Node.js and browsers",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "workspaces": [
     "packages/*"
   ],

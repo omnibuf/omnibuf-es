@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/omnibuf/omnibuf-es/actions/workflows/ci.yml/badge.svg)](https://github.com/omnibuf/omnibuf-es/actions/workflows/ci.yml)
 [![Wire Spec: v0.1](https://img.shields.io/badge/spec-v0.1-111111?style=flat&labelColor=111111&color=FF4F18)](https://omnibuf.com/spec)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Website](https://img.shields.io/badge/website-omnibuf.com-111111?style=flat&labelColor=111111&color=D4FF33)](https://omnibuf.com/es)
 
 TypeScript and ECMAScript implementation of **[OmniBuf Wire Specification v0.1](https://omnibuf.com/spec)**.
@@ -130,4 +130,4 @@ and `testdata/conformance_corpus.json` from the same upstream commit.
 
 ## License
 
-Released under the [MIT License](./LICENSE).
+Released under the [Apache 2.0 License](./LICENSE).

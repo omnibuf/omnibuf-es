@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "OmniBuf for Node.js - Buffer string codecs, stream framing, descriptor loaders, and conformance adapter",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
