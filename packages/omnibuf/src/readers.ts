@@ -1479,12 +1479,17 @@ export function readTypedMap<V = any>(
         const [kVal, p1] = readMapEntryPayload(body, p, keyWT, keyType);
         const [vVal, p2] = readMapEntryPayload(body, p1, valWT, valType, decodeSubMsg);
         p = p2;
-        Object.defineProperty(out, String(kVal), {
-          value: vVal,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
+        const kStr = String(kVal);
+        if (kStr === '__proto__') {
+          Object.defineProperty(out, kStr, {
+            value: vVal,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+        } else {
+          out[kStr] = vVal;
+        }
       }
     } catch {
       return [{}, false];

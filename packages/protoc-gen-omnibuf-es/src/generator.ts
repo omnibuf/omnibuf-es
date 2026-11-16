@@ -606,9 +606,18 @@ function emitDecodeMapEntryInline(
   switch (type) {
     case ProtoScalarType.STRING:
       return [
-        `${indent}if (${wtVar} !== 10) throw new Error('omnibuf: invalid map string wire type');`,
-        `${indent}const [__s, __np] = readLenSlice(body, p, 0);`,
-        `${indent}${targetVar} = decodeUTF8(__s); p = __np;`,
+        `${indent}if (${wtVar} !== 10 || p >= body.length) throw new Error('omnibuf: invalid map string wire type');`,
+        `${indent}const __sb = body[p]!;`,
+        `${indent}if ((__sb & 1) !== 0) {`,
+        `${indent}  const __sl = __sb >>> 1;`,
+        `${indent}  p += 1;`,
+        `${indent}  if (p + __sl > body.length) throw new Error('omnibuf: truncated map string');`,
+        `${indent}  ${targetVar} = decodeUTF8(body, p, p + __sl);`,
+        `${indent}  p += __sl;`,
+        `${indent}} else {`,
+        `${indent}  const [__s, __np] = readLenSlice(body, p, 0);`,
+        `${indent}  ${targetVar} = decodeUTF8(__s); p = __np;`,
+        `${indent}}`,
       ].join('\n');
     case ProtoScalarType.BYTES:
       return [
@@ -724,7 +733,12 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
       `${indent}  {`,
       emitDecodeMapEntryInline(f.mapValType, f.mapValMsgSymbol, 'valWT', 'vVal', `${indent}    `),
       `${indent}  }`,
-      `${indent}  Object.defineProperty(dst, String(kVal), { value: vVal, writable: true, enumerable: true, configurable: true });`,
+      `${indent}  const __kStr = String(kVal);`,
+      `${indent}  if (__kStr === '__proto__') {`,
+      `${indent}    Object.defineProperty(dst, __kStr, { value: vVal, writable: true, enumerable: true, configurable: true });`,
+      `${indent}  } else {`,
+      `${indent}    dst[__kStr] = vVal;`,
+      `${indent}  }`,
       `${indent}}`,
       `${indent}if (p !== body.length) throw new Error('omnibuf: map trailing bytes');`,
       `${indent}${prop} = dst;`,
@@ -1442,7 +1456,6 @@ export function generateFileCode(
     'appendUint32ArrBody',
     'appendUintArrAutoBody',
     'countSubMsgArrElems',
-    '$decodeSchemaMeta',
     'decodeUTF8',
     'decodeVarintAuto',
     'decodeVarintBigInt',
@@ -1492,6 +1505,7 @@ export function generateFileCode(
     'readUintAuto',
     'roundFloat32Shortest',
     'spliceFields',
+    'validateField0At',
     'validateMapTypes',
     'validateMessage',
     'validateValue',
@@ -1860,7 +1874,6 @@ export function generateFileCode(
   lines.push('  appendUint32ArrBody,');
   lines.push('  appendUintArrAutoBody,');
   lines.push('  countSubMsgArrElems,');
-  lines.push('  decodeSchemaMeta as $decodeSchemaMeta,');
   lines.push('  decodeUTF8,');
   lines.push('  decodeVarintAuto,');
   lines.push('  decodeVarintBigInt,');
@@ -1910,6 +1923,7 @@ export function generateFileCode(
   lines.push('  readUintAuto,');
   lines.push('  roundFloat32Shortest,');
   lines.push('  spliceFields,');
+  lines.push('  validateField0At,');
   lines.push('  validateMapTypes,');
   lines.push('  validateMessage,');
   lines.push('  validateValue,');
@@ -2181,9 +2195,8 @@ export function generateFileCode(
     lines.push('    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);');
     lines.push('    const wt = tag & 0x0f;');
     lines.push('    if (fieldNum === 0) {');
-    lines.push("      if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');");
-    lines.push('      const [meta, nextPos] = readLenSlice(buf, pos, 0, n);');
-    lines.push('      $decodeSchemaMeta(meta, depth + 1, maxDepth);');
+    lines.push('      const nextPos = validateField0At(buf, pos, wt, depth, maxDepth, n);');
+    lines.push("      if (nextPos < 0) throw new Error('omnibuf: invalid Field #0');");
     lines.push('      pos = nextPos;');
     lines.push('      continue;');
     lines.push('    }');

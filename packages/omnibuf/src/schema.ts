@@ -6,7 +6,6 @@ import { validateValue, validateMapTypes } from './validation.js';
 import {
   type SchemaMeta,
   base64ToUint8Array,
-  decodeSchemaMeta,
   encodeField0SchemaMeta,
   mergeSchemaMeta,
   writeField0SchemaMeta,
@@ -56,6 +55,7 @@ import {
   readFloat64At,
   readLenSlice,
   roundFloat32Shortest,
+  validateField0At,
 } from './wire.js';
 
 /**
@@ -518,10 +518,13 @@ export class MessageSchema<
   readonly shortName: string;
   readonly fields: readonly CompiledField[];
   readonly oneofs: readonly CompiledOneof[];
+  private readonly nonOneofFields: readonly CompiledField[];
+  private readonly denseByNum: (CompiledField | undefined)[];
   private readonly byNum = new Map<number, CompiledField>();
   private readonly byKey = new Map<string, CompiledField>();
   private readonly oneofByName = new Map<string, CompiledOneof>();
   private readonly factory?: () => T;
+  private readonly precomputedDescMap: PropertyDescriptorMap | null;
   private generatedHooks?: GeneratedCodecHooks<T>;
   private readonly typeNameDesc: PropertyDescriptor;
   private cachedMeta: SchemaMeta | null = null;
@@ -638,7 +641,115 @@ export class MessageSchema<
     // Sort fields by ascending fieldNum for deterministic output
     compiled.sort((a, b) => a.fieldNum - b.fieldNum);
     this.fields = compiled;
+    this.nonOneofFields = compiled.filter((f) => !f.oneof);
     this.oneofs = Array.from(oneofMap.values());
+    const dense = new Array<CompiledField | undefined>(65);
+    for (const cf of compiled) {
+      if (cf.fieldNum <= 64) {
+        dense[cf.fieldNum] = cf;
+      }
+    }
+    this.denseByNum = dense;
+
+    const canUseProtoFastPath =
+      !factory &&
+      !compiled.some((f) => f.isProtoKey || f.inObjectProto || f.altKey === '__proto__') &&
+      !this.oneofs.some(
+        (o) =>
+          o.localName === '__proto__' ||
+          o.protoName === '__proto__' ||
+          o.localName in Object.prototype,
+      );
+    if (canUseProtoFastPath) {
+      this.precomputedDescMap = this.buildDescriptorMap();
+    } else {
+      this.precomputedDescMap = null;
+    }
+  }
+
+  private buildDescriptorMap(): PropertyDescriptorMap {
+    const descMap: PropertyDescriptorMap = {
+      $typeName: this.typeNameDesc,
+    };
+    for (const oneof of this.oneofs) {
+      if (oneof.protoName !== oneof.localName) {
+        const ln = oneof.localName;
+        descMap[oneof.protoName] = {
+          get(this: any) {
+            return this[ln];
+          },
+          set(this: any, v: any) {
+            this[ln] = v;
+          },
+          enumerable: false,
+          configurable: true,
+        };
+      }
+    }
+    for (const f of this.fields) {
+      if (f.oneof) {
+        const oneofKey = f.oneof;
+        const caseName = f.localName;
+        const altCaseName = f.name;
+        const propKey = f.propKey;
+        descMap[propKey] = {
+          get(this: any) {
+            const g = this[oneofKey];
+            if (
+              g &&
+              typeof g === 'object' &&
+              (g.case === caseName || g.case === altCaseName || g.case === propKey)
+            ) {
+              return g.value;
+            }
+            return undefined;
+          },
+          set(this: any, v: any) {
+            if (v === undefined || v === null) {
+              const g = this[oneofKey];
+              if (
+                g &&
+                typeof g === 'object' &&
+                (g.case === caseName || g.case === altCaseName || g.case === propKey)
+              ) {
+                this[oneofKey] = { case: undefined };
+              }
+            } else {
+              this[oneofKey] = { case: caseName, value: v };
+            }
+          },
+          enumerable: false,
+          configurable: true,
+        };
+        if (f.altKey) {
+          descMap[f.altKey] = {
+            get(this: any) {
+              return this[propKey];
+            },
+            set(this: any, v: any) {
+              this[propKey] = v;
+            },
+            enumerable: false,
+            configurable: true,
+          };
+        }
+        continue;
+      }
+      if (f.altKey) {
+        const pk = f.propKey;
+        descMap[f.altKey] = {
+          get(this: any) {
+            return this[pk];
+          },
+          set(this: any, v: any) {
+            this[pk] = v;
+          },
+          enumerable: false,
+          configurable: true,
+        };
+      }
+    }
+    return descMap;
   }
 
   /**
@@ -798,6 +909,27 @@ export class MessageSchema<
       return init as T;
     }
     const hasGenCreate = Boolean(this.generatedHooks?.create);
+    if (!hasGenCreate && this.precomputedDescMap !== null) {
+      const obj: any = {};
+      let nextCreating: Set<MessageSchema<any>> | undefined;
+      if (this.isCyclicOrDeep()) {
+        nextCreating = new Set(creatingAncestors);
+        nextCreating.add(this);
+      }
+      for (let i = 0; i < this.oneofs.length; i++) {
+        obj[this.oneofs[i]!.localName] = { case: undefined };
+      }
+      for (let i = 0; i < this.nonOneofFields.length; i++) {
+        const f = this.nonOneofFields[i]!;
+        obj[f.propKey] = f.explicitPresence ? undefined : defaultFieldValue(f, nextCreating);
+      }
+      Object.defineProperties(obj, this.precomputedDescMap);
+      if (!init) {
+        return obj as T;
+      }
+      return this.applyInitToInstance(obj, init) as T;
+    }
+
     const obj: any = hasGenCreate
       ? this.generatedHooks!.create!()
       : this.factory
@@ -829,74 +961,80 @@ export class MessageSchema<
     }
 
     if (init) {
-      for (const oneof of this.oneofs) {
-        const localVal =
-          oneof.localName in Object.prototype
-            ? getOwnProp(init as any, oneof.localName)
-            : (init as any)[oneof.localName];
-        const protoVal =
-          oneof.protoName !== oneof.localName
-            ? oneof.protoName in Object.prototype
-              ? getOwnProp(init as any, oneof.protoName)
-              : (init as any)[oneof.protoName]
-            : undefined;
-        const initOneof = localVal ?? protoVal;
-        if (initOneof && typeof initOneof === 'object' && 'case' in initOneof) {
-          if (initOneof.case === undefined) {
-            obj[oneof.localName] = { case: undefined };
-          } else {
-            const matchingField = oneof.fields.find(
-              (f) =>
-                f.localName === initOneof.case ||
-                f.name === initOneof.case ||
-                f.propKey === initOneof.case,
-            );
-            if (matchingField) {
-              obj[oneof.localName] = {
-                case: matchingField.localName,
-                value: initFieldValue(matchingField, initOneof.value),
-              };
-            }
-          }
-        }
-      }
-      for (const f of this.fields) {
-        const pVal = f.inObjectProto
-          ? getOwnProp(init as any, f.propKey)
-          : (init as any)[f.propKey];
-        const initVal =
-          pVal !== undefined
-            ? pVal
-            : f.altKey !== undefined
-              ? f.altInObjectProto
-                ? getOwnProp(init as any, f.altKey)
-                : (init as any)[f.altKey]
-              : undefined;
-        if (initVal !== undefined) {
-          if (f.oneof) {
-            obj[f.oneof] = {
-              case: f.localName,
-              value: initFieldValue(f, initVal),
-            };
-          } else {
-            setFieldOnObj(obj, f, initFieldValue(f, initVal));
-          }
-        }
-      }
-      if (Array.isArray((init as any).$unknown) && (init as any).$unknown.length > 0) {
-        Object.defineProperty(obj, '$unknown', {
-          value: (init as any).$unknown.map((u: UnknownField) => ({
-            no: u.no,
-            wireType: u.wireType,
-            data: u.data.slice(),
-          })),
-          enumerable: false,
-          writable: true,
-          configurable: true,
-        });
-      }
+      return this.applyInitToInstance(obj, init) as T;
     }
     return obj as T;
+  }
+
+  private applyInitToInstance(
+    obj: Record<string, any>,
+    init: Partial<T> & Record<string, any>,
+  ): Record<string, any> {
+    for (const oneof of this.oneofs) {
+      const localVal =
+        oneof.localName in Object.prototype
+          ? getOwnProp(init as any, oneof.localName)
+          : (init as any)[oneof.localName];
+      const protoVal =
+        oneof.protoName !== oneof.localName
+          ? oneof.protoName in Object.prototype
+            ? getOwnProp(init as any, oneof.protoName)
+            : (init as any)[oneof.protoName]
+          : undefined;
+      const initOneof = localVal ?? protoVal;
+      if (initOneof && typeof initOneof === 'object' && 'case' in initOneof) {
+        if (initOneof.case === undefined) {
+          obj[oneof.localName] = { case: undefined };
+        } else {
+          const matchingField = oneof.fields.find(
+            (f) =>
+              f.localName === initOneof.case ||
+              f.name === initOneof.case ||
+              f.propKey === initOneof.case,
+          );
+          if (matchingField) {
+            obj[oneof.localName] = {
+              case: matchingField.localName,
+              value: initFieldValue(matchingField, initOneof.value),
+            };
+          }
+        }
+      }
+    }
+    for (const f of this.fields) {
+      const pVal = f.inObjectProto ? getOwnProp(init as any, f.propKey) : (init as any)[f.propKey];
+      const initVal =
+        pVal !== undefined
+          ? pVal
+          : f.altKey !== undefined
+            ? f.altInObjectProto
+              ? getOwnProp(init as any, f.altKey)
+              : (init as any)[f.altKey]
+            : undefined;
+      if (initVal !== undefined) {
+        if (f.oneof) {
+          obj[f.oneof] = {
+            case: f.localName,
+            value: initFieldValue(f, initVal),
+          };
+        } else {
+          setFieldOnObj(obj, f, initFieldValue(f, initVal));
+        }
+      }
+    }
+    if (Array.isArray((init as any).$unknown) && (init as any).$unknown.length > 0) {
+      Object.defineProperty(obj, '$unknown', {
+        value: (init as any).$unknown.map((u: UnknownField) => ({
+          no: u.no,
+          wireType: u.wireType,
+          data: u.data.slice(),
+        })),
+        enumerable: false,
+        writable: true,
+        configurable: true,
+      });
+    }
+    return obj;
   }
 
   /**
@@ -1236,7 +1374,7 @@ export class MessageSchema<
     const writeUnknown = options?.writeUnknownFields ?? false;
     const selfDescribing = Boolean(options?.selfDescribing);
     if (selfDescribing) {
-      if (deterministic && !this.isCyclicOrDeep()) {
+      if (!this.isCyclicOrDeep()) {
         enc.writeRaw(this.getCachedField0Det());
       } else {
         writeField0SchemaMeta(
@@ -1378,8 +1516,15 @@ export class MessageSchema<
   /**
    * Decodes `data` into `target` (or a newly created instance if omitted).
    */
-  decode(data: Uint8Array, target?: T, depth = 0, options?: BinaryReadOptions): T {
-    if (this.generatedHooks?.decode) {
+  decode(
+    data: Uint8Array,
+    target?: T,
+    depth = 0,
+    options?: BinaryReadOptions,
+    startOffset = 0,
+    endOffset = data.length,
+  ): T {
+    if (this.generatedHooks?.decode && startOffset === 0 && endOffset === data.length) {
       return this.generatedHooks.decode(data, target, depth, options);
     }
     const maxDepth = options?.recursionLimit ?? MaxNestingDepth;
@@ -1422,8 +1567,8 @@ export class MessageSchema<
         }
       }
     }
-    const n = data.length;
-    let pos = 0;
+    const n = endOffset;
+    let pos = startOffset;
     let seenMask = 0;
     let seenSet: Set<number> | null = null;
     let unknownFields: UnknownField[] | null = Array.isArray(out.$unknown) ? out.$unknown : null;
@@ -1441,7 +1586,7 @@ export class MessageSchema<
         tag = ((b0 | (data[pos + 1]! << 8)) >>> 2) >>> 0;
         pos += 2;
       } else {
-        const [t64, tn] = decodeVarintBigInt(data, pos);
+        const [t64, tn] = decodeVarintBigInt(data, pos, n);
         if (tn === 0 || t64 >> 4n > 536870911n) {
           throw new Error(`omnibuf: truncated or invalid multi-byte tag at ${pos}`);
         }
@@ -1453,23 +1598,23 @@ export class MessageSchema<
       const wt = tag & 0x0f;
 
       if (fieldNum === 0) {
-        if (wt !== WireSubMsg) {
-          throw new Error(`omnibuf: invalid Field #0 wire type ${wt}`);
+        const nextPos = validateField0At(data, pos, wt, depth, maxDepth, n);
+        if (nextPos < 0) {
+          throw new Error(`omnibuf: invalid Field #0 at ${pos}`);
         }
-        const [meta, nextPos] = readLenSlice(data, pos, 0);
-        decodeSchemaMeta(meta, depth + 1, maxDepth);
         pos = nextPos;
         continue;
       }
 
-      const f = this.byNum.get(fieldNum);
+      const f = fieldNum <= 64 ? this.denseByNum[fieldNum] : this.byNum.get(fieldNum);
       if (
         !f ||
         (f.effectiveType !== 'bool' && f.wireType !== wt) ||
         (f.effectiveType === 'bool' && wt !== WireBoolFalse && wt !== WireBoolTrue)
       ) {
         const valStart = pos;
-        pos = validateValue(data, pos, wt, depth, maxDepth);
+        const valBuf = n === data.length ? data : data.subarray(0, n);
+        pos = validateValue(valBuf, pos, wt, depth, maxDepth);
         if (readUnknown) {
           if (!unknownFields) unknownFields = [];
           unknownFields.push({
@@ -1508,6 +1653,7 @@ export class MessageSchema<
           depth,
           maxDepth,
           options,
+          n,
         );
         setFieldOnObj(out, f, box[f.propKey]);
       } else {
@@ -1521,6 +1667,7 @@ export class MessageSchema<
           depth,
           maxDepth,
           options,
+          n,
         );
       }
     }
@@ -1624,12 +1771,17 @@ function initFieldValue(f: CompiledField, val: any): unknown {
     }
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(val as Record<string, any>)) {
-      Object.defineProperty(out, k, {
-        value: isSubMsgVal ? sub.create(v) : v,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
+      const mapped = isSubMsgVal ? sub.create(v) : v;
+      if (k === '__proto__') {
+        Object.defineProperty(out, k, {
+          value: mapped,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      } else {
+        out[k] = mapped;
+      }
     }
     return out;
   }
@@ -1688,12 +1840,17 @@ function cloneFieldValue(f: CompiledField, val: any): unknown {
     }
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(val as Record<string, any>)) {
-      Object.defineProperty(out, k, {
-        value: isSubMsgVal ? sub.clone(v) : v,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
+      const cloned = isSubMsgVal ? sub.clone(v) : v;
+      if (k === '__proto__') {
+        Object.defineProperty(out, k, {
+          value: cloned,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      } else {
+        out[k] = cloned;
+      }
     }
     return out;
   }
@@ -2170,9 +2327,10 @@ function decodeCompiledFieldValue(
   depth: number,
   maxDepth: number,
   options?: BinaryReadOptions,
+  endLimit = data.length,
 ): number {
   const key = f.propKey;
-  const n = data.length;
+  const n = endLimit;
   if ((wt === WireArray || wt === WireMap) && depth + 1 > maxDepth) {
     throw new Error(`omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`);
   }
@@ -2180,18 +2338,20 @@ function decodeCompiledFieldValue(
   switch (f.effectiveType) {
     case 'uint32': {
       if (pos < n && (data[pos]! & 7) !== 0) {
-        const [v, vn] = decodeVarint(data, pos);
+        const [v, vn] = decodeVarint(data, pos, n);
         if (vn === 0) throw new Error(`omnibuf: truncated uint32 at ${pos}`);
         out[key] = v >>> 0;
         return pos + vn;
       }
-      const [v, vn] = decodeVarintBigInt(data, pos);
+      const [v, vn] = decodeVarintBigInt(data, pos, n);
       if (vn === 0) throw new Error(`omnibuf: truncated uint32 at ${pos}`);
       out[key] = Number(v & 0xffffffffn) >>> 0;
       return pos + vn;
     }
     case 'uint64': {
-      const [v, vn] = f.useBigInt ? decodeVarintBigInt(data, pos) : decodeVarintAuto(data, pos);
+      const [v, vn] = f.useBigInt
+        ? decodeVarintBigInt(data, pos, n)
+        : decodeVarintAuto(data, pos, n);
       if (vn === 0) throw new Error(`omnibuf: truncated uint64 at ${pos}`);
       out[key] = v;
       return pos + vn;
@@ -2200,19 +2360,19 @@ function decodeCompiledFieldValue(
     case 'int32':
     case 'enum': {
       if (pos < n && (data[pos]! & 7) !== 0) {
-        const [v, vn] = decodeVarint(data, pos);
+        const [v, vn] = decodeVarint(data, pos, n);
         if (vn === 0) throw new Error(`omnibuf: truncated int32 at ${pos}`);
         out[key] = decodeZigZag32(v);
         return pos + vn;
       }
-      const [v, vn] = decodeVarintBigInt(data, pos);
+      const [v, vn] = decodeVarintBigInt(data, pos, n);
       if (vn === 0) throw new Error(`omnibuf: truncated int32 at ${pos}`);
       out[key] = decodeZigZag32(v);
       return pos + vn;
     }
     case 'sint64':
     case 'int64': {
-      const [v, vn] = decodeVarintBigInt(data, pos);
+      const [v, vn] = decodeVarintBigInt(data, pos, n);
       if (vn === 0) throw new Error(`omnibuf: truncated int64 at ${pos}`);
       out[key] = f.useBigInt ? decodeZigZagBigInt(v) : decodeZigZagAuto(v);
       return pos + vn;
@@ -2222,12 +2382,21 @@ function decodeCompiledFieldValue(
       return pos;
     }
     case 'string': {
-      const [s, nextPos] = readLenSlice(data, pos, 0);
+      if (pos < n && (data[pos]! & 1) !== 0) {
+        const sLen = data[pos]! >>> 1;
+        const sStart = pos + 1;
+        const sEnd = sStart + sLen;
+        if (sEnd <= n) {
+          out[key] = decodeUTF8(data, sStart, sEnd);
+          return sEnd;
+        }
+      }
+      const [s, nextPos] = readLenSlice(data, pos, 0, n);
       out[key] = decodeUTF8(s);
       return nextPos;
     }
     case 'bytes': {
-      const [b, nextPos] = readLenSlice(data, pos, 0);
+      const [b, nextPos] = readLenSlice(data, pos, 0, n);
       out[key] = b.slice();
       return nextPos;
     }
@@ -2280,7 +2449,7 @@ function decodeCompiledFieldValue(
       return pos + 8;
     }
     case 'string[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: string[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const [arr, ok] = appendStringArrBody(prev, body);
       if (!ok) throw new Error(`omnibuf: invalid string array at ${pos}`);
@@ -2288,7 +2457,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'bytes[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: Uint8Array[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const [arr, ok] = appendBytesArrBody(prev, body, false);
       if (!ok) throw new Error(`omnibuf: invalid bytes array at ${pos}`);
@@ -2296,7 +2465,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'bool[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: boolean[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const [arr, ok] = appendBoolArrBody(prev, body);
       if (!ok) throw new Error(`omnibuf: invalid bool array at ${pos}`);
@@ -2304,7 +2473,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'uint32[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: number[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const [arr, ok] = appendUint32ArrBody(prev, body);
       if (!ok) throw new Error(`omnibuf: invalid uint32 array at ${pos}`);
@@ -2312,7 +2481,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'enum[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: number[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const [arr, ok] = appendEnumArrBody(prev, body);
       if (!ok) throw new Error(`omnibuf: invalid enum array at ${pos}`);
@@ -2320,7 +2489,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'uint64[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: (number | bigint)[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const startLen = prev.length;
       const [arr, ok] = appendUintArrAutoBody(prev, body);
@@ -2335,7 +2504,7 @@ function decodeCompiledFieldValue(
     }
     case 'sint32[]':
     case 'int32[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: number[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const [arr, ok] = appendEnumArrBody(prev, body);
       if (!ok) throw new Error(`omnibuf: invalid sint32 array at ${pos}`);
@@ -2344,7 +2513,7 @@ function decodeCompiledFieldValue(
     }
     case 'sint64[]':
     case 'int64[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: (number | bigint)[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const startLen = prev.length;
       const [arr, ok] = appendSintArrAutoBody(prev, body);
@@ -2358,7 +2527,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'float32[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: number[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const startLen = prev.length;
       const [arr, ok] = appendFloat32ArrBody(prev, body);
@@ -2370,7 +2539,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'fixed32[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const [elemType, c, startP, ok] = parseArrayHeader(body);
       if (!ok || elemType !== WireFixed32 || body.length - startP !== c * 4) {
         throw new Error(`omnibuf: invalid fixed32 array at ${pos}`);
@@ -2387,7 +2556,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'sfixed32[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const [elemType, c, startP, ok] = parseArrayHeader(body);
       if (!ok || elemType !== WireSfixed32 || body.length - startP !== c * 4) {
         throw new Error(`omnibuf: invalid sfixed32 array at ${pos}`);
@@ -2403,7 +2572,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'float64[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: number[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       const [arr, ok] = appendFloat64ArrBody(prev, body);
       if (!ok) throw new Error(`omnibuf: invalid float64 array at ${pos}`);
@@ -2412,7 +2581,7 @@ function decodeCompiledFieldValue(
     }
     case 'fixed64[]':
     case 'sfixed64[]': {
-      const [body, nextPos] = readLenSlice(data, pos, 2);
+      const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const isSigned = f.effectiveType === 'sfixed64[]';
       const expElemType = isSigned ? WireSfixed64 : WireFixed64;
       const [elemType, c, startP, ok] = parseArrayHeader(body);
@@ -2441,7 +2610,6 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'submsg': {
-      const [subBytes, nextPos] = readLenSlice(data, pos, 0);
       const subSchema = f.resolveSubSchema?.();
       if (!subSchema) {
         throw new Error(`omnibuf: missing subSchema on ${key}`);
@@ -2450,21 +2618,112 @@ function decodeCompiledFieldValue(
       const hasExisting =
         existing !== undefined && existing !== null && typeof existing === 'object';
       const targetSub = hasExisting ? existing : subSchema.create();
-      out[key] = subSchema.decode(subBytes, targetSub, depth + 1, {
-        ...options,
-        merge: f.oneof ? alreadySeen && hasExisting : alreadySeen,
-      });
+      const shouldMerge = f.oneof ? alreadySeen && hasExisting : alreadySeen;
+      const subOpts = shouldMerge
+        ? { ...options, merge: true }
+        : options?.merge
+          ? { ...options, merge: false }
+          : options;
+      if (pos < n) {
+        const lb = data[pos]!;
+        if ((lb & 1) !== 0) {
+          const subLen = lb >>> 1;
+          const sStart = pos + 1;
+          const sEnd = sStart + subLen;
+          if (sEnd <= n) {
+            out[key] = subSchema.decode(data, targetSub, depth + 1, subOpts, sStart, sEnd);
+            return sEnd;
+          }
+        } else if ((lb & 2) !== 0 && pos + 2 <= n) {
+          const subLen = (lb | (data[pos + 1]! << 8)) >>> 2;
+          const sStart = pos + 2;
+          const sEnd = sStart + subLen;
+          if (sEnd <= n) {
+            out[key] = subSchema.decode(data, targetSub, depth + 1, subOpts, sStart, sEnd);
+            return sEnd;
+          }
+        }
+      }
+      const [subBytes, nextPos] = readLenSlice(data, pos, 0, n);
+      out[key] = subSchema.decode(subBytes, targetSub, depth + 1, subOpts);
       return nextPos;
     }
     case 'submsg[]': {
-      const [arrPayload, nextPos] = readLenSlice(data, pos, 2);
-      const [elemCount, ok] = countSubMsgArrElems(arrPayload);
-      if (!ok) {
-        throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
-      }
       const subSchema = f.resolveSubSchema?.();
       if (!subSchema) {
         throw new Error(`omnibuf: missing subSchema on ${key}`);
+      }
+      if (pos < n) {
+        let arrLen = -1;
+        let arrStart = pos;
+        const lb = data[pos]!;
+        if ((lb & 1) !== 0) {
+          arrLen = lb >>> 1;
+          arrStart = pos + 1;
+        } else if ((lb & 2) !== 0 && pos + 2 <= n) {
+          arrLen = (lb | (data[pos + 1]! << 8)) >>> 2;
+          arrStart = pos + 2;
+        }
+        const arrEnd = arrStart + arrLen;
+        if (
+          arrLen >= 2 &&
+          arrEnd <= n &&
+          data[arrStart]! === WireSubMsg &&
+          (data[arrStart + 1]! & 1) !== 0
+        ) {
+          const elemCount = data[arrStart + 1]! >>> 1;
+          let p = arrStart + 2;
+          if (elemCount <= arrEnd - p && (elemCount > 0 || p === arrEnd)) {
+            const elems: any[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
+            const origLen = elems.length;
+            for (let i = 0; i < elemCount; i++) {
+              if (p >= arrEnd) {
+                elems.length = origLen;
+                throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
+              }
+              let elNum = 0;
+              const eb0 = data[p]!;
+              if ((eb0 & 1) !== 0) {
+                elNum = eb0 >>> 1;
+                p += 1;
+              } else if ((eb0 & 2) !== 0) {
+                if (p + 2 > arrEnd) {
+                  elems.length = origLen;
+                  throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
+                }
+                elNum = (eb0 | (data[p + 1]! << 8)) >>> 2;
+                p += 2;
+              } else {
+                const [el, en] = decodeVarintBigInt(data, p, arrEnd);
+                if (en === 0 || el > BigInt(arrEnd - (p + en))) {
+                  elems.length = origLen;
+                  throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
+                }
+                p += en;
+                elNum = Number(el);
+              }
+              if (p + elNum > arrEnd) {
+                elems.length = origLen;
+                throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
+              }
+              elems.push(
+                subSchema.decode(data, subSchema.create(), depth + 2, options, p, p + elNum),
+              );
+              p += elNum;
+            }
+            if (p !== arrEnd) {
+              elems.length = origLen;
+              throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
+            }
+            out[key] = elems;
+            return arrEnd;
+          }
+        }
+      }
+      const [arrPayload, nextPos] = readLenSlice(data, pos, 2, n);
+      const [elemCount, ok] = countSubMsgArrElems(arrPayload);
+      if (!ok) {
+        throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
       }
       const elems: any[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       let [, , p] = parseArrayHeader(arrPayload);
@@ -2473,10 +2732,12 @@ function decodeCompiledFieldValue(
         p += en;
         const elNum = Number(el);
         const elemObj = subSchema.decode(
-          arrPayload.subarray(p, p + elNum),
+          arrPayload,
           subSchema.create(),
           depth + 2,
           options,
+          p,
+          p + elNum,
         );
         elems.push(elemObj);
         p += elNum;
@@ -2485,7 +2746,7 @@ function decodeCompiledFieldValue(
       return nextPos;
     }
     case 'map': {
-      const [body, nextPos] = readLenSlice(data, pos, 3);
+      const [body, nextPos] = readLenSlice(data, pos, 3, n);
       decodeMapFieldBody(f, out, body, alreadySeen, depth + 1, options);
       return nextPos;
     }
@@ -2502,6 +2763,14 @@ function decodeMapScalarEntry(
 ): [val: any, nextPos: number] {
   switch (wt) {
     case WireString: {
+      if (p < body.length && (body[p]! & 1) !== 0) {
+        const sLen = body[p]! >>> 1;
+        const sStart = p + 1;
+        const sEnd = sStart + sLen;
+        if (sEnd <= body.length) {
+          return [decodeUTF8(body, sStart, sEnd), sEnd];
+        }
+      }
       const [sBytes, nextP] = readLenSlice(body, p, 0);
       return [decodeUTF8(sBytes), nextP];
     }
@@ -2567,6 +2836,36 @@ function decodeMapScalarEntry(
   }
 }
 
+function convertMapScalarValue(
+  v: any,
+  type: ScalarFieldType | 'submsg' | undefined,
+  useBigInt: boolean,
+): any {
+  switch (type) {
+    case 'bool':
+      return Boolean(v);
+    case 'float32':
+      return roundFloat32Shortest(float32FromBits(Number(v)));
+    case 'float64':
+      return float64FromBits(BigInt(v));
+    case 'uint32':
+      return typeof v === 'number' ? v >>> 0 : Number(BigInt(v) & 0xffffffffn) >>> 0;
+    case 'sfixed32':
+    case 'int32':
+    case 'sint32':
+    case 'enum':
+      return typeof v === 'number' ? v | 0 : Number(BigInt(v) & 0xffffffffn) | 0;
+    case 'sfixed64': {
+      const signed = BigInt.asIntN(64, BigInt(v));
+      return useBigInt || signed < -9007199254740991n || signed > 9007199254740991n
+        ? signed
+        : Number(signed);
+    }
+    default:
+      return v;
+  }
+}
+
 function decodeMapFieldBody(
   f: CompiledField,
   out: Record<string, any>,
@@ -2616,50 +2915,25 @@ function decodeMapFieldBody(
   let p = 2 + cn;
   const c = Number(count);
   for (let i = 0; i < c; i++) {
-    const [kv, nextP] = decodeMapScalarEntry(
-      body,
-      p,
-      f.mapKeyWT ?? WireString,
-      undefined,
-      depth,
-      options,
-    );
-    const [rawVv, nextP2] = decodeMapScalarEntry(
-      body,
-      nextP,
-      f.mapValWT ?? WireUint,
-      subSchema,
-      depth,
-      options,
-    );
-    const convert = (v: any, type: ScalarFieldType | 'submsg' | undefined): any => {
-      if (type === 'bool') return Boolean(v);
-      if (type === 'float32') return roundFloat32Shortest(float32FromBits(Number(v)));
-      if (type === 'float64') return float64FromBits(BigInt(v));
-      if (type === 'uint32') return Number(BigInt(v) & 0xffffffffn) >>> 0;
-      if (type === 'sfixed32' || type === 'int32' || type === 'sint32' || type === 'enum') {
-        return Number(BigInt(v) & 0xffffffffn) | 0;
-      }
-      if (type === 'sfixed64') {
-        const signed = BigInt.asIntN(64, BigInt(v));
-        return f.useBigInt || signed < -9007199254740991n || signed > 9007199254740991n
-          ? signed
-          : Number(signed);
-      }
-      return v;
-    };
-    const vv = convert(isVal64 ? BigInt(rawVv) : rawVv, f.mapValType);
-    const key = convert(isKey64 ? BigInt(kv) : kv, f.mapKeyType);
+    const [kv, nextP] = decodeMapScalarEntry(body, p, expKeyWT, undefined, depth, options);
+    const [rawVv, nextP2] = decodeMapScalarEntry(body, nextP, expValWT, subSchema, depth, options);
+    const vv = convertMapScalarValue(isVal64 ? BigInt(rawVv) : rawVv, f.mapValType, f.useBigInt);
+    const key = convertMapScalarValue(isKey64 ? BigInt(kv) : kv, f.mapKeyType, f.useBigInt);
     p = nextP2;
     if (targetMap instanceof Map) {
       targetMap.set(key, vv);
     } else {
-      Object.defineProperty(targetMap, String(key), {
-        value: vv,
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
+      const kStr = String(key);
+      if (kStr === '__proto__') {
+        Object.defineProperty(targetMap, kStr, {
+          value: vv,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      } else {
+        targetMap[kStr] = vv;
+      }
     }
   }
   if (p !== body.length) {

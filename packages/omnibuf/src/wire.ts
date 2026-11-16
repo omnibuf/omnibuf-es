@@ -1083,6 +1083,20 @@ function validateUnknownMessageBytes(
   return true;
 }
 
+function isValidUTF8Slice(bytes: Uint8Array, start: number, end: number): boolean {
+  for (let i = start; i < end; i++) {
+    if (bytes[i]! >= 0x80) {
+      try {
+        sharedTextDecoder.decode(bytes.subarray(start, end));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 /**
  * Validates an `omnibuf.v1.SchemaMeta` payload at `depth`.
  */
@@ -1090,86 +1104,172 @@ export function validateSchemaMetaBytes(
   data: Uint8Array,
   depth: number,
   limit = MaxNestingDepth,
+  start = 0,
+  endLimit = data.length,
 ): boolean {
   if (depth > limit) return false;
-  let pos = 0;
-  const n = data.length;
+  let pos = start;
+  const n = endLimit;
   while (pos < n) {
-    const [tag, tn] = decodeVarintBigInt(data, pos);
-    if (tn === 0 || tag >> 4n > 536870911n) return false;
-    pos += tn;
-    const fnum = Number(tag >> 4n);
-    const wt = Number(tag & 0x0fn);
+    let fnum = 0;
+    let wt = 0;
+    const tb = data[pos]!;
+    if ((tb & 1) !== 0) {
+      fnum = tb >>> 5;
+      wt = (tb >>> 1) & 0x0f;
+      pos += 1;
+    } else if ((tb & 2) !== 0) {
+      if (pos + 2 > n) return false;
+      const u16 = (tb | (data[pos + 1]! << 8)) >>> 2;
+      fnum = u16 >>> 4;
+      wt = u16 & 0x0f;
+      pos += 2;
+    } else {
+      const [tag, tn] = decodeVarintBigInt(data, pos, n);
+      if (tn === 0 || tag >> 4n > 536870911n) return false;
+      pos += tn;
+      fnum = Number(tag >> 4n);
+      wt = Number(tag & 0x0fn);
+    }
     switch (fnum) {
       case 1: {
         if (wt !== WireString || pos >= n) return false;
-        const [sLen, sn] = decodeVarintBigInt(data, pos);
-        if (sn === 0 || sLen > BigInt(n - (pos + sn))) return false;
-        pos += sn;
-        const end = pos + Number(sLen);
-        try {
-          decodeUTF8(data, pos, end);
-        } catch {
-          return false;
+        let sLen = 0;
+        const sb = data[pos]!;
+        if ((sb & 1) !== 0) {
+          sLen = sb >>> 1;
+          pos += 1;
+        } else {
+          const [sl64, sn] = decodeVarintBigInt(data, pos, n);
+          if (sn === 0 || sl64 > BigInt(n - (pos + sn))) return false;
+          pos += sn;
+          sLen = Number(sl64);
         }
+        const end = pos + sLen;
+        if (end > n || !isValidUTF8Slice(data, pos, end)) return false;
         pos = end;
         break;
       }
       case 2: {
         if (wt !== WireMap || depth + 1 > limit || pos >= n) return false;
-        const [bLen, bn] = decodeVarintBigInt(data, pos);
-        if (bn === 0 || bLen < 3n || bLen > BigInt(n - (pos + bn))) return false;
-        const bodyEnd = pos + bn + Number(bLen);
-        const body = data.subarray(pos + bn, bodyEnd);
-        pos = bodyEnd;
-        const [keyWT, valWT, count, startP, ok] = parseMapHeader(body);
+        let bLen = 0;
+        const lb = data[pos]!;
+        if ((lb & 1) !== 0) {
+          bLen = lb >>> 1;
+          pos += 1;
+        } else if ((lb & 2) !== 0) {
+          if (pos + 2 > n) return false;
+          bLen = (lb | (data[pos + 1]! << 8)) >>> 2;
+          pos += 2;
+        } else {
+          const [bl64, bn] = decodeVarintBigInt(data, pos, n);
+          if (bn === 0 || bl64 > BigInt(n - (pos + bn))) return false;
+          pos += bn;
+          bLen = Number(bl64);
+        }
+        const bodyEnd = pos + bLen;
+        if (bLen < 3 || bodyEnd > n) return false;
+        const [keyWT, valWT, count, startP, ok] = parseMapHeader(data, pos, bodyEnd);
         if (!ok || keyWT !== WireUint || valWT !== WireString) return false;
         let p = startP;
         for (let i = 0; i < count; i++) {
-          const [k64, kn] = decodeVarintBigInt(body, p);
-          if (kn === 0 || k64 === 0n || k64 > 536870911n) return false;
-          p += kn;
-          const [sLen, sn] = decodeVarintBigInt(body, p);
-          if (sn === 0 || sLen > BigInt(body.length - (p + sn))) return false;
-          p += sn;
-          const sEnd = p + Number(sLen);
-          try {
-            decodeUTF8(body, p, sEnd);
-          } catch {
-            return false;
+          if (p >= bodyEnd) return false;
+          let kNum = 0;
+          const kb = data[p]!;
+          if ((kb & 1) !== 0) {
+            kNum = kb >>> 1;
+            p += 1;
+          } else {
+            const [k64, kn] = decodeVarintBigInt(data, p, bodyEnd);
+            if (kn === 0 || k64 === 0n || k64 > 536870911n) return false;
+            p += kn;
+            kNum = Number(k64);
           }
+          if (kNum === 0 || kNum > 536870911 || p >= bodyEnd) return false;
+          let sLen = 0;
+          const sb = data[p]!;
+          if ((sb & 1) !== 0) {
+            sLen = sb >>> 1;
+            p += 1;
+          } else {
+            const [sl64, sn] = decodeVarintBigInt(data, p, bodyEnd);
+            if (sn === 0 || sl64 > BigInt(bodyEnd - (p + sn))) return false;
+            p += sn;
+            sLen = Number(sl64);
+          }
+          const sEnd = p + sLen;
+          if (sEnd > bodyEnd || !isValidUTF8Slice(data, p, sEnd)) return false;
           p = sEnd;
         }
-        if (p !== body.length) return false;
+        if (p !== bodyEnd) return false;
+        pos = bodyEnd;
         break;
       }
       case 3: {
         if (wt !== WireMap || depth + 1 > limit || pos >= n) return false;
-        const [bLen, bn] = decodeVarintBigInt(data, pos);
-        if (bn === 0 || bLen < 3n || bLen > BigInt(n - (pos + bn))) return false;
-        const bodyEnd = pos + bn + Number(bLen);
-        const body = data.subarray(pos + bn, bodyEnd);
-        pos = bodyEnd;
-        const [keyWT, valWT, count, startP, ok] = parseMapHeader(body);
+        let bLen = 0;
+        const lb = data[pos]!;
+        if ((lb & 1) !== 0) {
+          bLen = lb >>> 1;
+          pos += 1;
+        } else if ((lb & 2) !== 0) {
+          if (pos + 2 > n) return false;
+          bLen = (lb | (data[pos + 1]! << 8)) >>> 2;
+          pos += 2;
+        } else {
+          const [bl64, bn] = decodeVarintBigInt(data, pos, n);
+          if (bn === 0 || bl64 > BigInt(n - (pos + bn))) return false;
+          pos += bn;
+          bLen = Number(bl64);
+        }
+        const bodyEnd = pos + bLen;
+        if (bLen < 3 || bodyEnd > n) return false;
+        const [keyWT, valWT, count, startP, ok] = parseMapHeader(data, pos, bodyEnd);
         if (!ok || keyWT !== WireUint || valWT !== WireSubMsg) return false;
         let p = startP;
         for (let i = 0; i < count; i++) {
-          const [k64, kn] = decodeVarintBigInt(body, p);
-          if (kn === 0 || k64 === 0n || k64 > 536870911n) return false;
-          p += kn;
-          const [cLen, cn] = decodeVarintBigInt(body, p);
-          if (cn === 0 || cLen > BigInt(body.length - (p + cn))) return false;
-          p += cn;
-          const cEnd = p + Number(cLen);
-          if (!validateSchemaMetaBytes(body.subarray(p, cEnd), depth + 2, limit)) return false;
+          if (p >= bodyEnd) return false;
+          let kNum = 0;
+          const kb = data[p]!;
+          if ((kb & 1) !== 0) {
+            kNum = kb >>> 1;
+            p += 1;
+          } else {
+            const [k64, kn] = decodeVarintBigInt(data, p, bodyEnd);
+            if (kn === 0 || k64 === 0n || k64 > 536870911n) return false;
+            p += kn;
+            kNum = Number(k64);
+          }
+          if (kNum === 0 || kNum > 536870911 || p >= bodyEnd) return false;
+          let cLen = 0;
+          const cb = data[p]!;
+          if ((cb & 1) !== 0) {
+            cLen = cb >>> 1;
+            p += 1;
+          } else if ((cb & 2) !== 0) {
+            if (p + 2 > bodyEnd) return false;
+            cLen = (cb | (data[p + 1]! << 8)) >>> 2;
+            p += 2;
+          } else {
+            const [cl64, cn] = decodeVarintBigInt(data, p, bodyEnd);
+            if (cn === 0 || cl64 > BigInt(bodyEnd - (p + cn))) return false;
+            p += cn;
+            cLen = Number(cl64);
+          }
+          const cEnd = p + cLen;
+          if (cEnd > bodyEnd || !validateSchemaMetaBytes(data, depth + 2, limit, p, cEnd)) {
+            return false;
+          }
           p = cEnd;
         }
-        if (p !== body.length) return false;
+        if (p !== bodyEnd) return false;
+        pos = bodyEnd;
         break;
       }
       default: {
         if (fnum === 0) return false;
-        const nextPos = validateUnknownValueAt(data, pos, wt, depth, limit);
+        const sub = n === data.length ? data : data.subarray(0, n);
+        const nextPos = validateUnknownValueAt(sub, pos, wt, depth, limit);
         if (nextPos < 0) return false;
         pos = nextPos;
         break;
@@ -1189,13 +1289,29 @@ export function validateField0At(
   wt: number,
   depth = 0,
   limit = MaxNestingDepth,
+  endLimit = packet.length,
 ): number {
-  if (wt !== WireSubMsg || pos < 0 || pos >= packet.length) return -1;
-  const [bLen, bn] = decodeVarintBigInt(packet, pos);
-  if (bn === 0 || bLen > BigInt(packet.length - (pos + bn))) return -1;
+  if (wt !== WireSubMsg || pos < 0 || pos >= endLimit) return -1;
+  let bLen = 0;
+  let bn = 0;
+  const lb = packet[pos]!;
+  if ((lb & 1) !== 0) {
+    bLen = lb >>> 1;
+    bn = 1;
+  } else if ((lb & 2) !== 0) {
+    if (pos + 2 > endLimit) return -1;
+    bLen = (lb | (packet[pos + 1]! << 8)) >>> 2;
+    bn = 2;
+  } else {
+    const [bl64, nBytes] = decodeVarintBigInt(packet, pos, endLimit);
+    if (nBytes === 0 || bl64 > BigInt(endLimit - (pos + nBytes))) return -1;
+    bLen = Number(bl64);
+    bn = nBytes;
+  }
   const start = pos + bn;
-  const end = start + Number(bLen);
-  if (!validateSchemaMetaBytes(packet.subarray(start, end), depth + 1, limit)) return -1;
+  const end = start + bLen;
+  if (end > endLimit) return -1;
+  if (!validateSchemaMetaBytes(packet, depth + 1, limit, start, end)) return -1;
   return end;
 }
 
