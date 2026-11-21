@@ -19,6 +19,7 @@ import {
   WireString,
   WireSubMsg,
   WireUint,
+  allocBytes,
   compareUTF8Strings,
   encodeZigZag,
   encodeZigZagNumber,
@@ -112,11 +113,16 @@ export class Encoder {
    * Returns a standalone `Uint8Array` copy of `[startPos, this.pos)` in the slab.
    */
   endMessage(startPos: number): Uint8Array {
-    const out = this.buf.slice(startPos, this.pos);
-    if (this.buf.length > MAX_RETAINED_SLAB) {
+    const endPos = this.pos;
+    const len = endPos - startPos;
+    const out = allocBytes(len);
+    if (len > 0) {
+      out.set(this.buf.subarray(startPos, endPos), 0);
+    }
+    this.pos = startPos;
+    if (this.buf.length > MAX_RETAINED_SLAB && startPos === 0) {
       this.buf = new Uint8Array(8192);
       this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
-      this.pos = 0;
     }
     return out;
   }
@@ -140,7 +146,12 @@ export class Encoder {
    * Returns a standalone copy of the encoded packet bytes.
    */
   bytes(): Uint8Array {
-    return this.buf.slice(0, this.pos);
+    const len = this.pos;
+    const out = allocBytes(len);
+    if (len > 0) {
+      out.set(this.buf.subarray(0, len), 0);
+    }
+    return out;
   }
 
   /**
@@ -271,6 +282,57 @@ export class Encoder {
     }
     const codec = getStringCodec();
     if (codec.encodeInto) {
+      if (n <= 178956970) {
+        // Single-pass UTF-8 encode: reserve minimum Prefix-Varint width for s.length,
+        // write UTF-8 directly into the slab without a separate byteLength scan, and
+        // shift only if multi-byte expansion crosses a varint width threshold.
+        const maxBytes = n * 3;
+        const reserved = n <= 127 ? 1 : n <= 16383 ? 2 : 4;
+        if (this.pos + 4 + maxBytes > this.buf.length) {
+          this.ensureCapacity(4 + maxBytes);
+        }
+        const buf = this.buf;
+        const lenPos = this.pos;
+        const written = codec.encodeInto(s, buf, lenPos + reserved);
+        if (reserved === 4) {
+          const w32 = ((written << 3) | 4) >>> 0;
+          buf[lenPos] = w32 & 0xff;
+          buf[lenPos + 1] = (w32 >>> 8) & 0xff;
+          buf[lenPos + 2] = (w32 >>> 16) & 0xff;
+          buf[lenPos + 3] = (w32 >>> 24) & 0xff;
+          this.pos = lenPos + 4 + written;
+          return;
+        }
+        if (reserved === 2) {
+          if (written <= 16383) {
+            const u16 = ((written << 2) | 2) & 0xffff;
+            buf[lenPos] = u16 & 0xff;
+            buf[lenPos + 1] = (u16 >>> 8) & 0xff;
+            this.pos = lenPos + 2 + written;
+            return;
+          }
+          buf.copyWithin(lenPos + 4, lenPos + 2, lenPos + 2 + written);
+          const w32 = ((written << 3) | 4) >>> 0;
+          buf[lenPos] = w32 & 0xff;
+          buf[lenPos + 1] = (w32 >>> 8) & 0xff;
+          buf[lenPos + 2] = (w32 >>> 16) & 0xff;
+          buf[lenPos + 3] = (w32 >>> 24) & 0xff;
+          this.pos = lenPos + 4 + written;
+          return;
+        }
+        // reserved === 1 (n in 43..127, so maxBytes <= 381 <= 16383)
+        if (written <= 127) {
+          buf[lenPos] = (written << 1) | 1;
+          this.pos = lenPos + 1 + written;
+          return;
+        }
+        buf.copyWithin(lenPos + 2, lenPos + 1, lenPos + 1 + written);
+        const u16 = ((written << 2) | 2) & 0xffff;
+        buf[lenPos] = u16 & 0xff;
+        buf[lenPos + 1] = (u16 >>> 8) & 0xff;
+        this.pos = lenPos + 2 + written;
+        return;
+      }
       const byteLen = codec.byteLength(s);
       this.ensureCapacity(9 + byteLen);
       this.pos = writeVarintAt(this.buf, this.pos, byteLen);
@@ -410,7 +472,7 @@ export class Encoder {
       this.elemCountStack = nextElem;
     }
     if (minBodyBytes > 16383) {
-      this.ensureCapacity(4);
+      this.ensureCapacity(4 + minBodyBytes + 64);
       this.lenStack[this.depth] = this.pos;
       this.lenWidthStack[this.depth++] = 4;
       this.buf[this.pos++] = 0;

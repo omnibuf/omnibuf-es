@@ -44,6 +44,23 @@ export function createLocation(init?: $ob.MessageInitShape<typeof LocationSchema
   return LocationSchema.create(init);
 }
 
+function minBytesLocation(msg: Partial<Location>): number {
+  let sz = 12;
+  {
+    const s = msg.region;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const s = msg.datacenter;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const s = msg.city;
+    if (typeof s === 'string') sz += s.length;
+  }
+  return sz;
+}
+
 export function encodeLocation(
   enc: $ob.Encoder,
   msg: Partial<Location>,
@@ -654,6 +671,15 @@ export function createNeighbor(init?: $ob.MessageInitShape<typeof NeighborSchema
   return NeighborSchema.create(init);
 }
 
+function minBytesNeighbor(msg: Partial<Neighbor>): number {
+  let sz = 8;
+  {
+    const s = msg.router;
+    if (typeof s === 'string') sz += s.length;
+  }
+  return sz;
+}
+
 export function encodeNeighbor(
   enc: $ob.Encoder,
   msg: Partial<Neighbor>,
@@ -1223,17 +1249,27 @@ export function encodePeerUpdate(
   {
     const subVal = msg.location;
     if (subVal !== null && subVal !== undefined) {
-      enc.beginSubMsg(9);
+      enc.beginSubMsg(9, minBytesLocation(subVal));
       encodeLocation(enc, subVal, options);
       enc.endSubMsg();
     }
   }
   {
     const arr = msg.neighbors ?? [];
-    enc.beginSubMsgArr(10);
+    let arrMin = 2 + arr.length * 2;
+    if (arr.length <= 64) {
+      for (let i = 0; i < arr.length; i++) {
+        const item = arr[i];
+        if (item !== null && item !== undefined) arrMin += minBytesNeighbor(item);
+      }
+    }
+    enc.beginSubMsgArr(10, arrMin);
     for (let i = 0; i < arr.length; i++) {
-      enc.beginSubMsgElem();
-      if (arr[i] !== null && arr[i] !== undefined) encodeNeighbor(enc, arr[i]!, options);
+      const item = arr[i];
+      const elemMin =
+        arrMin > 16383 && item !== null && item !== undefined ? minBytesNeighbor(item) : 0;
+      enc.beginSubMsgElem(elemMin);
+      if (item !== null && item !== undefined) encodeNeighbor(enc, item, options);
       enc.endSubMsgElem();
     }
     enc.endSubMsgArr();

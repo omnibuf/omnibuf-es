@@ -371,6 +371,18 @@ export function getStringCodec(): StringCodec {
   return activeStringCodec;
 }
 
+export type BufferAllocator = (len: number) => Uint8Array;
+
+let activeBufferAllocator: BufferAllocator = (len: number) => new Uint8Array(len);
+
+export function setBufferAllocator(allocator: BufferAllocator): void {
+  activeBufferAllocator = allocator;
+}
+
+export function allocBytes(len: number): Uint8Array {
+  return activeBufferAllocator(len);
+}
+
 export function encodeUTF8(str: string): Uint8Array {
   return activeStringCodec.encode(str);
 }

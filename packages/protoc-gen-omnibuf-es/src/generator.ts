@@ -488,10 +488,19 @@ function emitEncodeScalarOrSubMsgWithVar(f: ResolvedField, val: string, indent: 
         return [
           `${indent}{`,
           `${indent}  const arr = ${val} ?? [];`,
-          `${indent}  enc.beginSubMsgArr(${num});`,
+          `${indent}  let arrMin = 2 + arr.length * 2;`,
+          `${indent}  if (arr.length <= 64) {`,
+          `${indent}    for (let i = 0; i < arr.length; i++) {`,
+          `${indent}      const item = arr[i];`,
+          `${indent}      if (item !== null && item !== undefined) arrMin += minBytes${sub}(item);`,
+          `${indent}    }`,
+          `${indent}  }`,
+          `${indent}  enc.beginSubMsgArr(${num}, arrMin);`,
           `${indent}  for (let i = 0; i < arr.length; i++) {`,
-          `${indent}    enc.beginSubMsgElem();`,
-          `${indent}    if (arr[i] !== null && arr[i] !== undefined) encode${sub}(enc, arr[i]!, options);`,
+          `${indent}    const item = arr[i];`,
+          `${indent}    const elemMin = arrMin > 16383 && item !== null && item !== undefined ? minBytes${sub}(item) : 0;`,
+          `${indent}    enc.beginSubMsgElem(elemMin);`,
+          `${indent}    if (item !== null && item !== undefined) encode${sub}(enc, item, options);`,
           `${indent}    enc.endSubMsgElem();`,
           `${indent}  }`,
           `${indent}  enc.endSubMsgArr();`,
@@ -539,7 +548,7 @@ function emitEncodeScalarOrSubMsgWithVar(f: ResolvedField, val: string, indent: 
         `${indent}{`,
         `${indent}  const subVal = ${val};`,
         `${indent}  if (subVal !== null && subVal !== undefined) {`,
-        `${indent}    enc.beginSubMsg(${num});`,
+        `${indent}    enc.beginSubMsg(${num}, minBytes${sub}(subVal));`,
         `${indent}    encode${sub}(enc, subVal, options);`,
         `${indent}    enc.endSubMsg();`,
         `${indent}  }`,
@@ -1526,10 +1535,12 @@ export function generateFileCode(
     fileImports.set(exportName, alias);
     if (isMessage) {
       localExportNames.add(`${alias}Schema`);
+      localExportNames.add(`minBytes${alias}`);
       localExportNames.add(`encode${alias}`);
       localExportNames.add(`decode${alias}`);
       localExportNames.add(`Opaque${alias}`);
       fileImports.set(`${exportName}Schema`, `${alias}Schema`);
+      fileImports.set(`minBytes${exportName}`, `minBytes${alias}`);
       fileImports.set(`encode${exportName}`, `encode${alias}`);
       fileImports.set(`decode${exportName}`, `decode${alias}`);
       fileImports.set(`Opaque${exportName}`, `Opaque${alias}`);
@@ -1944,7 +1955,22 @@ export function generateFileCode(
     lines.push('}');
     lines.push('');
 
-    // 4. Single-pass Encoder
+    // 4. Single-pass Encoder & fast >16 KiB container size estimator
+    lines.push(`export function minBytes${msgName}(msg: Partial<${msgName}>): number {`);
+    lines.push(`  let sz = ${fields.length * 2};`);
+    for (const f of fields) {
+      if (f.isMap || f.repeated || f.oneofLocalName) continue;
+      if (f.type === ProtoScalarType.STRING) {
+        const val = emitFieldValueAccess(f, 'msg');
+        lines.push(`  { const s = ${val}; if (typeof s === 'string') sz += s.length; }`);
+      } else if (f.type === ProtoScalarType.BYTES) {
+        const val = emitFieldValueAccess(f, 'msg');
+        lines.push(`  { const b = ${val}; if (b !== null && b !== undefined) sz += b.length; }`);
+      }
+    }
+    lines.push('  return sz;');
+    lines.push('}');
+    lines.push('');
     lines.push(
       `export function encode${msgName}(enc: $ob.Encoder, msg: Partial<${msgName}>, options?: $ob.MarshalOptions): void {`,
     );

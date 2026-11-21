@@ -1,5 +1,5 @@
 ============================================================================
-OmniBuf-ES Benchmark Suite (Node.js v24.22.1 / darwin-arm64 / Apple M1 Pro)
+OmniBuf-ES Benchmark Suite (Node.js v26.5.0 / darwin-arm64 / Apple M1 Pro)
 Workload: Canonical PeerUpdate (nested submessage, 4 neighbors, arrays, scalars)
 ============================================================================
 
@@ -7,64 +7,64 @@ Workload: Canonical PeerUpdate (nested submessage, 4 neighbors, arrays, scalars)
 
 | Codec / Operation | Latency (ns/op) | Throughput (ops/sec) | Wire Size (B) | vs Baseline |
 |---|---:|---:|---:|---:|
-| OmniBuf |    985 ns | 1,015,645 | 366 | 1.00x (baseline) |
-| protobufjs |   1256 ns | 796,232 | 341 | 1.28x slower |
-| @bufbuild/protobuf (protobuf-es) |   2117 ns | 472,378 | 341 | 2.15x slower |
-| google-protobuf |   4578 ns | 218,430 | 341 | 4.65x slower |
-| @msgpack/msgpack |   3297 ns | 303,277 | 622 | 3.35x slower |
-| JSON |   1789 ns | 559,107 | 791 | 1.82x slower |
+| OmniBuf |    950 ns | 1,052,791 | 366 | 1.00x (baseline) |
+| protobufjs |   1388 ns | 720,266 | 341 | 1.46x slower |
+| @bufbuild/protobuf (protobuf-es) |   2467 ns | 405,326 | 341 | 2.60x slower |
+| google-protobuf |   5072 ns | 197,170 | 341 | 5.34x slower |
+| @msgpack/msgpack |   3476 ns | 287,712 | 622 | 3.66x slower |
+| JSON |   1793 ns | 557,840 | 791 | 1.89x slower |
 
 ### 2. Full Message Decode Speed
 
 | Codec / Operation | Latency (ns/op) | Throughput (ops/sec) | vs Baseline |
 |---|---:|---:|---:|
-| OmniBuf |    954 ns | 1,047,792 | 1.00x (baseline) |
-| protobufjs |   1901 ns | 526,063 | 1.99x slower |
-| @bufbuild/protobuf (protobuf-es) |   3240 ns | 308,607 | 3.40x slower |
-| google-protobuf |   2866 ns | 348,925 | 3.00x slower |
-| @msgpack/msgpack |   2963 ns | 337,501 | 3.10x slower |
-| JSON |   1969 ns | 507,838 | 2.06x slower |
+| OmniBuf |    918 ns | 1,088,873 | 1.00x (baseline) |
+| protobufjs |   1766 ns | 566,331 | 1.92x slower |
+| @bufbuild/protobuf (protobuf-es) |   3359 ns | 297,678 | 3.66x slower |
+| google-protobuf |   2891 ns | 345,903 | 3.15x slower |
+| @msgpack/msgpack |   2850 ns | 350,872 | 3.10x slower |
+| JSON |   2549 ns | 392,362 | 2.78x slower |
 
 ### 3. Read a Single Nested Field
 
 | Codec / Operation | Latency (ns/op) | Throughput (ops/sec) | vs Baseline |
 |---|---:|---:|---:|
-| OmniBuf |    298 ns | 3,354,764 | 1.00x (baseline) |
-| protobufjs |   1167 ns | 857,259 | 3.91x slower |
-| @bufbuild/protobuf (protobuf-es) |   2945 ns | 339,572 | 9.88x slower |
-| google-protobuf |   2527 ns | 395,688 | 8.48x slower |
-| @msgpack/msgpack |   2774 ns | 360,536 | 9.30x slower |
-| JSON |   1751 ns | 571,235 | 5.87x slower |
+| OmniBuf |    314 ns | 3,181,492 | 1.00x (baseline) |
+| protobufjs |   1200 ns | 833,605 | 3.82x slower |
+| @bufbuild/protobuf (protobuf-es) |   3298 ns | 303,242 | 10.49x slower |
+| google-protobuf |   2724 ns | 367,070 | 8.67x slower |
+| @msgpack/msgpack |   2798 ns | 357,420 | 8.90x slower |
+| JSON |   2262 ns | 442,049 | 7.20x slower |
 
 ### 4. Selective Single-Field Mutation
 
 | Codec / Operation | Latency (ns/op) | Throughput (ops/sec) | vs Baseline |
 |---|---:|---:|---:|
-| OmniBuf |   2921 ns | 342,375 | 1.00x (baseline) |
-| protobufjs |   3120 ns | 320,470 | 1.07x slower |
-| @bufbuild/protobuf (protobuf-es) |   5219 ns | 191,620 | 1.79x slower |
-| google-protobuf |   7067 ns | 141,500 | 2.42x slower |
-| @msgpack/msgpack |   6092 ns | 164,161 | 2.09x slower |
-| JSON |   3609 ns | 277,111 | 1.24x slower |
+| OmniBuf |   3171 ns | 315,312 | 1.00x (baseline) |
+| protobufjs |   3530 ns | 283,269 | 1.11x slower |
+| @bufbuild/protobuf (protobuf-es) |   6378 ns | 156,790 | 2.01x slower |
+| google-protobuf |   7882 ns | 126,871 | 2.49x slower |
+| @msgpack/msgpack |   6270 ns | 159,483 | 1.98x slower |
+| JSON |   3274 ns | 305,466 | 1.03x slower |
 
 ### 5. Large Embedded Message Encode
 
 | Codec / Operation | Latency (ns/op) | Throughput (ops/sec) | Wire Size (B) | vs Baseline |
 |---|---:|---:|---:|---:|
-| OmniBuf |  23097 ns | 43,297 | 39256 | 1.00x (baseline) |
-| protobufjs |  16692 ns | 59,909 | 39227 | 1.38x faster |
-| @bufbuild/protobuf (protobuf-es) |  22620 ns | 44,208 | 39227 | 1.00x (baseline) |
-| google-protobuf |  19305 ns | 51,799 | 39227 | 1.20x faster |
-| @msgpack/msgpack |  88928 ns | 11,245 | 39504 | 3.85x slower |
-| JSON |  25417 ns | 39,344 | 39669 | 1.10x slower |
+| OmniBuf |   4994 ns | 200,246 | 39256 | 1.00x (baseline) |
+| protobufjs |  13851 ns | 72,197 | 39227 | 2.77x slower |
+| @bufbuild/protobuf (protobuf-es) |  23955 ns | 41,745 | 39227 | 4.80x slower |
+| google-protobuf |  13643 ns | 73,300 | 39227 | 2.73x slower |
+| @msgpack/msgpack |  94038 ns | 10,634 | 39504 | 18.83x slower |
+| JSON |  32614 ns | 30,661 | 39669 | 6.53x slower |
 
 ### 6. Embedded Message Growth
 
 | Codec / Operation | Latency (ns/op) | Throughput (ops/sec) | vs Baseline |
 |---|---:|---:|---:|
-| OmniBuf |  19338 ns | 51,711 | 1.00x (baseline) |
-| protobufjs |  22411 ns | 44,620 | 1.16x slower |
-| @bufbuild/protobuf (protobuf-es) |  27968 ns | 35,756 | 1.45x slower |
-| google-protobuf |  31845 ns | 31,402 | 1.65x slower |
-| @msgpack/msgpack |  79295 ns | 12,611 | 4.10x slower |
-| JSON |  25767 ns | 38,810 | 1.33x slower |
+| OmniBuf |  12893 ns | 77,561 | 1.00x (baseline) |
+| protobufjs |  20054 ns | 49,865 | 1.56x slower |
+| @bufbuild/protobuf (protobuf-es) |  30394 ns | 32,901 | 2.36x slower |
+| google-protobuf |  29435 ns | 33,974 | 2.28x slower |
+| @msgpack/msgpack |  82943 ns | 12,056 | 6.43x slower |
+| JSON |  37982 ns | 26,328 | 2.95x slower |

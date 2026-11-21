@@ -7,6 +7,7 @@ import {
   DescriptorRegistry,
   fastDecodeShortASCII,
   parseBinaryFileDescriptorSet,
+  setBufferAllocator,
   setStringCodec,
   type FileDescriptorSetJSON,
   type StringCodec,
@@ -32,9 +33,11 @@ export {
   unmarshalTestAllTypesOmniBuf,
 } from './gen/conformance_omnibuf.pb.js';
 
+const nodeTextEncoder = new TextEncoder();
+
 /**
- * Node.js-optimized `StringCodec` backed by `Buffer.from(str, 'utf8')`, `Buffer.byteLength`,
- * `Buffer.write`, and `Buffer.toString('utf8')`.
+ * Node.js-optimized `StringCodec` backed by `TextEncoder.encodeInto` (SIMD), `Buffer.byteLength`,
+ * and `isUtf8` + `Buffer.toString('utf8')`.
  */
 export const NodeBufferStringCodec: StringCodec = {
   encode(str: string): Uint8Array {
@@ -57,13 +60,19 @@ export const NodeBufferStringCodec: StringCodec = {
   encodeInto(str: string, dst: Uint8Array, offset: number): number {
     if (str.length === 0 || offset >= dst.byteLength) return 0;
     const off = offset < 0 ? 0 : offset;
-    const buf = Buffer.from(dst.buffer, dst.byteOffset + off, dst.byteLength - off);
-    return buf.write(str, 0, buf.length, 'utf8');
+    return nodeTextEncoder.encodeInto(str, dst.subarray(off)).written ?? 0;
   },
 };
 
-// Automatically install NodeBufferStringCodec when @omnibuf/node is imported
+const EMPTY_BYTES = new Uint8Array(0);
+
+// Automatically install NodeBufferStringCodec and uninitialized slab allocator when @omnibuf/node is imported
 setStringCodec(NodeBufferStringCodec);
+setBufferAllocator((len: number): Uint8Array => {
+  if (len <= 0) return EMPTY_BYTES;
+  const b = Buffer.allocUnsafe(len);
+  return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+});
 
 /**
  * Encode an OmniBuf packet into a 4-byte little-endian length-prefixed `Buffer` frame.
