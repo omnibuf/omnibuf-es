@@ -40,6 +40,7 @@ import {
   WireString,
   WireSubMsg,
   WireUint,
+  compareUTF8Strings,
   decodeUTF8,
   decodeVarint,
   decodeVarintAuto,
@@ -54,7 +55,7 @@ import {
   parseArrayHeader,
   readFloat64At,
   readLenSlice,
-  roundFloat32Shortest,
+  toBigInt64Input,
   validateField0At,
 } from './wire.js';
 
@@ -109,6 +110,11 @@ export interface BinaryReadOptions {
    * Merge decoded fields into an existing target message (appending arrays and merging maps).
    */
   merge?: boolean;
+  /**
+   * When true, `bytes` fields return zero-copy `Uint8Array.subarray` views into the input buffer
+   * instead of copying with `.slice()`.
+   */
+  zeroCopy?: boolean;
 }
 
 /**
@@ -1711,14 +1717,29 @@ function getFieldFromMsg(msg: Record<string, any> | null | undefined, f: Compile
 }
 
 function coerce64(val: any, useBigInt: boolean, unsigned: boolean): number | bigint {
-  if (useBigInt) {
-    const b = typeof val === 'bigint' ? val : BigInt(val ?? 0);
-    return unsigned ? BigInt.asUintN(64, b) : BigInt.asIntN(64, b);
+  if (useBigInt || typeof val === 'string') {
+    const b = toBigInt64Input(val ?? 0);
+    const clamped = unsigned ? BigInt.asUintN(64, b) : BigInt.asIntN(64, b);
+    if (useBigInt) return clamped;
+    return unsigned
+      ? clamped <= 9007199254740991n
+        ? Number(clamped)
+        : clamped
+      : clamped >= -9007199254740991n && clamped <= 9007199254740991n
+        ? Number(clamped)
+        : clamped;
   }
   if (typeof val === 'bigint') {
-    return val >= -9007199254740991n && val <= 9007199254740991n ? Number(val) : val;
+    const clamped = unsigned ? BigInt.asUintN(64, val) : BigInt.asIntN(64, val);
+    return clamped >= -9007199254740991n && clamped <= 9007199254740991n
+      ? Number(clamped)
+      : clamped;
   }
-  return Number(val ?? 0);
+  const n = Number(val ?? 0);
+  if (!Number.isFinite(n)) {
+    throw new Error(`omnibuf: non-finite integer value ${val}`);
+  }
+  return Math.trunc(n);
 }
 
 function initFieldValue(f: CompiledField, val: any): unknown {
@@ -1994,8 +2015,14 @@ function defaultFieldValue(f: CompiledField, creatingAncestors?: Set<MessageSche
       return '';
     case 'bytes':
       return new Uint8Array(0);
-    default:
+    case 'uint64':
+    case 'int64':
+    case 'sint64':
+    case 'fixed64':
+    case 'sfixed64':
       return f.useBigInt ? 0n : 0;
+    default:
+      return 0;
   }
 }
 
@@ -2046,10 +2073,11 @@ function encodeFieldValue(
       break;
     case 'uint64': {
       const v = rawVal ?? 0;
-      enc.writeUint(
-        fnum,
-        typeof v === 'bigint' ? BigInt.asUintN(64, v) : v < 0 ? BigInt.asUintN(64, BigInt(v)) : v,
-      );
+      if (typeof v === 'number' && v >= 0 && v <= 9007199254740991) {
+        enc.writeUint(fnum, v);
+      } else {
+        enc.writeUint(fnum, BigInt.asUintN(64, toBigInt64Input(v)));
+      }
       break;
     }
     case 'sint32':
@@ -2193,13 +2221,9 @@ function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void 
       break;
     case 'uint64': {
       const v =
-        typeof val === 'bigint'
-          ? BigInt.asUintN(64, val)
-          : typeof val === 'string'
-            ? BigInt.asUintN(64, BigInt(val))
-            : val < 0
-              ? BigInt.asUintN(64, BigInt(val))
-              : Number(val ?? 0);
+        typeof val === 'number' && val >= 0 && val <= 9007199254740991
+          ? val
+          : BigInt.asUintN(64, toBigInt64Input(val ?? 0));
       enc.writeRawVarint(v);
       break;
     }
@@ -2210,9 +2234,7 @@ function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void 
       break;
     case 'sint64':
     case 'int64': {
-      const v =
-        typeof val === 'bigint' ? val : typeof val === 'string' ? BigInt(val) : Number(val ?? 0);
-      enc.writeRawVarint(encodeZigZag(v));
+      enc.writeRawVarint(encodeZigZag(val ?? 0));
       break;
     }
     case 'float32':
@@ -2227,9 +2249,7 @@ function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void 
       break;
     case 'fixed64':
     case 'sfixed64': {
-      const v =
-        typeof val === 'bigint' ? val : typeof val === 'string' ? BigInt(val) : Number(val ?? 0);
-      enc.writeRawFixed64(v);
+      enc.writeRawFixed64(val ?? 0);
       break;
     }
     case 'bool': {
@@ -2243,9 +2263,7 @@ function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void 
 function compareMapKeys(keyType: ScalarFieldType, a: any, b: any): number {
   switch (keyType) {
     case 'string': {
-      const sa = String(a);
-      const sb = String(b);
-      return sa < sb ? -1 : sa > sb ? 1 : 0;
+      return compareUTF8Strings(String(a), String(b));
     }
     case 'bool': {
       const ba = a === true || a === 'true' ? 1 : 0;
@@ -2397,7 +2415,7 @@ function decodeCompiledFieldValue(
     }
     case 'bytes': {
       const [b, nextPos] = readLenSlice(data, pos, 0, n);
-      out[key] = b.slice();
+      out[key] = options?.zeroCopy ? b : b.slice();
       return nextPos;
     }
     case 'float32': {
@@ -2405,7 +2423,7 @@ function decodeCompiledFieldValue(
       const bits =
         (data[pos]! | (data[pos + 1]! << 8) | (data[pos + 2]! << 16) | (data[pos + 3]! << 24)) >>>
         0;
-      out[key] = roundFloat32Shortest(float32FromBits(bits));
+      out[key] = float32FromBits(bits);
       return pos + 4;
     }
     case 'fixed32': {
@@ -2459,7 +2477,7 @@ function decodeCompiledFieldValue(
     case 'bytes[]': {
       const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: Uint8Array[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
-      const [arr, ok] = appendBytesArrBody(prev, body, false);
+      const [arr, ok] = appendBytesArrBody(prev, body, Boolean(options?.zeroCopy));
       if (!ok) throw new Error(`omnibuf: invalid bytes array at ${pos}`);
       out[key] = arr;
       return nextPos;
@@ -2529,12 +2547,8 @@ function decodeCompiledFieldValue(
     case 'float32[]': {
       const [body, nextPos] = readLenSlice(data, pos, 2, n);
       const prev: number[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
-      const startLen = prev.length;
       const [arr, ok] = appendFloat32ArrBody(prev, body);
       if (!ok) throw new Error(`omnibuf: invalid float32 array at ${pos}`);
-      for (let i = startLen; i < arr.length; i++) {
-        arr[i] = roundFloat32Shortest(arr[i]!);
-      }
       out[key] = arr;
       return nextPos;
     }
@@ -2776,7 +2790,7 @@ function decodeMapScalarEntry(
     }
     case WireBytes: {
       const [bBytes, nextP] = readLenSlice(body, p, 0);
-      return [bBytes.slice(), nextP];
+      return [options?.zeroCopy ? bBytes : bBytes.slice(), nextP];
     }
     case WireUint: {
       const [v, vn] = decodeVarintAuto(body, p);
@@ -2845,7 +2859,7 @@ function convertMapScalarValue(
     case 'bool':
       return Boolean(v);
     case 'float32':
-      return roundFloat32Shortest(float32FromBits(Number(v)));
+      return float32FromBits(Number(v));
     case 'float64':
       return float64FromBits(BigInt(v));
     case 'uint32':
@@ -2995,8 +3009,13 @@ export function omnibufField(fieldNum: number, options: DecoratorFieldOptions = 
       const propKey = String(contextOrPropKey.name);
       if (contextOrPropKey.metadata) {
         const metaObj = contextOrPropKey.metadata as Record<symbol, any>;
-        if (!metaObj[PENDING_FIELDS_SYMBOL]) {
-          metaObj[PENDING_FIELDS_SYMBOL] = Object.create(null);
+        if (!Object.hasOwn(metaObj, PENDING_FIELDS_SYMBOL)) {
+          const inherited = metaObj[PENDING_FIELDS_SYMBOL];
+          const own = Object.create(null);
+          if (inherited) {
+            Object.assign(own, inherited);
+          }
+          metaObj[PENDING_FIELDS_SYMBOL] = own;
         }
         metaObj[PENDING_FIELDS_SYMBOL][propKey] = spec;
       }
@@ -3082,7 +3101,9 @@ export function getClassSchema<T extends object>(
     typeof ctorOrInstance === 'function' ? ctorOrInstance : ctorOrInstance?.constructor;
   if (!ctor || ctor === Object) return null;
 
-  const existing = classSchemaRegistry.get(ctor) ?? ctor[SCHEMA_SYMBOL];
+  const existing =
+    classSchemaRegistry.get(ctor) ??
+    (Object.hasOwn(ctor, SCHEMA_SYMBOL) ? ctor[SCHEMA_SYMBOL] : undefined);
   if (existing) return existing;
 
   // Trigger a dummy instantiation if Stage 3 addInitializer hasn't run yet
@@ -3101,7 +3122,10 @@ export function getClassSchema<T extends object>(
     return null;
   }
 
-  const name = ctor.__omnibufTypeName || ctor.name || 'Message';
+  const name =
+    (Object.hasOwn(ctor, '__omnibufTypeName') ? ctor.__omnibufTypeName : '') ||
+    ctor.name ||
+    'Message';
   const schema = new MessageSchema<T>(name, pending, () => new ctor());
   classSchemaRegistry.set(ctor, schema);
   ctor[SCHEMA_SYMBOL] = schema;

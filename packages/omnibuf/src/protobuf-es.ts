@@ -221,6 +221,16 @@ function scalarTypeFromProto(protoType: number): {
   }
 }
 
+function is64BitProtoScalar(protoType: number | undefined): boolean {
+  return (
+    protoType === ProtoScalarType.INT64 ||
+    protoType === ProtoScalarType.UINT64 ||
+    protoType === ProtoScalarType.FIXED64 ||
+    protoType === ProtoScalarType.SFIXED64 ||
+    protoType === ProtoScalarType.SINT64
+  );
+}
+
 const compiledProtobufDescCache = new WeakMap<ProtobufDescMessage, MessageSchema<any>>();
 
 /**
@@ -255,12 +265,12 @@ export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
       const propKey =
         f.localName ?? (f.protoName ? f.name : safeObjectProperty(protoCamelCase(f.name)));
       const protoName = f.protoName ?? f.name;
-      const fieldUseBigInt =
+      const defaultUseBigInt =
         options?.useBigInt !== undefined
           ? options.useBigInt
           : typeof f.longAsString === 'boolean'
             ? !f.longAsString
-            : false;
+            : true;
       const oneofProtoName = f.oneof?.name;
       const oneofLocalName = f.oneof
         ? (f.oneof.localName ?? safeObjectProperty(protoCamelCase(f.oneof.name)))
@@ -281,7 +291,7 @@ export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
           name: protoName,
           localName: propKey,
           type: scalar,
-          useBigInt: fieldUseBigInt,
+          useBigInt: is64BitProtoScalar(scalarNum) ? defaultUseBigInt : false,
           oneof: oneofLocalName,
           oneofProtoName,
           explicitPresence: isExplicitPresence,
@@ -327,7 +337,7 @@ export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
             name: protoName,
             localName: propKey,
             type: array,
-            useBigInt: fieldUseBigInt,
+            useBigInt: is64BitProtoScalar(scalarNum) ? defaultUseBigInt : false,
           };
         }
       } else if (f.fieldKind === 'map') {
@@ -349,6 +359,7 @@ export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
             type: 'map',
             mapKey,
             mapVal: 'submsg',
+            useBigInt: is64BitProtoScalar(keyScalar) ? defaultUseBigInt : false,
             subSchema: () => cache.get(valMsg.typeName) ?? build(valMsg),
           };
         } else {
@@ -364,7 +375,10 @@ export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
             type: 'map',
             mapKey,
             mapVal,
-            useBigInt: fieldUseBigInt,
+            useBigInt:
+              is64BitProtoScalar(keyScalar) || is64BitProtoScalar(valScalar)
+                ? defaultUseBigInt
+                : false,
           };
         }
       }
@@ -428,17 +442,24 @@ export class DescriptorRegistry {
   constructor(fds: FileDescriptorSetJSON, options?: { useBigInt?: boolean }) {
     const rawMap = new Map<string, DescriptorProtoJSON>();
     const syntaxMap = new Map<string, string>();
+    const pkgMap = new Map<string, string>();
     const useBigInt = options?.useBigInt ?? false;
 
-    const registerRecursive = (prefix: string, desc: DescriptorProtoJSON, syntax: string) => {
+    const registerRecursive = (
+      prefix: string,
+      desc: DescriptorProtoJSON,
+      syntax: string,
+      pkg: string,
+    ) => {
       if ((desc.extension?.length ?? 0) > 0) {
         throw new Error(`omnibuf: proto2 extensions are not supported (${desc.name ?? prefix})`);
       }
       const fullName = prefix ? `${prefix}.${desc.name ?? ''}` : (desc.name ?? '');
       rawMap.set(fullName, desc);
       syntaxMap.set(fullName, syntax);
+      pkgMap.set(fullName, pkg);
       for (const nested of desc.nestedType ?? []) {
-        registerRecursive(fullName, nested, syntax);
+        registerRecursive(fullName, nested, syntax, pkg);
       }
     };
 
@@ -451,9 +472,44 @@ export class DescriptorRegistry {
       const pkg = file.package ?? '';
       const syntax = file.syntax ?? '';
       for (const msg of file.messageType ?? []) {
-        registerRecursive(pkg, msg, syntax);
+        registerRecursive(pkg, msg, syntax, pkg);
       }
     }
+
+    const resolveMessageTarget = (
+      rawTypeName: string | undefined,
+      enclosingFullName: string,
+    ): [resolvedName: string, target: DescriptorProtoJSON] => {
+      if (!rawTypeName) {
+        throw new Error(`omnibuf: missing typeName on message field in ${enclosingFullName}`);
+      }
+      if (rawTypeName.startsWith('.')) {
+        const clean = rawTypeName.slice(1);
+        const hit = rawMap.get(clean);
+        if (!hit) {
+          throw new Error(
+            `omnibuf: unresolved message type "${rawTypeName}" in ${enclosingFullName}`,
+          );
+        }
+        return [clean, hit];
+      }
+      const parts = enclosingFullName ? enclosingFullName.split('.') : [];
+      for (let i = parts.length; i >= 0; i--) {
+        const scope = parts.slice(0, i).join('.');
+        const candidate = scope ? `${scope}.${rawTypeName}` : rawTypeName;
+        const hit = rawMap.get(candidate);
+        if (hit) return [candidate, hit];
+      }
+      const pkg = pkgMap.get(enclosingFullName) ?? '';
+      if (pkg) {
+        const candidate = `${pkg}.${rawTypeName}`;
+        const hit = rawMap.get(candidate);
+        if (hit) return [candidate, hit];
+      }
+      const rootHit = rawMap.get(rawTypeName);
+      if (rootHit) return [rawTypeName, rootHit];
+      throw new Error(`omnibuf: unresolved message type "${rawTypeName}" in ${enclosingFullName}`);
+    };
 
     const building = new Set<string>();
     const compile = (fullName: string, desc: DescriptorProtoJSON): MessageSchema<any> => {
@@ -474,7 +530,6 @@ export class DescriptorRegistry {
           );
         }
         const repeated = isRepeatedLabel(f.label);
-        const cleanTypeName = (f.typeName ?? '').replace(/^\./, '');
         const hasRealOneof =
           f.oneofIndex !== undefined && !f.proto3Optional && desc.oneofDecl?.[f.oneofIndex]?.name;
         const oneofProtoName = hasRealOneof ? desc.oneofDecl![f.oneofIndex!]!.name : undefined;
@@ -485,19 +540,15 @@ export class DescriptorRegistry {
           !oneofLocalName && !repeated && (Boolean(f.proto3Optional) || isProto2);
 
         if (typeNum === ProtoScalarType.MESSAGE) {
-          const target = rawMap.get(cleanTypeName);
-          if (target?.options?.mapEntry) {
+          const [cleanTypeName, target] = resolveMessageTarget(f.typeName, fullName);
+          if (target.options?.mapEntry) {
             const kf = (target.field ?? []).find((x) => x.number === 1);
             const vf = (target.field ?? []).find((x) => x.number === 2);
             const kTypeNum = parseFieldDescriptorType(kf?.type);
             const vTypeNum = parseFieldDescriptorType(vf?.type);
             const { scalar: mapKey } = scalarTypeFromProto(kTypeNum);
             if (vTypeNum === ProtoScalarType.MESSAGE) {
-              const valTargetName = (vf?.typeName ?? '').replace(/^\./, '');
-              const valTarget = rawMap.get(valTargetName);
-              if (!valTarget) {
-                throw new Error(`omnibuf: missing map value message ${valTargetName}`);
-              }
+              const [valTargetName, valTarget] = resolveMessageTarget(vf?.typeName, cleanTypeName);
               if (!this.schemas.has(valTargetName) && !building.has(valTargetName)) {
                 compile(valTargetName, valTarget);
               }
@@ -521,8 +572,7 @@ export class DescriptorRegistry {
                 useBigInt,
               };
             }
-          } else if (target) {
-            const isRecursiveRef = cleanTypeName === fullName || building.has(cleanTypeName);
+          } else {
             if (!this.schemas.has(cleanTypeName) && !building.has(cleanTypeName)) {
               compile(cleanTypeName, target);
             }
@@ -530,7 +580,7 @@ export class DescriptorRegistry {
               fieldNum: num,
               name: protoName,
               type: repeated ? 'submsg[]' : 'submsg',
-              optional: isRecursiveRef || Boolean(oneofLocalName) || Boolean(f.proto3Optional),
+              optional: !repeated,
               oneof: oneofLocalName,
               oneofProtoName,
               subSchema: () => this.schemas.get(cleanTypeName) ?? compile(cleanTypeName, target),

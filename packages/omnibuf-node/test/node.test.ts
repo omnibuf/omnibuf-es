@@ -601,8 +601,10 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
     });
 
     const opaque = new OpaquePeerUpdate(initial);
-    // Zero-copy when clean
-    expect(opaque.marshal()).toBe(initial);
+    // Returns an independent defensive copy when clean
+    const cleanOut = opaque.marshal();
+    expect(cleanOut).toEqual(initial);
+    assert.notEqual(cleanOut, initial);
     expect(opaque.asn()).toBe(64512);
     expect(opaque.routerId()).toBe('edge-rtr-fra01.core.backbone.net');
     expect(opaque.getRouterId()).toBe('edge-rtr-fra01.core.backbone.net');

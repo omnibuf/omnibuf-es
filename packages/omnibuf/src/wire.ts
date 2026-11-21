@@ -384,16 +384,111 @@ export function decodeUTF8(bytes: Uint8Array, start = 0, end = bytes.length): st
   return activeStringCodec.decode(bytes, start, end);
 }
 
+/**
+ * Throws an Error if `bytes[start..end)` is not valid UTF-8.
+ */
+export function assertValidUTF8(bytes: Uint8Array, start = 0, end = bytes.length): void {
+  if (!isValidUTF8Slice(bytes, start, end)) {
+    throw new Error('omnibuf: invalid UTF-8 string');
+  }
+}
+
+/**
+ * Compares two JavaScript UTF-16 strings in canonical UTF-8 byte order (Unicode scalar value order).
+ * Unlike JS `<`/`>` (which compares UTF-16 code units and orders astral surrogate pairs `0xD800..0xDBFF`
+ * before BMP `U+E000..U+FFFF`), this orders astral code points (`>= U+10000`, UTF-8 `>= 0xF0`) after
+ * all BMP code points (`<= U+FFFF`, UTF-8 `<= 0xEF`), matching Go/Rust/C++ UTF-8 byte order.
+ */
+export function compareUTF8Strings(a: string, b: string): number {
+  if (a === b) return 0;
+  const lenA = a.length;
+  const lenB = b.length;
+  let iA = 0;
+  let iB = 0;
+  while (iA < lenA && iB < lenB) {
+    const cA = a.charCodeAt(iA);
+    const cB = b.charCodeAt(iB);
+    if (cA === cB && (cA < 0xd800 || cA > 0xdfff)) {
+      iA++;
+      iB++;
+      continue;
+    }
+    if ((cA < 0xd800 || cA > 0xdfff) && (cB < 0xd800 || cB > 0xdfff)) {
+      return cA - cB;
+    }
+    let cpA = cA;
+    if (cA >= 0xd800 && cA <= 0xdbff && iA + 1 < lenA) {
+      const loA = a.charCodeAt(iA + 1);
+      if (loA >= 0xdc00 && loA <= 0xdfff) {
+        cpA = 0x10000 + ((cA - 0xd800) << 10) + (loA - 0xdc00);
+        iA += 2;
+      } else {
+        cpA = 0xfffd;
+        iA += 1;
+      }
+    } else if (cA >= 0xd800 && cA <= 0xdfff) {
+      cpA = 0xfffd;
+      iA += 1;
+    } else {
+      iA += 1;
+    }
+
+    let cpB = cB;
+    if (cB >= 0xd800 && cB <= 0xdbff && iB + 1 < lenB) {
+      const loB = b.charCodeAt(iB + 1);
+      if (loB >= 0xdc00 && loB <= 0xdfff) {
+        cpB = 0x10000 + ((cB - 0xd800) << 10) + (loB - 0xdc00);
+        iB += 2;
+      } else {
+        cpB = 0xfffd;
+        iB += 1;
+      }
+    } else if (cB >= 0xd800 && cB <= 0xdfff) {
+      cpB = 0xfffd;
+      iB += 1;
+    } else {
+      iB += 1;
+    }
+
+    if (cpA !== cpB) {
+      return cpA - cpB;
+    }
+  }
+  return lenA - iA - (lenB - iB);
+}
+
 // ============================================================================
 // ZigZag Signed Integer Mapping
 // ============================================================================
+
+/**
+ * Converts a `number`, `bigint`, or decimal integer `string` into a `bigint` without losing
+ * 64-bit precision through IEEE-754 float64 coercion. Throws on `NaN`, `Infinity`, or malformed strings.
+ */
+export function toBigInt64Input(v: number | bigint | string): bigint {
+  if (typeof v === 'bigint') return v;
+  if (typeof v === 'string') {
+    const trimmed = v.trim();
+    if (trimmed.length === 0) {
+      throw new Error('omnibuf: invalid empty integer string');
+    }
+    return BigInt(trimmed);
+  }
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) {
+      throw new Error(`omnibuf: non-finite integer value ${v}`);
+    }
+    return BigInt(Math.trunc(v));
+  }
+  return BigInt(v as any);
+}
 
 /**
  * Maps a signed integer (number or bigint) to an unsigned 64-bit bigint via ZigZag encoding:
  * u = (n << 1) ^ (n >> 63)
  */
 export function encodeZigZag(n: number | bigint): bigint {
-  const b = BigInt.asIntN(64, typeof n === 'bigint' ? n : BigInt(Math.trunc(n)));
+  const b = BigInt.asIntN(64, toBigInt64Input(n));
   return BigInt.asUintN(64, (b << 1n) ^ (b >> 63n));
 }
 
@@ -401,9 +496,14 @@ export function encodeZigZag(n: number | bigint): bigint {
  * Fast-path ZigZag encoding for 32-bit signed integers that fit in safe number range.
  */
 export function encodeZigZagNumber(n: number | bigint): number | bigint {
-  if (typeof n === 'number' && n >= -268435456 && n <= 268435455) {
-    const i = n | 0;
-    return ((i << 1) ^ (i >> 31)) >>> 0;
+  if (typeof n === 'number') {
+    if (!Number.isFinite(n)) {
+      throw new Error(`omnibuf: non-finite integer value ${n}`);
+    }
+    if (n >= -268435456 && n <= 268435455) {
+      const i = n | 0;
+      return ((i << 1) ^ (i >> 31)) >>> 0;
+    }
   }
   return encodeZigZag(n);
 }
@@ -413,7 +513,7 @@ export function encodeZigZagNumber(n: number | bigint): number | bigint {
  * n = (u >> 1) ^ -(u & 1)
  */
 export function decodeZigZagBigInt(u: number | bigint): bigint {
-  const b = BigInt.asUintN(64, typeof u === 'bigint' ? u : BigInt(Math.trunc(u)));
+  const b = BigInt.asUintN(64, toBigInt64Input(u));
   return BigInt.asIntN(64, (b >> 1n) ^ -(b & 1n));
 }
 
@@ -472,12 +572,15 @@ const MAX_4B_VARINT = 536870911;
  */
 export function varintByteLength(v: number | bigint): number {
   if (typeof v === 'number') {
+    if (!Number.isFinite(v)) {
+      throw new Error(`omnibuf: non-finite integer value ${v}`);
+    }
     if (v >= 0 && v <= MAX_1B_VARINT) return 1;
     if (v >= 0 && v <= MAX_2B_VARINT) return 2;
     if (v >= 0 && v <= MAX_4B_VARINT) return 4;
     return 9;
   }
-  const u = BigInt.asUintN(64, v);
+  const u = BigInt.asUintN(64, toBigInt64Input(v));
   if (u <= 127n) return 1;
   if (u <= 16383n) return 2;
   if (u <= 536870911n) return 4;
@@ -523,7 +626,7 @@ export function writeVarintAt(dst: Uint8Array, pos: number, v: number | bigint):
     return pos + 9;
   }
 
-  const u = BigInt.asUintN(64, typeof v === 'bigint' ? v : BigInt(Math.trunc(v)));
+  const u = BigInt.asUintN(64, toBigInt64Input(v));
   if (u <= 127n) {
     dst[pos] = Number((u << 1n) | 1n);
     return pos + 1;
@@ -976,6 +1079,15 @@ function validateUnknownEntryAt(
     if (p >= body.length || (body[p]! !== 0 && body[p]! !== 1)) return -1;
     return p + 1;
   }
+  if (wt === WireString) {
+    if (p >= body.length) return -1;
+    const [bLen, bn] = decodeVarintBigInt(body, p);
+    if (bn === 0 || bLen > BigInt(body.length - (p + bn))) return -1;
+    const start = p + bn;
+    const end = start + Number(bLen);
+    if (!isValidUTF8Slice(body, start, end)) return -1;
+    return end;
+  }
   if (wt === WireSubMsg) {
     if (p >= body.length) return -1;
     const [bLen, bn] = decodeVarintBigInt(body, p);
@@ -999,6 +1111,15 @@ function validateUnknownValueAt(
   limit: number,
 ): number {
   if (depth > limit) return -1;
+  if (wt === WireString) {
+    if (pos >= data.length) return -1;
+    const [bLen, bn] = decodeVarintBigInt(data, pos);
+    if (bn === 0 || bLen > BigInt(data.length - (pos + bn))) return -1;
+    const start = pos + bn;
+    const end = start + Number(bLen);
+    if (!isValidUTF8Slice(data, start, end)) return -1;
+    return end;
+  }
   if (wt === WireSubMsg) {
     if (pos >= data.length) return -1;
     const [bLen, bn] = decodeVarintBigInt(data, pos);
@@ -1084,15 +1205,29 @@ function validateUnknownMessageBytes(
 }
 
 function isValidUTF8Slice(bytes: Uint8Array, start: number, end: number): boolean {
-  for (let i = start; i < end; i++) {
-    if (bytes[i]! >= 0x80) {
+  let i = start;
+  const end4 = end - 3;
+  while (i < end4) {
+    if (((bytes[i]! | bytes[i + 1]! | bytes[i + 2]! | bytes[i + 3]!) & 0x80) !== 0) {
       try {
-        sharedTextDecoder.decode(bytes.subarray(start, end));
+        sharedTextDecoder.decode(bytes.subarray(i, end));
         return true;
       } catch {
         return false;
       }
     }
+    i += 4;
+  }
+  while (i < end) {
+    if (bytes[i]! >= 0x80) {
+      try {
+        sharedTextDecoder.decode(bytes.subarray(i, end));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    i++;
   }
   return true;
 }
@@ -1402,6 +1537,91 @@ export function locateField(
     wireType: lastWT,
     ok: true,
   };
+}
+
+/**
+ * Lazy once-per-packet top-level field-offset directory for generated `Opaque` wrappers.
+ * Packed 4 `Int32` values per dense field `fnum` (`base = fnum << 2`):
+ * - `dense[base]`: `fieldStart` (tag byte offset of last occurrence)
+ * - `dense[base + 1]`: `valPos` (payload start byte offset of last occurrence)
+ * - `dense[base + 2]`: `valEnd` (payload end byte offset of last occurrence)
+ * - `dense[base + 3]`: `(count << 4) | wt` where `count` is `0` (absent), `1` (single), or `2` (multiple)
+ */
+export interface OpaqueDirectory {
+  readonly valid: boolean;
+  readonly maxDense: number;
+  readonly dense: Int32Array;
+}
+
+/**
+ * Scans top-level field headers of `packet` in a single pass and builds an `OpaqueDirectory`
+ * for `O(1)` direct slice lookups on clean `Opaque` getters.
+ */
+export function buildOpaqueDirectory(
+  packet: Uint8Array,
+  maxDenseField: number,
+  depth = 0,
+): OpaqueDirectory {
+  const maxDense = Math.min(Math.max(maxDenseField, 0), 256);
+  const dense = new Int32Array((maxDense + 1) << 2);
+  if (depth > MaxNestingDepth) {
+    return { valid: false, maxDense, dense };
+  }
+  let pos = 0;
+  const n = packet.length;
+  while (pos < n) {
+    const fieldStart = pos;
+    let fnum = 0;
+    let wt = 0;
+    const b0 = packet[pos]!;
+    if ((b0 & 1) !== 0) {
+      fnum = b0 >>> 5;
+      wt = (b0 >>> 1) & 0x0f;
+      pos += 1;
+    } else if ((b0 & 2) !== 0) {
+      if (pos + 2 > n) return { valid: false, maxDense, dense };
+      const u16 = (b0 | (packet[pos + 1]! << 8)) >>> 2;
+      fnum = u16 >>> 4;
+      wt = u16 & 0x0f;
+      pos += 2;
+    } else {
+      const [tag, tn] = decodeVarintBigInt(packet, pos);
+      if (tn === 0 || tag >> 4n > 536870911n) {
+        return { valid: false, maxDense, dense };
+      }
+      fnum = Number(tag >> 4n);
+      wt = Number(tag & 0x0fn);
+      pos += tn;
+    }
+
+    if (fnum === 0) {
+      const f0End = validateField0At(packet, pos, wt, depth);
+      if (f0End < 0) {
+        return { valid: false, maxDense, dense };
+      }
+      pos = f0End;
+      continue;
+    }
+
+    const valPos = pos;
+    const valEnd = skipValidatedValue(packet, pos, wt);
+    if (valEnd < 0) {
+      return { valid: false, maxDense, dense };
+    }
+
+    if (fnum <= maxDense) {
+      const base = fnum << 2;
+      const prevCount = dense[base + 3]! >>> 4;
+      const nextCount = prevCount === 0 ? 1 : 2;
+      dense[base] = fieldStart;
+      dense[base + 1] = valPos;
+      dense[base + 2] = valEnd;
+      dense[base + 3] = (nextCount << 4) | wt;
+    }
+
+    pos = valEnd;
+  }
+  return { valid: true, maxDense, dense };
 }
 
 export interface NextContainerResult {

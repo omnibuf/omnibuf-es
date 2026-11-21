@@ -38,6 +38,7 @@ import {
   readLenSlice,
   roundFloat32Shortest,
   skipValidatedValue,
+  skipValue,
   validateField0At,
 } from './wire.js';
 
@@ -269,6 +270,16 @@ export function readBytes(packet: Uint8Array, fieldNum: number): [value: Uint8Ar
     return [new Uint8Array(0), false];
   }
   return [valSlice.subarray(bn, bn + Number(bLen)), true];
+}
+
+/**
+ * Zero-copy alias for `readBytes`, returning a `subarray` view into `packet`.
+ */
+export function readBytesView(
+  packet: Uint8Array,
+  fieldNum: number,
+): [value: Uint8Array, ok: boolean] {
+  return readBytes(packet, fieldNum);
 }
 
 // ============================================================================
@@ -1015,6 +1026,33 @@ export function readBytesArr(
   }
 }
 
+/**
+ * Reads a `WireArray(WireBytes)` field returning zero-copy `Uint8Array.subarray` element views.
+ */
+export function readBytesArrView(
+  packet: Uint8Array,
+  fieldNum: number,
+): [value: Uint8Array[], ok: boolean] {
+  const out: Uint8Array[] = [];
+  let found = false;
+  let pos = 0;
+  while (true) {
+    const { body, nextPos, matched, valid } = nextContainerField(
+      packet,
+      pos,
+      fieldNum,
+      WireArray,
+      2,
+    );
+    if (!valid) return [[], false];
+    if (!matched) return [out, found];
+    pos = nextPos;
+    found = true;
+    const [, ok] = appendBytesArrBody(out, body, true);
+    if (!ok) return [[], false];
+  }
+}
+
 export function readBoolArr(packet: Uint8Array, fieldNum: number): [value: boolean[], ok: boolean] {
   const out: boolean[] = [];
   let found = false;
@@ -1255,7 +1293,10 @@ export function readSubMsgMerged<T>(
         out = useRange
           ? decodeFn(packet, out, found, pos, pos + lenNum)
           : decodeFn(packet.subarray(pos, pos + lenNum), out, found);
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && /MaxNestingDepth|nesting depth/i.test(err.message)) {
+          throw err;
+        }
         return [null, false];
       }
       found = true;
@@ -1301,7 +1342,10 @@ export function readSubMsgArrDecoded<T>(
       const elNum = Number(el);
       try {
         out.push(decodeFn(body.subarray(p, p + elNum)));
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && /MaxNestingDepth|nesting depth/i.test(err.message)) {
+          throw err;
+        }
         return [[], false];
       }
       p += elNum;
@@ -1863,4 +1907,61 @@ export function spliceFields(
   }
 
   return activeEnc.finish();
+}
+
+export interface OpaqueFieldSpan {
+  tagStart: number;
+  valEnd: number;
+  multi: boolean;
+}
+
+/**
+ * Performs a single linear header-hop scan over top-level fields in `packet` and records
+ * byte ranges by field number for O(1) subsequent field access on Opaque views.
+ */
+export function indexTopLevelFields(packet: Uint8Array): Map<number, OpaqueFieldSpan> {
+  const index = new Map<number, OpaqueFieldSpan>();
+  let pos = 0;
+  const n = packet.length;
+  while (pos < n) {
+    const tagStart = pos;
+    const [tag, tn] = decodeVarintBigInt(packet, pos, n);
+    if (tn === 0 || tag >> 4n > 536870911n) {
+      break;
+    }
+    pos += tn;
+    const fnum = Number(tag >> 4n);
+    const wt = Number(tag & 0x0fn);
+    let valEnd: number;
+    try {
+      valEnd = skipValue(packet, pos, wt);
+    } catch {
+      break;
+    }
+    pos = valEnd;
+    if (fnum === 0) continue;
+    const prev = index.get(fnum);
+    if (prev) {
+      prev.tagStart = tagStart;
+      prev.valEnd = valEnd;
+      prev.multi = true;
+    } else {
+      index.set(fnum, { tagStart, valEnd, multi: false });
+    }
+  }
+  return index;
+}
+
+/**
+ * Returns a zero-copy subarray covering `fieldNum` when indexed once, or the full packet when
+ * `fieldNum` appears multiple times (concatenated/repeated fields), or `null` when absent.
+ */
+export function sliceIndexedField(
+  packet: Uint8Array,
+  index: Map<number, OpaqueFieldSpan>,
+  fieldNum: number,
+): Uint8Array | null {
+  const span = index.get(fieldNum);
+  if (!span) return null;
+  return span.multi ? packet : packet.subarray(span.tagStart, span.valEnd);
 }

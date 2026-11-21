@@ -19,14 +19,18 @@ import {
   WireString,
   WireSubMsg,
   WireUint,
+  compareUTF8Strings,
   encodeZigZag,
   encodeZigZagNumber,
   getStringCodec,
   mapHeaderByte,
+  toBigInt64Input,
   writeVarintAt,
 } from './wire.js';
 
 export { mapHeaderByte };
+
+const MAX_RETAINED_SLAB = 256 * 1024;
 
 /**
  * Encoder encodes OmniBuf messages into a reusable contiguous byte buffer in a single forward pass.
@@ -36,6 +40,7 @@ export class Encoder {
   private view: DataView;
   private pos = 0;
   private lenStack = new Int32Array(MaxNestingDepth * 2 + 8);
+  private lenWidthStack = new Uint8Array(MaxNestingDepth * 2 + 8);
   private elemCountStack = new Int32Array(MaxNestingDepth * 2 + 8);
   private depth = 0;
 
@@ -83,14 +88,22 @@ export class Encoder {
   }
 
   /**
-   * Begins a new message in the slab buffer, allocating a fresh 8KB slab if remaining capacity is low.
+   * Begins a new message in the slab buffer, retaining grown slabs up to 256 KiB.
    */
   beginMessage(minRemaining = 1024): number {
     this.depth = 0;
-    if (this.buf.length - this.pos < minRemaining || this.buf.length > 16384) {
+    if (this.buf.length > MAX_RETAINED_SLAB) {
       this.buf = new Uint8Array(Math.max(8192, minRemaining));
       this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
       this.pos = 0;
+    } else if (this.buf.length - this.pos < minRemaining) {
+      if (this.buf.length >= minRemaining) {
+        this.pos = 0;
+      } else {
+        this.buf = new Uint8Array(Math.max(8192, minRemaining));
+        this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+        this.pos = 0;
+      }
     }
     return this.pos;
   }
@@ -100,7 +113,7 @@ export class Encoder {
    */
   endMessage(startPos: number): Uint8Array {
     const out = this.buf.slice(startPos, this.pos);
-    if (this.buf.length > 65536) {
+    if (this.buf.length > MAX_RETAINED_SLAB) {
       this.buf = new Uint8Array(8192);
       this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
       this.pos = 0;
@@ -305,8 +318,7 @@ export class Encoder {
    */
   writeRawFixed64(v: number | bigint): void {
     this.ensureCapacity(8);
-    const u =
-      typeof v === 'bigint' ? BigInt.asUintN(64, v) : BigInt.asUintN(64, BigInt(Math.trunc(v)));
+    const u = BigInt.asUintN(64, toBigInt64Input(v));
     this.view.setBigUint64(this.pos, u, true);
     this.pos += 8;
   }
@@ -381,27 +393,42 @@ export class Encoder {
   }
 
   /**
-   * Reserves a 2-byte Prefix-Varint container length slot on `lenStack`.
+   * Reserves a 2-byte or 4-byte Prefix-Varint container length slot on `lenStack`.
+   * When `minBodyBytes > 16383`, reserves 4 bytes up front to avoid shifting large payloads in `endContainer`.
    */
-  beginContainer(): void {
+  beginContainer(minBodyBytes = 0): void {
     if (this.depth >= this.lenStack.length) {
       const nextCap = this.lenStack.length * 2;
       const nextLen = new Int32Array(nextCap);
       nextLen.set(this.lenStack);
       this.lenStack = nextLen;
+      const nextWidth = new Uint8Array(nextCap);
+      nextWidth.set(this.lenWidthStack);
+      this.lenWidthStack = nextWidth;
       const nextElem = new Int32Array(nextCap);
       nextElem.set(this.elemCountStack);
       this.elemCountStack = nextElem;
     }
+    if (minBodyBytes > 16383) {
+      this.ensureCapacity(4);
+      this.lenStack[this.depth] = this.pos;
+      this.lenWidthStack[this.depth++] = 4;
+      this.buf[this.pos++] = 0;
+      this.buf[this.pos++] = 0;
+      this.buf[this.pos++] = 0;
+      this.buf[this.pos++] = 0;
+      return;
+    }
     this.ensureCapacity(2);
-    this.lenStack[this.depth++] = this.pos;
+    this.lenStack[this.depth] = this.pos;
+    this.lenWidthStack[this.depth++] = 2;
     this.buf[this.pos++] = 0;
     this.buf[this.pos++] = 0;
   }
 
   /**
    * Backpatches the most recently opened container length slot.
-   * Expands to 4-byte or 9-byte Prefix-Varint if the container exceeds 16,383 bytes.
+   * Preserves canonical Prefix-Varint width (2B <= 16,383, 4B <= 536,870,911, 9B otherwise).
    */
   endContainer(): void {
     if (this.depth <= 0) {
@@ -409,7 +436,31 @@ export class Encoder {
     }
     this.depth--;
     const lenPos = this.lenStack[this.depth]!;
-    const subLen = this.pos - (lenPos + 2);
+    const reserved = this.lenWidthStack[this.depth]!;
+    const subLen = this.pos - (lenPos + reserved);
+    if (reserved === 4) {
+      if (subLen > 16383 && subLen <= 536870911) {
+        const w32 = ((subLen << 3) | 4) >>> 0;
+        this.buf[lenPos] = w32 & 0xff;
+        this.buf[lenPos + 1] = (w32 >>> 8) & 0xff;
+        this.buf[lenPos + 2] = (w32 >>> 16) & 0xff;
+        this.buf[lenPos + 3] = (w32 >>> 24) & 0xff;
+        return;
+      }
+      if (subLen <= 16383) {
+        this.buf.copyWithin(lenPos + 2, lenPos + 4, this.pos);
+        const u16 = ((subLen << 2) | 2) & 0xffff;
+        this.buf[lenPos] = u16 & 0xff;
+        this.buf[lenPos + 1] = (u16 >>> 8) & 0xff;
+        this.pos -= 2;
+        return;
+      }
+      this.ensureCapacity(5);
+      this.buf.copyWithin(lenPos + 9, lenPos + 4, this.pos);
+      writeVarintAt(this.buf, lenPos, BigInt(subLen));
+      this.pos += 5;
+      return;
+    }
     if (subLen <= 16383) {
       const u16 = ((subLen << 2) | 2) & 0xffff;
       this.buf[lenPos] = u16 & 0xff;
@@ -647,7 +698,7 @@ export class Encoder {
    */
   writeStringArr(fieldNum: number, items: readonly string[]): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length);
     this.writeByte(WireString);
     this.writeRawVarint(items.length);
     for (let i = 0; i < items.length; i++) {
@@ -657,11 +708,16 @@ export class Encoder {
   }
 
   /**
-   * Writes a repeated bytes array (`WireArray = 13`, `ElementType = WireBytes = 11`) with an outer backpatched 2B length prefix.
+   * Writes a repeated bytes array (`WireArray = 13`, `ElementType = WireBytes = 11`) with an outer backpatched length prefix.
    */
   writeBytesArr(fieldNum: number, items: readonly Uint8Array[]): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    let minBody = 2 + items.length;
+    for (let i = 0; i < items.length; i++) {
+      minBody += items[i]!.length;
+      if (minBody > 16383) break;
+    }
+    this.beginContainer(minBody);
     this.writeByte(WireBytes);
     this.writeRawVarint(items.length);
     for (let i = 0; i < items.length; i++) {
@@ -671,11 +727,11 @@ export class Encoder {
   }
 
   /**
-   * Writes a packed unsigned integer array (`WireArray = 13`, `ElementType = WireUint = 0`) with an outer backpatched 2B length prefix.
+   * Writes a packed unsigned integer array (`WireArray = 13`, `ElementType = WireUint = 0`) with an outer backpatched length prefix.
    */
   writeUint32Arr(fieldNum: number, items: ArrayLike<number>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length);
     this.writeByte(WireUint);
     this.writeRawVarint(items.length);
     for (let i = 0; i < items.length; i++) {
@@ -689,7 +745,7 @@ export class Encoder {
    */
   writeUintArr(fieldNum: number, items: ArrayLike<number | bigint>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length);
     this.writeByte(WireUint);
     this.writeRawVarint(items.length);
     for (let i = 0; i < items.length; i++) {
@@ -704,7 +760,7 @@ export class Encoder {
    */
   writeBoolArr(fieldNum: number, items: readonly boolean[]): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length);
     this.writeByte(WireBoolFalse);
     this.writeRawVarint(items.length);
     this.ensureCapacity(items.length);
@@ -715,11 +771,11 @@ export class Encoder {
   }
 
   /**
-   * Writes a packed ZigZag signed integer array (`WireArray = 13`, `ElementType = WireSint = 1`) with an outer backpatched 2B length prefix.
+   * Writes a packed ZigZag signed integer array (`WireArray = 13`, `ElementType = WireSint = 1`) with an outer backpatched length prefix.
    */
   writeSintArr(fieldNum: number, items: ArrayLike<number | bigint>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length);
     this.writeByte(WireSint);
     this.writeRawVarint(items.length);
     for (let i = 0; i < items.length; i++) {
@@ -734,7 +790,7 @@ export class Encoder {
    */
   writeFloat32Arr(fieldNum: number, items: ArrayLike<number>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length * 4);
     this.writeByte(WireFloat32);
     this.writeRawVarint(items.length);
     this.ensureCapacity(items.length * 4);
@@ -750,7 +806,7 @@ export class Encoder {
    */
   writeFixed32Arr(fieldNum: number, items: ArrayLike<number>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length * 4);
     this.writeByte(WireFixed32);
     this.writeRawVarint(items.length);
     this.ensureCapacity(items.length * 4);
@@ -766,7 +822,7 @@ export class Encoder {
    */
   writeSfixed32Arr(fieldNum: number, items: ArrayLike<number>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length * 4);
     this.writeByte(WireSfixed32);
     this.writeRawVarint(items.length);
     this.ensureCapacity(items.length * 4);
@@ -782,7 +838,7 @@ export class Encoder {
    */
   writeFloat64Arr(fieldNum: number, items: ArrayLike<number>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length * 8);
     this.writeByte(WireFloat64);
     this.writeRawVarint(items.length);
     this.ensureCapacity(items.length * 8);
@@ -798,14 +854,12 @@ export class Encoder {
    */
   writeFixed64Arr(fieldNum: number, items: ArrayLike<number | bigint>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length * 8);
     this.writeByte(WireFixed64);
     this.writeRawVarint(items.length);
     this.ensureCapacity(items.length * 8);
     for (let i = 0; i < items.length; i++) {
-      const v = items[i]!;
-      const u =
-        typeof v === 'bigint' ? BigInt.asUintN(64, v) : BigInt.asUintN(64, BigInt(Math.trunc(v)));
+      const u = BigInt.asUintN(64, toBigInt64Input(items[i]!));
       this.view.setBigUint64(this.pos, u, true);
       this.pos += 8;
     }
@@ -817,14 +871,12 @@ export class Encoder {
    */
   writeSfixed64Arr(fieldNum: number, items: ArrayLike<number | bigint>): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(2 + items.length * 8);
     this.writeByte(WireSfixed64);
     this.writeRawVarint(items.length);
     this.ensureCapacity(items.length * 8);
     for (let i = 0; i < items.length; i++) {
-      const v = items[i]!;
-      const u =
-        typeof v === 'bigint' ? BigInt.asUintN(64, v) : BigInt.asUintN(64, BigInt(Math.trunc(v)));
+      const u = BigInt.asUintN(64, toBigInt64Input(items[i]!));
       this.view.setBigUint64(this.pos, u, true);
       this.pos += 8;
     }
@@ -836,11 +888,11 @@ export class Encoder {
   // ==========================================================================
 
   /**
-   * Starts a nested sub-message (`WireSubMsg = 12`) in a single pass by reserving a 2-byte length slot.
+   * Starts a nested sub-message (`WireSubMsg = 12`) in a single pass.
    */
-  beginSubMsg(fieldNum: number): void {
+  beginSubMsg(fieldNum: number, minBodyBytes = 0): void {
     this.writeTag(fieldNum, WireSubMsg);
-    this.beginContainer();
+    this.beginContainer(minBodyBytes);
   }
 
   /**
@@ -853,22 +905,22 @@ export class Encoder {
   /**
    * Starts a repeated sub-message array (`WireArray = 13`, `ElementType = WireSubMsg = 12`) in a single pass.
    */
-  beginSubMsgArr(fieldNum: number): void {
+  beginSubMsgArr(fieldNum: number, minBodyBytes = 0): void {
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer();
+    this.beginContainer(minBodyBytes);
     this.elemCountStack[this.depth - 1] = 0;
     this.writeByte(WireSubMsg);
-    this.writeByte(0x01); // 1-byte Prefix-Varint(0) count slot at lenPos + 3
+    this.writeByte(0x01); // 1-byte Prefix-Varint(0) count slot
   }
 
   /**
-   * Starts the next element inside an open `WireArray(WireSubMsg)` by reserving its 2-byte length prefix.
+   * Starts the next element inside an open `WireArray(WireSubMsg)` by reserving its length prefix.
    */
-  beginSubMsgElem(): void {
+  beginSubMsgElem(minBodyBytes = 0): void {
     if (this.depth > 0) {
       this.elemCountStack[this.depth - 1]!++;
     }
-    this.beginContainer();
+    this.beginContainer(minBodyBytes);
   }
 
   /**
@@ -886,8 +938,9 @@ export class Encoder {
       throw new Error('omnibuf: endSubMsgArr called without matching beginSubMsgArr');
     }
     const lenPos = this.lenStack[this.depth - 1]!;
+    const reserved = this.lenWidthStack[this.depth - 1]!;
     const count = this.elemCountStack[this.depth - 1]!;
-    this.patchReservedVarint(lenPos + 3, count);
+    this.patchReservedVarint(lenPos + reserved + 1, count);
     this.endContainer();
   }
 
@@ -903,17 +956,16 @@ export class Encoder {
     m: ReadonlyMap<string, number | bigint> | Readonly<Record<string, number | bigint>>,
     deterministic = false,
   ): void {
+    const entries: [string, number | bigint][] =
+      m instanceof Map ? Array.from(m.entries()) : Object.entries(m);
     this.writeTag(fieldNum, WireMap);
-    this.beginContainer();
+    this.beginContainer(3 + entries.length * 2);
     this.writeByte(WireString);
     this.writeByte(WireUint);
 
-    const entries: [string, number | bigint][] =
-      m instanceof Map ? Array.from(m.entries()) : Object.entries(m);
-
     this.writeRawVarint(entries.length);
     if (deterministic && entries.length > 1) {
-      entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+      entries.sort((a, b) => compareUTF8Strings(a[0], b[0]));
     }
     for (let i = 0; i < entries.length; i++) {
       const [k, v] = entries[i]!;

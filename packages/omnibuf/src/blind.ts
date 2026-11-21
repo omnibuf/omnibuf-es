@@ -29,6 +29,7 @@ import {
   WireString,
   WireSubMsg,
   WireUint,
+  compareUTF8Strings,
   decodeUTF8,
   decodeVarintAuto,
   decodeVarintBigInt,
@@ -560,7 +561,18 @@ function parseBlindContainerShape(
   let merged: BlindShape | null = null;
   let p = startP;
   for (let i = 0; i < count; i++) {
-    p = skipValue(body, p, keyWT);
+    if (keyWT === WireBoolFalse) {
+      if (body.length - p < 1) {
+        throw new Error(`omnibuf: truncated WireMap bool key at ${p}`);
+      }
+      const b = body[p]!;
+      if (b !== 0 && b !== 1) {
+        throw new Error(`omnibuf: invalid WireMap bool key ${b} at ${p}`);
+      }
+      p += 1;
+    } else {
+      p = skipValue(body, p, keyWT);
+    }
     const [valShape, nextP] = parseBlindContainerShape(body, p, valWT, depth + 1);
     const [u, compat] = unifyBlindShapes(merged, valShape);
     if (!compat) {
@@ -1324,7 +1336,7 @@ export function stringifyBlindJSON(
     }
     if (typeof val === 'object') {
       const obj = val as Record<string, unknown>;
-      const keys = Object.keys(obj).sort();
+      const keys = Object.keys(obj).sort(compareUTF8Strings);
       if (keys.length === 0) return '{}';
       if (!step) {
         const parts: string[] = [];

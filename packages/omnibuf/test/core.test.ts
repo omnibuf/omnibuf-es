@@ -1344,4 +1344,75 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
 
     expect(decodeBlindJSON(new Uint8Array(0), { indent: 2 })).toBe('{}');
   });
+
+  it('supports >16 KiB container backpatch heuristic with bit-for-bit wire equivalence and zeroCopy bytes decode', () => {
+    // 1. >16 KiB container backpatch heuristic matches 2B-reserved expansion bit-for-bit
+    const bigPayload = new Uint8Array(20_000);
+    for (let i = 0; i < bigPayload.length; i++) bigPayload[i] = i & 0xff;
+
+    const encHeuristic = new Encoder(24_000);
+    encHeuristic.beginSubMsg(1, 20_000);
+    encHeuristic.writeBytes(1, bigPayload);
+    encHeuristic.endSubMsg();
+    const heuristicBytes = encHeuristic.finish();
+
+    const encDefault = new Encoder(24_000);
+    encDefault.beginSubMsg(1);
+    encDefault.writeBytes(1, bigPayload);
+    encDefault.endSubMsg();
+    const defaultBytes = encDefault.finish();
+
+    expect(heuristicBytes).toEqual(defaultBytes);
+
+    // Defensive shrink when caller overestimates minBodyBytes > 16383 for a small payload
+    const encOver = new Encoder(256);
+    encOver.beginSubMsg(1, 20_000);
+    encOver.writeString(1, 'small');
+    encOver.endSubMsg();
+    const encSmall = new Encoder(256);
+    encSmall.beginSubMsg(1);
+    encSmall.writeString(1, 'small');
+    encSmall.endSubMsg();
+    expect(encOver.finish()).toEqual(encSmall.finish());
+
+    // Large fixed32 array (>16 KiB) uses 4B container slot and round-trips cleanly
+    const fixed32Items = new Array<number>(5000);
+    for (let i = 0; i < fixed32Items.length; i++) fixed32Items[i] = (i * 2654435761) >>> 0;
+    const arrEnc = new Encoder();
+    arrEnc.writeFixed32Arr(2, fixed32Items);
+    const arrWire = arrEnc.finish();
+    const ArrSchema = defineMessage<{ vals: number[] }>('test.LargeFixed32Arr', {
+      vals: { fieldNum: 2, type: 'fixed32[]' },
+    });
+    expect(ArrSchema.decode(arrWire).vals).toEqual(fixed32Items);
+
+    // 2. Zero-copy { zeroCopy: true } decode returns Uint8Array.subarray views into the input buffer
+    const BytesSchema = defineMessage<{
+      single: Uint8Array;
+      list: Uint8Array[];
+      dict: Record<string, Uint8Array>;
+    }>('test.ZeroCopyBytes', {
+      single: { fieldNum: 1, type: 'bytes' },
+      list: { fieldNum: 2, type: 'bytes[]' },
+      dict: { fieldNum: 3, type: 'map', mapKey: 'string', mapVal: 'bytes' },
+    });
+    const wire = BytesSchema.encode({
+      single: new Uint8Array([1, 2, 3, 4]),
+      list: [new Uint8Array([10, 20]), new Uint8Array([30, 40])],
+      dict: { k: new Uint8Array([99, 100]) },
+    });
+
+    const copied = BytesSchema.decode(wire);
+    assert.notEqual(copied.single.buffer, wire.buffer);
+    assert.notEqual(copied.list[0]!.buffer, wire.buffer);
+    assert.notEqual(copied.dict['k']!.buffer, wire.buffer);
+
+    const viewed = BytesSchema.decode(wire, undefined, 0, { zeroCopy: true });
+    expect(viewed.single.buffer).toBe(wire.buffer);
+    expect(viewed.list[0]!.buffer).toBe(wire.buffer);
+    expect(viewed.dict['k']!.buffer).toBe(wire.buffer);
+    expect(Array.from(viewed.single)).toEqual([1, 2, 3, 4]);
+    expect(Array.from(viewed.list[1]!)).toEqual([30, 40]);
+    expect(Array.from(viewed.dict['k']!)).toEqual([99, 100]);
+  });
 });

@@ -2,82 +2,7 @@
 // source: omnibuf/conformance/conformance.proto
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import {
-  Encoder,
-  MaxNestingDepth,
-  activeOneofSlice,
-  appendBoolArrBody,
-  appendBytesArrBody,
-  appendEnumArrBody,
-  appendFloat32ArrBody,
-  appendFloat64ArrBody,
-  appendSint32ArrBody,
-  appendSintArrAutoBody,
-  appendStringArrBody,
-  appendUint32ArrBody,
-  appendUintArrAutoBody,
-  countSubMsgArrElems,
-  decodeSchemaMeta as $decodeSchemaMeta,
-  decodeUTF8,
-  decodeVarintAuto,
-  decodeVarintBigInt,
-  decodeZigZag32,
-  decodeZigZagAuto,
-  defineMessage,
-  encodeField0SchemaMeta,
-  encodeZigZag,
-  float32FromBits,
-  float64FromBits,
-  parseArrayHeader,
-  readBool,
-  readBoolArr,
-  readBytes,
-  readBytesArr,
-  readEnum,
-  readEnumArr,
-  readField0SchemaMeta,
-  readFixed32,
-  readFixed32Arr,
-  readFixed64Auto,
-  readFixed64Arr,
-  readFloat32,
-  readFloat32Arr,
-  readFloat64,
-  readFloat64Arr,
-  readFloat64At,
-  readInt,
-  readInt32,
-  readIntAuto,
-  readLenSlice,
-  readSfixed32,
-  readSfixed32Arr,
-  readSfixed64Auto,
-  readSfixed64Arr,
-  readSint32Arr,
-  readSintArr,
-  readString,
-  readStringArr,
-  readSubMsgArrDecoded,
-  readSubMsgMerged,
-  readTypedMap,
-  readUint,
-  readUint32,
-  readUint32Arr,
-  readUintArr,
-  readUintAuto,
-  roundFloat32Shortest,
-  spliceFields,
-  validateMapTypes,
-  validateMessage,
-  validateValue,
-  writeField0SchemaMeta,
-  type BinaryReadOptions,
-  type MarshalOptions,
-  type Message,
-  type MessageInitShape,
-  type MessageSchema,
-  type UnknownField,
-} from '@omnibuf/core';
+import * as $ob from '@omnibuf/core';
 
 export enum WireFormat {
   WIRE_FORMAT_UNSPECIFIED = 0,
@@ -93,7 +18,7 @@ export enum TestTier {
   TEST_TIER_BLIND = 4,
 }
 
-export interface ConformanceRequest extends Message<'omnibuf.conformance.ConformanceRequest'> {
+export interface ConformanceRequest extends $ob.Message<'omnibuf.conformance.ConformanceRequest'> {
   testName: string;
   test_name?: string;
   messageType: string;
@@ -101,8 +26,8 @@ export interface ConformanceRequest extends Message<'omnibuf.conformance.Conform
   tier: TestTier;
   requestedOutputFormat: WireFormat;
   requested_output_format?: WireFormat;
-  omnibufPayload: Uint8Array;
-  omnibuf_payload?: Uint8Array;
+  omnibufPayload: globalThis.Uint8Array;
+  omnibuf_payload?: globalThis.Uint8Array;
   jsonPayload: string;
   json_payload?: string;
   selfDescribing: boolean;
@@ -113,10 +38,10 @@ export interface ConformanceRequest extends Message<'omnibuf.conformance.Conform
   test_opaque_splice_shrink?: boolean;
 }
 
-export const ConformanceRequestSchema: MessageSchema<
+export const ConformanceRequestSchema: $ob.MessageSchema<
   ConformanceRequest,
   'omnibuf.conformance.ConformanceRequest'
-> = defineMessage<ConformanceRequest, 'omnibuf.conformance.ConformanceRequest'>(
+> = $ob.defineMessage<ConformanceRequest, 'omnibuf.conformance.ConformanceRequest'>(
   'omnibuf.conformance.ConformanceRequest',
   {
     testName: { fieldNum: 1, name: 'test_name', type: 'string' },
@@ -155,11 +80,11 @@ class ConformanceRequestMsg implements ConformanceRequest {
   set requested_output_format(v: WireFormat | undefined) {
     this.requestedOutputFormat = v as any;
   }
-  omnibufPayload: Uint8Array = new Uint8Array(0);
-  get omnibuf_payload(): Uint8Array {
+  omnibufPayload: globalThis.Uint8Array = new globalThis.Uint8Array(0);
+  get omnibuf_payload(): globalThis.Uint8Array {
     return this.omnibufPayload;
   }
-  set omnibuf_payload(v: Uint8Array | undefined) {
+  set omnibuf_payload(v: globalThis.Uint8Array | undefined) {
     this.omnibufPayload = v as any;
   }
   jsonPayload: string = '';
@@ -191,7 +116,7 @@ class ConformanceRequestMsg implements ConformanceRequest {
     this.testOpaqueSpliceShrink = v as any;
   }
 }
-Object.defineProperty(ConformanceRequestMsg.prototype, '$typeName', {
+globalThis.Object.defineProperty(ConformanceRequestMsg.prototype, '$typeName', {
   value: 'omnibuf.conformance.ConformanceRequest',
   enumerable: false,
   writable: true,
@@ -199,28 +124,31 @@ Object.defineProperty(ConformanceRequestMsg.prototype, '$typeName', {
 });
 
 export function createConformanceRequest(
-  init?: MessageInitShape<typeof ConformanceRequestSchema>,
+  init?: $ob.MessageInitShape<typeof ConformanceRequestSchema>,
 ): ConformanceRequest {
   if (init === undefined) return new ConformanceRequestMsg();
   return ConformanceRequestSchema.create(init);
 }
 
 export function encodeConformanceRequest(
-  enc: Encoder,
+  enc: $ob.Encoder,
   msg: Partial<ConformanceRequest>,
-  options?: MarshalOptions,
+  options?: $ob.MarshalOptions,
 ): void {
   enc.writeString(1, msg.testName ?? msg.test_name ?? '');
   enc.writeString(2, msg.messageType ?? msg.message_type ?? '');
-  enc.writeInt(3, Number(msg.tier ?? 0) | 0);
-  enc.writeInt(4, Number(msg.requestedOutputFormat ?? msg.requested_output_format ?? 0) | 0);
-  enc.writeBytes(5, msg.omnibufPayload ?? msg.omnibuf_payload ?? new Uint8Array(0));
+  enc.writeInt(3, globalThis.Number(msg.tier ?? 0) | 0);
+  enc.writeInt(
+    4,
+    globalThis.Number(msg.requestedOutputFormat ?? msg.requested_output_format ?? 0) | 0,
+  );
+  enc.writeBytes(5, msg.omnibufPayload ?? msg.omnibuf_payload ?? new globalThis.Uint8Array(0));
   enc.writeString(6, msg.jsonPayload ?? msg.json_payload ?? '');
-  enc.writeBool(7, Boolean(msg.selfDescribing ?? msg.self_describing));
-  enc.writeBool(8, Boolean(msg.testOpaqueSplice ?? msg.test_opaque_splice));
-  enc.writeBool(9, Boolean(msg.testOpaqueSpliceShrink ?? msg.test_opaque_splice_shrink));
-  if (options?.writeUnknownFields && Array.isArray((msg as any).$unknown)) {
-    for (const uf of (msg as any).$unknown as UnknownField[]) {
+  enc.writeBool(7, globalThis.Boolean(msg.selfDescribing ?? msg.self_describing));
+  enc.writeBool(8, globalThis.Boolean(msg.testOpaqueSplice ?? msg.test_opaque_splice));
+  enc.writeBool(9, globalThis.Boolean(msg.testOpaqueSpliceShrink ?? msg.test_opaque_splice_shrink));
+  if (options?.writeUnknownFields && globalThis.Array.isArray((msg as any).$unknown)) {
+    for (const uf of (msg as any).$unknown as $ob.UnknownField[]) {
       enc.writeTag(uf.no, uf.wireType);
       enc.writeRaw(uf.data);
     }
@@ -229,14 +157,14 @@ export function encodeConformanceRequest(
 
 export function marshalConformanceRequestOmniBuf(
   msg: Partial<ConformanceRequest>,
-  options?: MarshalOptions,
-): Uint8Array {
-  const enc = new Encoder(256);
+  options?: $ob.MarshalOptions,
+): globalThis.Uint8Array {
+  const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
-    writeField0SchemaMeta(
+    $ob.writeField0SchemaMeta(
       enc,
-      ConformanceRequestSchema.getSchemaMeta(0, msg as Record<string, any>),
-      Boolean(options.deterministic),
+      ConformanceRequestSchema.getSchemaMeta(0, msg as { [key: string]: any }),
+      globalThis.Boolean(options.deterministic),
     );
   }
   encodeConformanceRequest(enc, msg, options);
@@ -244,42 +172,45 @@ export function marshalConformanceRequestOmniBuf(
 }
 
 export function decodeConformanceRequest(
-  buf: Uint8Array,
+  buf: globalThis.Uint8Array,
   target?: ConformanceRequest,
   depth = 0,
-  options?: BinaryReadOptions,
+  options?: $ob.BinaryReadOptions,
   startPos = 0,
   endPos = buf.length,
 ): ConformanceRequest {
-  const maxDepth = options?.recursionLimit ?? MaxNestingDepth;
+  const maxDepth = options?.recursionLimit ?? $ob.MaxNestingDepth;
   const readUnknown = options?.readUnknownFields ?? true;
   if (depth > maxDepth) {
-    throw new Error(`omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`);
+    throw new globalThis.Error(
+      `omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`,
+    );
   }
   const out: ConformanceRequest = target ?? new ConformanceRequestMsg();
   if (target !== undefined) {
     if (!(out instanceof ConformanceRequestMsg)) {
-      Object.setPrototypeOf(out, ConformanceRequestMsg.prototype);
+      globalThis.Object.setPrototypeOf(out, ConformanceRequestMsg.prototype);
     }
     if (!options?.merge) {
-      if (Object.hasOwn(out, 'test_name')) delete (out as any).test_name;
-      if (Object.hasOwn(out, 'message_type')) delete (out as any).message_type;
-      if (Object.hasOwn(out, 'requested_output_format'))
+      if (globalThis.Object.hasOwn(out, 'test_name')) delete (out as any).test_name;
+      if (globalThis.Object.hasOwn(out, 'message_type')) delete (out as any).message_type;
+      if (globalThis.Object.hasOwn(out, 'requested_output_format'))
         delete (out as any).requested_output_format;
-      if (Object.hasOwn(out, 'omnibuf_payload')) delete (out as any).omnibuf_payload;
-      if (Object.hasOwn(out, 'json_payload')) delete (out as any).json_payload;
-      if (Object.hasOwn(out, 'self_describing')) delete (out as any).self_describing;
-      if (Object.hasOwn(out, 'test_opaque_splice')) delete (out as any).test_opaque_splice;
-      if (Object.hasOwn(out, 'test_opaque_splice_shrink'))
+      if (globalThis.Object.hasOwn(out, 'omnibuf_payload')) delete (out as any).omnibuf_payload;
+      if (globalThis.Object.hasOwn(out, 'json_payload')) delete (out as any).json_payload;
+      if (globalThis.Object.hasOwn(out, 'self_describing')) delete (out as any).self_describing;
+      if (globalThis.Object.hasOwn(out, 'test_opaque_splice'))
+        delete (out as any).test_opaque_splice;
+      if (globalThis.Object.hasOwn(out, 'test_opaque_splice_shrink'))
         delete (out as any).test_opaque_splice_shrink;
-      Object.assign(out, new ConformanceRequestMsg());
-      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
+      globalThis.Object.assign(out, new ConformanceRequestMsg());
+      if (globalThis.Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
   let pos = startPos;
   let seenMask = 0;
-  let unknownFields: UnknownField[] | null = Array.isArray((out as any).$unknown)
+  let unknownFields: $ob.UnknownField[] | null = globalThis.Array.isArray((out as any).$unknown)
     ? (out as any).$unknown
     : null;
   while (pos < n) {
@@ -289,31 +220,36 @@ export function decodeConformanceRequest(
       tag = b0 >>> 1;
       pos += 1;
     } else if ((b0 & 2) !== 0) {
-      if (pos + 2 > n) throw new Error('omnibuf: truncated tag');
+      if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated tag');
       tag = ((b0 | (buf[pos + 1]! << 8)) >>> 2) >>> 0;
       pos += 2;
     } else {
-      const [t64, tn] = decodeVarintBigInt(buf, pos, n);
-      if (tn === 0 || t64 >> 4n > 536870911n) throw new Error('omnibuf: invalid tag');
-      tag = Number(t64);
+      const [t64, tn] = $ob.decodeVarintBigInt(buf, pos, n);
+      if (tn === 0 || t64 >> 4n > 536870911n) throw new globalThis.Error('omnibuf: invalid tag');
+      tag = globalThis.Number(t64);
       pos += tn;
     }
-    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);
+    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
     const wt = tag & 0x0f;
     if (fieldNum === 0) {
-      if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');
-      const [meta, nextPos] = readLenSlice(buf, pos, 0, n);
-      $decodeSchemaMeta(meta, depth + 1, maxDepth);
+      const nextPos = $ob.validateField0At(buf, pos, wt, depth, maxDepth, n);
+      if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
       pos = nextPos;
       continue;
     }
     const bit = fieldNum <= 30 ? 1 << fieldNum : 0;
-    const alreadySeen = (seenMask & bit) !== 0 || Boolean(options?.merge);
+    const alreadySeen = (seenMask & bit) !== 0 || globalThis.Boolean(options?.merge);
     switch (fieldNum) {
       case 1: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -325,17 +261,17 @@ export function decodeConformanceRequest(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.testName = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.testName = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.testName = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.testName = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -343,7 +279,13 @@ export function decodeConformanceRequest(
       case 2: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -355,17 +297,17 @@ export function decodeConformanceRequest(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.messageType = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.messageType = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.messageType = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.messageType = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -373,7 +315,13 @@ export function decodeConformanceRequest(
       case 3: {
         if (!(wt === 1)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -385,7 +333,7 @@ export function decodeConformanceRequest(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated int32/enum');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated int32/enum');
         const vb = buf[pos]!;
         let i32Val = 0;
         if ((vb & 1) !== 0) {
@@ -393,21 +341,21 @@ export function decodeConformanceRequest(
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 1;
         } else if ((vb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: truncated int32/enum');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated int32/enum');
           const u = (vb | (buf[pos + 1]! << 8)) >>> 2;
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 2;
         } else if ((vb & 4) !== 0) {
-          if (pos + 4 > n) throw new Error('omnibuf: truncated int32/enum');
+          if (pos + 4 > n) throw new globalThis.Error('omnibuf: truncated int32/enum');
           const u =
             ((vb | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 3) >>>
             0;
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 4;
         } else {
-          const [v, vn] = decodeVarintBigInt(buf, pos, n);
-          if (vn === 0) throw new Error('omnibuf: truncated int32/enum');
-          i32Val = decodeZigZag32(v);
+          const [v, vn] = $ob.decodeVarintBigInt(buf, pos, n);
+          if (vn === 0) throw new globalThis.Error('omnibuf: truncated int32/enum');
+          i32Val = $ob.decodeZigZag32(v);
           pos += vn;
         }
         out.tier = i32Val as any;
@@ -416,7 +364,13 @@ export function decodeConformanceRequest(
       case 4: {
         if (!(wt === 1)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -428,7 +382,7 @@ export function decodeConformanceRequest(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated int32/enum');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated int32/enum');
         const vb = buf[pos]!;
         let i32Val = 0;
         if ((vb & 1) !== 0) {
@@ -436,21 +390,21 @@ export function decodeConformanceRequest(
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 1;
         } else if ((vb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: truncated int32/enum');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated int32/enum');
           const u = (vb | (buf[pos + 1]! << 8)) >>> 2;
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 2;
         } else if ((vb & 4) !== 0) {
-          if (pos + 4 > n) throw new Error('omnibuf: truncated int32/enum');
+          if (pos + 4 > n) throw new globalThis.Error('omnibuf: truncated int32/enum');
           const u =
             ((vb | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 3) >>>
             0;
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 4;
         } else {
-          const [v, vn] = decodeVarintBigInt(buf, pos, n);
-          if (vn === 0) throw new Error('omnibuf: truncated int32/enum');
-          i32Val = decodeZigZag32(v);
+          const [v, vn] = $ob.decodeVarintBigInt(buf, pos, n);
+          if (vn === 0) throw new globalThis.Error('omnibuf: truncated int32/enum');
+          i32Val = $ob.decodeZigZag32(v);
           pos += vn;
         }
         out.requestedOutputFormat = i32Val as any;
@@ -459,7 +413,13 @@ export function decodeConformanceRequest(
       case 5: {
         if (!(wt === 11)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -471,15 +431,21 @@ export function decodeConformanceRequest(
           break;
         }
         seenMask |= bit;
-        const [b, nextPos] = readLenSlice(buf, pos, 0, n);
-        out.omnibufPayload = b.slice();
+        const [b, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+        out.omnibufPayload = options?.zeroCopy ? b : b.slice();
         pos = nextPos;
         break;
       }
       case 6: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -491,17 +457,17 @@ export function decodeConformanceRequest(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.jsonPayload = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.jsonPayload = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.jsonPayload = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.jsonPayload = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -509,7 +475,13 @@ export function decodeConformanceRequest(
       case 7: {
         if (!(wt === 2 || wt === 3)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -527,7 +499,13 @@ export function decodeConformanceRequest(
       case 8: {
         if (!(wt === 2 || wt === 3)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -545,7 +523,13 @@ export function decodeConformanceRequest(
       case 9: {
         if (!(wt === 2 || wt === 3)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -562,7 +546,13 @@ export function decodeConformanceRequest(
       }
       default: {
         const valStart = pos;
-        pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+        pos = $ob.validateValue(
+          n < buf.length ? buf.subarray(0, n) : buf,
+          pos,
+          wt,
+          depth,
+          maxDepth,
+        );
         if (readUnknown) {
           if (!unknownFields) unknownFields = [];
           unknownFields.push({
@@ -576,7 +566,7 @@ export function decodeConformanceRequest(
     }
   }
   if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {
-    Object.defineProperty(out, '$unknown', {
+    globalThis.Object.defineProperty(out, '$unknown', {
       value: unknownFields,
       enumerable: false,
       writable: true,
@@ -587,8 +577,8 @@ export function decodeConformanceRequest(
 }
 
 export function unmarshalConformanceRequestOmniBuf(
-  buf: Uint8Array,
-  options?: BinaryReadOptions,
+  buf: globalThis.Uint8Array,
+  options?: $ob.BinaryReadOptions,
 ): ConformanceRequest {
   return decodeConformanceRequest(buf, undefined, 0, options);
 }
@@ -598,25 +588,44 @@ ConformanceRequestSchema.setGeneratedCodec({
   encode: encodeConformanceRequest,
   decode: decodeConformanceRequest,
 });
+$ob.registerClassSchema(
+  ConformanceRequestMsg as unknown as new () => ConformanceRequest,
+  ConformanceRequestSchema,
+);
 
 export class OpaqueConformanceRequest {
-  private _raw: Uint8Array;
+  private _raw: globalThis.Uint8Array;
+  private _depth: number;
+  private _readCount = 0;
+  private _fieldIndex: globalThis.Map<number, $ob.OpaqueFieldSpan> | null = null;
   private _dirtyMask = 0;
   private _testName?: string;
   private _messageType?: string;
   private _tier?: TestTier;
   private _requestedOutputFormat?: WireFormat;
-  private _omnibufPayload?: Uint8Array;
+  private _omnibufPayload?: globalThis.Uint8Array;
   private _jsonPayload?: string;
   private _selfDescribing?: boolean;
   private _testOpaqueSplice?: boolean;
   private _testOpaqueSpliceShrink?: boolean;
 
-  constructor(raw: Uint8Array) {
+  constructor(raw: globalThis.Uint8Array, depth = 0) {
     this._raw = raw;
+    this._depth = depth;
   }
 
-  raw(): Uint8Array {
+  private _sliceField(fieldNum: number): globalThis.Uint8Array | null {
+    if (this._fieldIndex === null) {
+      if (this._readCount < 2) {
+        this._readCount++;
+        return this._raw;
+      }
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+    }
+    return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
+  }
+
+  raw(): globalThis.Uint8Array {
     return this._raw;
   }
 
@@ -624,7 +633,8 @@ export class OpaqueConformanceRequest {
     if ((this._dirtyMask & (1 << 1)) !== 0) {
       return this._testName!;
     }
-    return readString(this._raw, 1)[0];
+    const __src = this._sliceField(1);
+    return __src ? $ob.readString(__src, 1)[0] : '';
   }
 
   testName(): string {
@@ -644,7 +654,8 @@ export class OpaqueConformanceRequest {
     if ((this._dirtyMask & (1 << 2)) !== 0) {
       return this._messageType!;
     }
-    return readString(this._raw, 2)[0];
+    const __src = this._sliceField(2);
+    return __src ? $ob.readString(__src, 2)[0] : '';
   }
 
   messageType(): string {
@@ -664,7 +675,8 @@ export class OpaqueConformanceRequest {
     if ((this._dirtyMask & (1 << 3)) !== 0) {
       return this._tier!;
     }
-    return readEnum(this._raw, 3)[0] as any;
+    const __src = this._sliceField(3);
+    return (__src ? $ob.readEnum(__src, 3)[0] : 0) as any;
   }
 
   tier(): TestTier {
@@ -680,7 +692,8 @@ export class OpaqueConformanceRequest {
     if ((this._dirtyMask & (1 << 4)) !== 0) {
       return this._requestedOutputFormat!;
     }
-    return readEnum(this._raw, 4)[0] as any;
+    const __src = this._sliceField(4);
+    return (__src ? $ob.readEnum(__src, 4)[0] : 0) as any;
   }
 
   requestedOutputFormat(): WireFormat {
@@ -696,22 +709,31 @@ export class OpaqueConformanceRequest {
     this._dirtyMask |= 1 << 4;
   }
 
-  getOmnibufPayload(): Uint8Array {
+  getOmnibufPayload(): globalThis.Uint8Array {
     if ((this._dirtyMask & (1 << 5)) !== 0) {
       return this._omnibufPayload!;
     }
-    return readBytes(this._raw, 5)[0];
+    const __src = this._sliceField(5);
+    return __src ? $ob.readBytes(__src, 5)[0] : new globalThis.Uint8Array(0);
   }
 
-  omnibufPayload(): Uint8Array {
+  getOmnibufPayloadView(): globalThis.Uint8Array {
+    if ((this._dirtyMask & (1 << 5)) !== 0) {
+      return this._omnibufPayload!;
+    }
+    const __src = this._sliceField(5);
+    return __src ? $ob.readBytesView(__src, 5)[0] : new globalThis.Uint8Array(0);
+  }
+
+  omnibufPayload(): globalThis.Uint8Array {
     return this.getOmnibufPayload();
   }
 
-  omnibuf_payload(): Uint8Array {
+  omnibuf_payload(): globalThis.Uint8Array {
     return this.getOmnibufPayload();
   }
 
-  setOmnibufPayload(val: Uint8Array): void {
+  setOmnibufPayload(val: globalThis.Uint8Array): void {
     this._omnibufPayload = val;
     this._dirtyMask |= 1 << 5;
   }
@@ -720,7 +742,8 @@ export class OpaqueConformanceRequest {
     if ((this._dirtyMask & (1 << 6)) !== 0) {
       return this._jsonPayload!;
     }
-    return readString(this._raw, 6)[0];
+    const __src = this._sliceField(6);
+    return __src ? $ob.readString(__src, 6)[0] : '';
   }
 
   jsonPayload(): string {
@@ -740,7 +763,8 @@ export class OpaqueConformanceRequest {
     if ((this._dirtyMask & (1 << 7)) !== 0) {
       return this._selfDescribing!;
     }
-    return readBool(this._raw, 7)[0];
+    const __src = this._sliceField(7);
+    return __src ? $ob.readBool(__src, 7)[0] : false;
   }
 
   selfDescribing(): boolean {
@@ -760,7 +784,8 @@ export class OpaqueConformanceRequest {
     if ((this._dirtyMask & (1 << 8)) !== 0) {
       return this._testOpaqueSplice!;
     }
-    return readBool(this._raw, 8)[0];
+    const __src = this._sliceField(8);
+    return __src ? $ob.readBool(__src, 8)[0] : false;
   }
 
   testOpaqueSplice(): boolean {
@@ -780,7 +805,8 @@ export class OpaqueConformanceRequest {
     if ((this._dirtyMask & (1 << 9)) !== 0) {
       return this._testOpaqueSpliceShrink!;
     }
-    return readBool(this._raw, 9)[0];
+    const __src = this._sliceField(9);
+    return __src ? $ob.readBool(__src, 9)[0] : false;
   }
 
   testOpaqueSpliceShrink(): boolean {
@@ -796,9 +822,10 @@ export class OpaqueConformanceRequest {
     this._dirtyMask |= 1 << 9;
   }
 
-  marshal(options?: MarshalOptions): Uint8Array {
+  marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
+    let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      this._raw = spliceFields(this._raw, this._dirtyMask, 9, (enc, fnum) => {
+      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 9, (enc, fnum) => {
         switch (fnum) {
           case 1: {
             const msg = { testName: this._testName! } as Partial<ConformanceRequest>;
@@ -812,7 +839,7 @@ export class OpaqueConformanceRequest {
           }
           case 3: {
             const msg = { tier: this._tier! } as Partial<ConformanceRequest>;
-            enc.writeInt(3, Number(msg.tier ?? 0) | 0);
+            enc.writeInt(3, globalThis.Number(msg.tier ?? 0) | 0);
             break;
           }
           case 4: {
@@ -821,13 +848,16 @@ export class OpaqueConformanceRequest {
             } as Partial<ConformanceRequest>;
             enc.writeInt(
               4,
-              Number(msg.requestedOutputFormat ?? msg.requested_output_format ?? 0) | 0,
+              globalThis.Number(msg.requestedOutputFormat ?? msg.requested_output_format ?? 0) | 0,
             );
             break;
           }
           case 5: {
             const msg = { omnibufPayload: this._omnibufPayload! } as Partial<ConformanceRequest>;
-            enc.writeBytes(5, msg.omnibufPayload ?? msg.omnibuf_payload ?? new Uint8Array(0));
+            enc.writeBytes(
+              5,
+              msg.omnibufPayload ?? msg.omnibuf_payload ?? new globalThis.Uint8Array(0),
+            );
             break;
           }
           case 6: {
@@ -837,44 +867,66 @@ export class OpaqueConformanceRequest {
           }
           case 7: {
             const msg = { selfDescribing: this._selfDescribing! } as Partial<ConformanceRequest>;
-            enc.writeBool(7, Boolean(msg.selfDescribing ?? msg.self_describing));
+            enc.writeBool(7, globalThis.Boolean(msg.selfDescribing ?? msg.self_describing));
             break;
           }
           case 8: {
             const msg = {
               testOpaqueSplice: this._testOpaqueSplice!,
             } as Partial<ConformanceRequest>;
-            enc.writeBool(8, Boolean(msg.testOpaqueSplice ?? msg.test_opaque_splice));
+            enc.writeBool(8, globalThis.Boolean(msg.testOpaqueSplice ?? msg.test_opaque_splice));
             break;
           }
           case 9: {
             const msg = {
               testOpaqueSpliceShrink: this._testOpaqueSpliceShrink!,
             } as Partial<ConformanceRequest>;
-            enc.writeBool(9, Boolean(msg.testOpaqueSpliceShrink ?? msg.test_opaque_splice_shrink));
+            enc.writeBool(
+              9,
+              globalThis.Boolean(msg.testOpaqueSpliceShrink ?? msg.test_opaque_splice_shrink),
+            );
             break;
           }
         }
       });
-      this._dirtyMask = 0;
     } else {
-      validateMessage(this._raw);
+      $ob.validateMessage(this._raw, this._depth);
+      outBuf = this._raw.slice();
     }
-    if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
-      const f0 = encodeField0SchemaMeta(
+    if (options?.selfDescribing && !$ob.readField0SchemaMeta(outBuf)[1]) {
+      const f0 = $ob.encodeField0SchemaMeta(
         ConformanceRequestSchema.getSchemaMeta(0),
-        Boolean(options.deterministic),
+        globalThis.Boolean(options.deterministic),
       );
-      const out = new Uint8Array(f0.length + this._raw.length);
-      out.set(f0, 0);
-      out.set(this._raw, f0.length);
-      return out;
+      const withF0 = new globalThis.Uint8Array(f0.length + outBuf.length);
+      withF0.set(f0, 0);
+      withF0.set(outBuf, f0.length);
+      return withF0;
     }
-    return this._raw;
+    return outBuf;
+  }
+
+  marshalValidated(options?: $ob.MarshalOptions): globalThis.Uint8Array {
+    const out = this.marshal(options);
+    $ob.validateMessage(out, this._depth);
+    return out;
+  }
+
+  tryMarshal(
+    options?: $ob.MarshalOptions,
+  ): { ok: true; value: globalThis.Uint8Array } | { ok: false; error: globalThis.Error } {
+    try {
+      return { ok: true, value: this.marshalValidated(options) };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof globalThis.Error ? err : new globalThis.Error(globalThis.String(err)),
+      };
+    }
   }
 }
 
-export interface ConformanceResponse extends Message<'omnibuf.conformance.ConformanceResponse'> {
+export interface ConformanceResponse extends $ob.Message<'omnibuf.conformance.ConformanceResponse'> {
   parseError: string;
   parse_error?: string;
   serializeError: string;
@@ -882,16 +934,16 @@ export interface ConformanceResponse extends Message<'omnibuf.conformance.Confor
   runtimeError: string;
   runtime_error?: string;
   skipped: string;
-  omnibufPayload: Uint8Array;
-  omnibuf_payload?: Uint8Array;
+  omnibufPayload: globalThis.Uint8Array;
+  omnibuf_payload?: globalThis.Uint8Array;
   jsonPayload: string;
   json_payload?: string;
 }
 
-export const ConformanceResponseSchema: MessageSchema<
+export const ConformanceResponseSchema: $ob.MessageSchema<
   ConformanceResponse,
   'omnibuf.conformance.ConformanceResponse'
-> = defineMessage<ConformanceResponse, 'omnibuf.conformance.ConformanceResponse'>(
+> = $ob.defineMessage<ConformanceResponse, 'omnibuf.conformance.ConformanceResponse'>(
   'omnibuf.conformance.ConformanceResponse',
   {
     parseError: { fieldNum: 1, name: 'parse_error', type: 'string' },
@@ -927,11 +979,11 @@ class ConformanceResponseMsg implements ConformanceResponse {
     this.runtimeError = v as any;
   }
   skipped: string = '';
-  omnibufPayload: Uint8Array = new Uint8Array(0);
-  get omnibuf_payload(): Uint8Array {
+  omnibufPayload: globalThis.Uint8Array = new globalThis.Uint8Array(0);
+  get omnibuf_payload(): globalThis.Uint8Array {
     return this.omnibufPayload;
   }
-  set omnibuf_payload(v: Uint8Array | undefined) {
+  set omnibuf_payload(v: globalThis.Uint8Array | undefined) {
     this.omnibufPayload = v as any;
   }
   jsonPayload: string = '';
@@ -942,7 +994,7 @@ class ConformanceResponseMsg implements ConformanceResponse {
     this.jsonPayload = v as any;
   }
 }
-Object.defineProperty(ConformanceResponseMsg.prototype, '$typeName', {
+globalThis.Object.defineProperty(ConformanceResponseMsg.prototype, '$typeName', {
   value: 'omnibuf.conformance.ConformanceResponse',
   enumerable: false,
   writable: true,
@@ -950,25 +1002,25 @@ Object.defineProperty(ConformanceResponseMsg.prototype, '$typeName', {
 });
 
 export function createConformanceResponse(
-  init?: MessageInitShape<typeof ConformanceResponseSchema>,
+  init?: $ob.MessageInitShape<typeof ConformanceResponseSchema>,
 ): ConformanceResponse {
   if (init === undefined) return new ConformanceResponseMsg();
   return ConformanceResponseSchema.create(init);
 }
 
 export function encodeConformanceResponse(
-  enc: Encoder,
+  enc: $ob.Encoder,
   msg: Partial<ConformanceResponse>,
-  options?: MarshalOptions,
+  options?: $ob.MarshalOptions,
 ): void {
   enc.writeString(1, msg.parseError ?? msg.parse_error ?? '');
   enc.writeString(2, msg.serializeError ?? msg.serialize_error ?? '');
   enc.writeString(3, msg.runtimeError ?? msg.runtime_error ?? '');
   enc.writeString(4, msg.skipped ?? '');
-  enc.writeBytes(5, msg.omnibufPayload ?? msg.omnibuf_payload ?? new Uint8Array(0));
+  enc.writeBytes(5, msg.omnibufPayload ?? msg.omnibuf_payload ?? new globalThis.Uint8Array(0));
   enc.writeString(6, msg.jsonPayload ?? msg.json_payload ?? '');
-  if (options?.writeUnknownFields && Array.isArray((msg as any).$unknown)) {
-    for (const uf of (msg as any).$unknown as UnknownField[]) {
+  if (options?.writeUnknownFields && globalThis.Array.isArray((msg as any).$unknown)) {
+    for (const uf of (msg as any).$unknown as $ob.UnknownField[]) {
       enc.writeTag(uf.no, uf.wireType);
       enc.writeRaw(uf.data);
     }
@@ -977,14 +1029,14 @@ export function encodeConformanceResponse(
 
 export function marshalConformanceResponseOmniBuf(
   msg: Partial<ConformanceResponse>,
-  options?: MarshalOptions,
-): Uint8Array {
-  const enc = new Encoder(256);
+  options?: $ob.MarshalOptions,
+): globalThis.Uint8Array {
+  const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
-    writeField0SchemaMeta(
+    $ob.writeField0SchemaMeta(
       enc,
-      ConformanceResponseSchema.getSchemaMeta(0, msg as Record<string, any>),
-      Boolean(options.deterministic),
+      ConformanceResponseSchema.getSchemaMeta(0, msg as { [key: string]: any }),
+      globalThis.Boolean(options.deterministic),
     );
   }
   encodeConformanceResponse(enc, msg, options);
@@ -992,37 +1044,39 @@ export function marshalConformanceResponseOmniBuf(
 }
 
 export function decodeConformanceResponse(
-  buf: Uint8Array,
+  buf: globalThis.Uint8Array,
   target?: ConformanceResponse,
   depth = 0,
-  options?: BinaryReadOptions,
+  options?: $ob.BinaryReadOptions,
   startPos = 0,
   endPos = buf.length,
 ): ConformanceResponse {
-  const maxDepth = options?.recursionLimit ?? MaxNestingDepth;
+  const maxDepth = options?.recursionLimit ?? $ob.MaxNestingDepth;
   const readUnknown = options?.readUnknownFields ?? true;
   if (depth > maxDepth) {
-    throw new Error(`omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`);
+    throw new globalThis.Error(
+      `omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`,
+    );
   }
   const out: ConformanceResponse = target ?? new ConformanceResponseMsg();
   if (target !== undefined) {
     if (!(out instanceof ConformanceResponseMsg)) {
-      Object.setPrototypeOf(out, ConformanceResponseMsg.prototype);
+      globalThis.Object.setPrototypeOf(out, ConformanceResponseMsg.prototype);
     }
     if (!options?.merge) {
-      if (Object.hasOwn(out, 'parse_error')) delete (out as any).parse_error;
-      if (Object.hasOwn(out, 'serialize_error')) delete (out as any).serialize_error;
-      if (Object.hasOwn(out, 'runtime_error')) delete (out as any).runtime_error;
-      if (Object.hasOwn(out, 'omnibuf_payload')) delete (out as any).omnibuf_payload;
-      if (Object.hasOwn(out, 'json_payload')) delete (out as any).json_payload;
-      Object.assign(out, new ConformanceResponseMsg());
-      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
+      if (globalThis.Object.hasOwn(out, 'parse_error')) delete (out as any).parse_error;
+      if (globalThis.Object.hasOwn(out, 'serialize_error')) delete (out as any).serialize_error;
+      if (globalThis.Object.hasOwn(out, 'runtime_error')) delete (out as any).runtime_error;
+      if (globalThis.Object.hasOwn(out, 'omnibuf_payload')) delete (out as any).omnibuf_payload;
+      if (globalThis.Object.hasOwn(out, 'json_payload')) delete (out as any).json_payload;
+      globalThis.Object.assign(out, new ConformanceResponseMsg());
+      if (globalThis.Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
   let pos = startPos;
   let seenMask = 0;
-  let unknownFields: UnknownField[] | null = Array.isArray((out as any).$unknown)
+  let unknownFields: $ob.UnknownField[] | null = globalThis.Array.isArray((out as any).$unknown)
     ? (out as any).$unknown
     : null;
   while (pos < n) {
@@ -1032,31 +1086,36 @@ export function decodeConformanceResponse(
       tag = b0 >>> 1;
       pos += 1;
     } else if ((b0 & 2) !== 0) {
-      if (pos + 2 > n) throw new Error('omnibuf: truncated tag');
+      if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated tag');
       tag = ((b0 | (buf[pos + 1]! << 8)) >>> 2) >>> 0;
       pos += 2;
     } else {
-      const [t64, tn] = decodeVarintBigInt(buf, pos, n);
-      if (tn === 0 || t64 >> 4n > 536870911n) throw new Error('omnibuf: invalid tag');
-      tag = Number(t64);
+      const [t64, tn] = $ob.decodeVarintBigInt(buf, pos, n);
+      if (tn === 0 || t64 >> 4n > 536870911n) throw new globalThis.Error('omnibuf: invalid tag');
+      tag = globalThis.Number(t64);
       pos += tn;
     }
-    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);
+    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
     const wt = tag & 0x0f;
     if (fieldNum === 0) {
-      if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');
-      const [meta, nextPos] = readLenSlice(buf, pos, 0, n);
-      $decodeSchemaMeta(meta, depth + 1, maxDepth);
+      const nextPos = $ob.validateField0At(buf, pos, wt, depth, maxDepth, n);
+      if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
       pos = nextPos;
       continue;
     }
     const bit = fieldNum <= 30 ? 1 << fieldNum : 0;
-    const alreadySeen = (seenMask & bit) !== 0 || Boolean(options?.merge);
+    const alreadySeen = (seenMask & bit) !== 0 || globalThis.Boolean(options?.merge);
     switch (fieldNum) {
       case 1: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1068,17 +1127,17 @@ export function decodeConformanceResponse(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.parseError = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.parseError = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.parseError = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.parseError = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -1086,7 +1145,13 @@ export function decodeConformanceResponse(
       case 2: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1098,17 +1163,17 @@ export function decodeConformanceResponse(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.serializeError = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.serializeError = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.serializeError = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.serializeError = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -1116,7 +1181,13 @@ export function decodeConformanceResponse(
       case 3: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1128,17 +1199,17 @@ export function decodeConformanceResponse(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.runtimeError = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.runtimeError = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.runtimeError = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.runtimeError = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -1146,7 +1217,13 @@ export function decodeConformanceResponse(
       case 4: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1158,17 +1235,17 @@ export function decodeConformanceResponse(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.skipped = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.skipped = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.skipped = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.skipped = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -1176,7 +1253,13 @@ export function decodeConformanceResponse(
       case 5: {
         if (!(wt === 11)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1188,15 +1271,21 @@ export function decodeConformanceResponse(
           break;
         }
         seenMask |= bit;
-        const [b, nextPos] = readLenSlice(buf, pos, 0, n);
-        out.omnibufPayload = b.slice();
+        const [b, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+        out.omnibufPayload = options?.zeroCopy ? b : b.slice();
         pos = nextPos;
         break;
       }
       case 6: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1208,24 +1297,30 @@ export function decodeConformanceResponse(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.jsonPayload = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.jsonPayload = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.jsonPayload = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.jsonPayload = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
       }
       default: {
         const valStart = pos;
-        pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+        pos = $ob.validateValue(
+          n < buf.length ? buf.subarray(0, n) : buf,
+          pos,
+          wt,
+          depth,
+          maxDepth,
+        );
         if (readUnknown) {
           if (!unknownFields) unknownFields = [];
           unknownFields.push({
@@ -1239,7 +1334,7 @@ export function decodeConformanceResponse(
     }
   }
   if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {
-    Object.defineProperty(out, '$unknown', {
+    globalThis.Object.defineProperty(out, '$unknown', {
       value: unknownFields,
       enumerable: false,
       writable: true,
@@ -1250,8 +1345,8 @@ export function decodeConformanceResponse(
 }
 
 export function unmarshalConformanceResponseOmniBuf(
-  buf: Uint8Array,
-  options?: BinaryReadOptions,
+  buf: globalThis.Uint8Array,
+  options?: $ob.BinaryReadOptions,
 ): ConformanceResponse {
   return decodeConformanceResponse(buf, undefined, 0, options);
 }
@@ -1261,22 +1356,41 @@ ConformanceResponseSchema.setGeneratedCodec({
   encode: encodeConformanceResponse,
   decode: decodeConformanceResponse,
 });
+$ob.registerClassSchema(
+  ConformanceResponseMsg as unknown as new () => ConformanceResponse,
+  ConformanceResponseSchema,
+);
 
 export class OpaqueConformanceResponse {
-  private _raw: Uint8Array;
+  private _raw: globalThis.Uint8Array;
+  private _depth: number;
+  private _readCount = 0;
+  private _fieldIndex: globalThis.Map<number, $ob.OpaqueFieldSpan> | null = null;
   private _dirtyMask = 0;
   private _parseError?: string;
   private _serializeError?: string;
   private _runtimeError?: string;
   private _skipped?: string;
-  private _omnibufPayload?: Uint8Array;
+  private _omnibufPayload?: globalThis.Uint8Array;
   private _jsonPayload?: string;
 
-  constructor(raw: Uint8Array) {
+  constructor(raw: globalThis.Uint8Array, depth = 0) {
     this._raw = raw;
+    this._depth = depth;
   }
 
-  raw(): Uint8Array {
+  private _sliceField(fieldNum: number): globalThis.Uint8Array | null {
+    if (this._fieldIndex === null) {
+      if (this._readCount < 2) {
+        this._readCount++;
+        return this._raw;
+      }
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+    }
+    return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
+  }
+
+  raw(): globalThis.Uint8Array {
     return this._raw;
   }
 
@@ -1284,7 +1398,8 @@ export class OpaqueConformanceResponse {
     if ((this._dirtyMask & (1 << 1)) !== 0) {
       return this._parseError!;
     }
-    return readString(this._raw, 1)[0];
+    const __src = this._sliceField(1);
+    return __src ? $ob.readString(__src, 1)[0] : '';
   }
 
   parseError(): string {
@@ -1304,7 +1419,8 @@ export class OpaqueConformanceResponse {
     if ((this._dirtyMask & (1 << 2)) !== 0) {
       return this._serializeError!;
     }
-    return readString(this._raw, 2)[0];
+    const __src = this._sliceField(2);
+    return __src ? $ob.readString(__src, 2)[0] : '';
   }
 
   serializeError(): string {
@@ -1324,7 +1440,8 @@ export class OpaqueConformanceResponse {
     if ((this._dirtyMask & (1 << 3)) !== 0) {
       return this._runtimeError!;
     }
-    return readString(this._raw, 3)[0];
+    const __src = this._sliceField(3);
+    return __src ? $ob.readString(__src, 3)[0] : '';
   }
 
   runtimeError(): string {
@@ -1344,7 +1461,8 @@ export class OpaqueConformanceResponse {
     if ((this._dirtyMask & (1 << 4)) !== 0) {
       return this._skipped!;
     }
-    return readString(this._raw, 4)[0];
+    const __src = this._sliceField(4);
+    return __src ? $ob.readString(__src, 4)[0] : '';
   }
 
   skipped(): string {
@@ -1356,22 +1474,31 @@ export class OpaqueConformanceResponse {
     this._dirtyMask |= 1 << 4;
   }
 
-  getOmnibufPayload(): Uint8Array {
+  getOmnibufPayload(): globalThis.Uint8Array {
     if ((this._dirtyMask & (1 << 5)) !== 0) {
       return this._omnibufPayload!;
     }
-    return readBytes(this._raw, 5)[0];
+    const __src = this._sliceField(5);
+    return __src ? $ob.readBytes(__src, 5)[0] : new globalThis.Uint8Array(0);
   }
 
-  omnibufPayload(): Uint8Array {
+  getOmnibufPayloadView(): globalThis.Uint8Array {
+    if ((this._dirtyMask & (1 << 5)) !== 0) {
+      return this._omnibufPayload!;
+    }
+    const __src = this._sliceField(5);
+    return __src ? $ob.readBytesView(__src, 5)[0] : new globalThis.Uint8Array(0);
+  }
+
+  omnibufPayload(): globalThis.Uint8Array {
     return this.getOmnibufPayload();
   }
 
-  omnibuf_payload(): Uint8Array {
+  omnibuf_payload(): globalThis.Uint8Array {
     return this.getOmnibufPayload();
   }
 
-  setOmnibufPayload(val: Uint8Array): void {
+  setOmnibufPayload(val: globalThis.Uint8Array): void {
     this._omnibufPayload = val;
     this._dirtyMask |= 1 << 5;
   }
@@ -1380,7 +1507,8 @@ export class OpaqueConformanceResponse {
     if ((this._dirtyMask & (1 << 6)) !== 0) {
       return this._jsonPayload!;
     }
-    return readString(this._raw, 6)[0];
+    const __src = this._sliceField(6);
+    return __src ? $ob.readString(__src, 6)[0] : '';
   }
 
   jsonPayload(): string {
@@ -1396,9 +1524,10 @@ export class OpaqueConformanceResponse {
     this._dirtyMask |= 1 << 6;
   }
 
-  marshal(options?: MarshalOptions): Uint8Array {
+  marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
+    let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      this._raw = spliceFields(this._raw, this._dirtyMask, 6, (enc, fnum) => {
+      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 6, (enc, fnum) => {
         switch (fnum) {
           case 1: {
             const msg = { parseError: this._parseError! } as Partial<ConformanceResponse>;
@@ -1422,7 +1551,10 @@ export class OpaqueConformanceResponse {
           }
           case 5: {
             const msg = { omnibufPayload: this._omnibufPayload! } as Partial<ConformanceResponse>;
-            enc.writeBytes(5, msg.omnibufPayload ?? msg.omnibuf_payload ?? new Uint8Array(0));
+            enc.writeBytes(
+              5,
+              msg.omnibufPayload ?? msg.omnibuf_payload ?? new globalThis.Uint8Array(0),
+            );
             break;
           }
           case 6: {
@@ -1432,35 +1564,54 @@ export class OpaqueConformanceResponse {
           }
         }
       });
-      this._dirtyMask = 0;
     } else {
-      validateMessage(this._raw);
+      $ob.validateMessage(this._raw, this._depth);
+      outBuf = this._raw.slice();
     }
-    if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
-      const f0 = encodeField0SchemaMeta(
+    if (options?.selfDescribing && !$ob.readField0SchemaMeta(outBuf)[1]) {
+      const f0 = $ob.encodeField0SchemaMeta(
         ConformanceResponseSchema.getSchemaMeta(0),
-        Boolean(options.deterministic),
+        globalThis.Boolean(options.deterministic),
       );
-      const out = new Uint8Array(f0.length + this._raw.length);
-      out.set(f0, 0);
-      out.set(this._raw, f0.length);
-      return out;
+      const withF0 = new globalThis.Uint8Array(f0.length + outBuf.length);
+      withF0.set(f0, 0);
+      withF0.set(outBuf, f0.length);
+      return withF0;
     }
-    return this._raw;
+    return outBuf;
+  }
+
+  marshalValidated(options?: $ob.MarshalOptions): globalThis.Uint8Array {
+    const out = this.marshal(options);
+    $ob.validateMessage(out, this._depth);
+    return out;
+  }
+
+  tryMarshal(
+    options?: $ob.MarshalOptions,
+  ): { ok: true; value: globalThis.Uint8Array } | { ok: false; error: globalThis.Error } {
+    try {
+      return { ok: true, value: this.marshalValidated(options) };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof globalThis.Error ? err : new globalThis.Error(globalThis.String(err)),
+      };
+    }
   }
 }
 
-export interface AllTypesSubMsg extends Message<'omnibuf.conformance.AllTypesSubMsg'> {
+export interface AllTypesSubMsg extends $ob.Message<'omnibuf.conformance.AllTypesSubMsg'> {
   id: number;
   label: string;
   flag: boolean;
   score: number | bigint;
 }
 
-export const AllTypesSubMsgSchema: MessageSchema<
+export const AllTypesSubMsgSchema: $ob.MessageSchema<
   AllTypesSubMsg,
   'omnibuf.conformance.AllTypesSubMsg'
-> = defineMessage<AllTypesSubMsg, 'omnibuf.conformance.AllTypesSubMsg'>(
+> = $ob.defineMessage<AllTypesSubMsg, 'omnibuf.conformance.AllTypesSubMsg'>(
   'omnibuf.conformance.AllTypesSubMsg',
   {
     id: { fieldNum: 1, type: 'uint32' },
@@ -1477,7 +1628,7 @@ class AllTypesSubMsgMsg implements AllTypesSubMsg {
   flag: boolean = false;
   score: number | bigint = 0;
 }
-Object.defineProperty(AllTypesSubMsgMsg.prototype, '$typeName', {
+globalThis.Object.defineProperty(AllTypesSubMsgMsg.prototype, '$typeName', {
   value: 'omnibuf.conformance.AllTypesSubMsg',
   enumerable: false,
   writable: true,
@@ -1485,23 +1636,23 @@ Object.defineProperty(AllTypesSubMsgMsg.prototype, '$typeName', {
 });
 
 export function createAllTypesSubMsg(
-  init?: MessageInitShape<typeof AllTypesSubMsgSchema>,
+  init?: $ob.MessageInitShape<typeof AllTypesSubMsgSchema>,
 ): AllTypesSubMsg {
   if (init === undefined) return new AllTypesSubMsgMsg();
   return AllTypesSubMsgSchema.create(init);
 }
 
 export function encodeAllTypesSubMsg(
-  enc: Encoder,
+  enc: $ob.Encoder,
   msg: Partial<AllTypesSubMsg>,
-  options?: MarshalOptions,
+  options?: $ob.MarshalOptions,
 ): void {
-  enc.writeUint(1, Number(msg.id ?? 0) >>> 0);
+  enc.writeUint(1, globalThis.Number(msg.id ?? 0) >>> 0);
   enc.writeString(2, msg.label ?? '');
-  enc.writeBool(3, Boolean(msg.flag));
+  enc.writeBool(3, globalThis.Boolean(msg.flag));
   enc.writeInt(4, msg.score ?? 0);
-  if (options?.writeUnknownFields && Array.isArray((msg as any).$unknown)) {
-    for (const uf of (msg as any).$unknown as UnknownField[]) {
+  if (options?.writeUnknownFields && globalThis.Array.isArray((msg as any).$unknown)) {
+    for (const uf of (msg as any).$unknown as $ob.UnknownField[]) {
       enc.writeTag(uf.no, uf.wireType);
       enc.writeRaw(uf.data);
     }
@@ -1510,14 +1661,14 @@ export function encodeAllTypesSubMsg(
 
 export function marshalAllTypesSubMsgOmniBuf(
   msg: Partial<AllTypesSubMsg>,
-  options?: MarshalOptions,
-): Uint8Array {
-  const enc = new Encoder(256);
+  options?: $ob.MarshalOptions,
+): globalThis.Uint8Array {
+  const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
-    writeField0SchemaMeta(
+    $ob.writeField0SchemaMeta(
       enc,
-      AllTypesSubMsgSchema.getSchemaMeta(0, msg as Record<string, any>),
-      Boolean(options.deterministic),
+      AllTypesSubMsgSchema.getSchemaMeta(0, msg as { [key: string]: any }),
+      globalThis.Boolean(options.deterministic),
     );
   }
   encodeAllTypesSubMsg(enc, msg, options);
@@ -1525,32 +1676,34 @@ export function marshalAllTypesSubMsgOmniBuf(
 }
 
 export function decodeAllTypesSubMsg(
-  buf: Uint8Array,
+  buf: globalThis.Uint8Array,
   target?: AllTypesSubMsg,
   depth = 0,
-  options?: BinaryReadOptions,
+  options?: $ob.BinaryReadOptions,
   startPos = 0,
   endPos = buf.length,
 ): AllTypesSubMsg {
-  const maxDepth = options?.recursionLimit ?? MaxNestingDepth;
+  const maxDepth = options?.recursionLimit ?? $ob.MaxNestingDepth;
   const readUnknown = options?.readUnknownFields ?? true;
   if (depth > maxDepth) {
-    throw new Error(`omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`);
+    throw new globalThis.Error(
+      `omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`,
+    );
   }
   const out: AllTypesSubMsg = target ?? new AllTypesSubMsgMsg();
   if (target !== undefined) {
     if (!(out instanceof AllTypesSubMsgMsg)) {
-      Object.setPrototypeOf(out, AllTypesSubMsgMsg.prototype);
+      globalThis.Object.setPrototypeOf(out, AllTypesSubMsgMsg.prototype);
     }
     if (!options?.merge) {
-      Object.assign(out, new AllTypesSubMsgMsg());
-      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
+      globalThis.Object.assign(out, new AllTypesSubMsgMsg());
+      if (globalThis.Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
   let pos = startPos;
   let seenMask = 0;
-  let unknownFields: UnknownField[] | null = Array.isArray((out as any).$unknown)
+  let unknownFields: $ob.UnknownField[] | null = globalThis.Array.isArray((out as any).$unknown)
     ? (out as any).$unknown
     : null;
   while (pos < n) {
@@ -1560,31 +1713,36 @@ export function decodeAllTypesSubMsg(
       tag = b0 >>> 1;
       pos += 1;
     } else if ((b0 & 2) !== 0) {
-      if (pos + 2 > n) throw new Error('omnibuf: truncated tag');
+      if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated tag');
       tag = ((b0 | (buf[pos + 1]! << 8)) >>> 2) >>> 0;
       pos += 2;
     } else {
-      const [t64, tn] = decodeVarintBigInt(buf, pos, n);
-      if (tn === 0 || t64 >> 4n > 536870911n) throw new Error('omnibuf: invalid tag');
-      tag = Number(t64);
+      const [t64, tn] = $ob.decodeVarintBigInt(buf, pos, n);
+      if (tn === 0 || t64 >> 4n > 536870911n) throw new globalThis.Error('omnibuf: invalid tag');
+      tag = globalThis.Number(t64);
       pos += tn;
     }
-    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);
+    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
     const wt = tag & 0x0f;
     if (fieldNum === 0) {
-      if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');
-      const [meta, nextPos] = readLenSlice(buf, pos, 0, n);
-      $decodeSchemaMeta(meta, depth + 1, maxDepth);
+      const nextPos = $ob.validateField0At(buf, pos, wt, depth, maxDepth, n);
+      if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
       pos = nextPos;
       continue;
     }
     const bit = fieldNum <= 30 ? 1 << fieldNum : 0;
-    const alreadySeen = (seenMask & bit) !== 0 || Boolean(options?.merge);
+    const alreadySeen = (seenMask & bit) !== 0 || globalThis.Boolean(options?.merge);
     switch (fieldNum) {
       case 1: {
         if (!(wt === 0)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1596,24 +1754,24 @@ export function decodeAllTypesSubMsg(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated uint32');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint32');
         const vb = buf[pos]!;
         let u32Val = 0;
         if ((vb & 1) !== 0) {
           u32Val = vb >>> 1;
           pos += 1;
         } else if ((vb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: truncated uint32');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated uint32');
           u32Val = (vb | (buf[pos + 1]! << 8)) >>> 2;
           pos += 2;
         } else if ((vb & 4) !== 0) {
-          if (pos + 4 > n) throw new Error('omnibuf: truncated uint32');
+          if (pos + 4 > n) throw new globalThis.Error('omnibuf: truncated uint32');
           u32Val =
             ((vb | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 3) >>>
             0;
           pos += 4;
         } else {
-          if (vb !== 0 || pos + 9 > n) throw new Error('omnibuf: truncated uint32');
+          if (vb !== 0 || pos + 9 > n) throw new globalThis.Error('omnibuf: truncated uint32');
           u32Val =
             (buf[pos + 1]! |
               (buf[pos + 2]! << 8) |
@@ -1628,7 +1786,13 @@ export function decodeAllTypesSubMsg(
       case 2: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1640,17 +1804,17 @@ export function decodeAllTypesSubMsg(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.label = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.label = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.label = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.label = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -1658,7 +1822,13 @@ export function decodeAllTypesSubMsg(
       case 3: {
         if (!(wt === 2 || wt === 3)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1676,7 +1846,13 @@ export function decodeAllTypesSubMsg(
       case 4: {
         if (!(wt === 1)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -1688,15 +1864,21 @@ export function decodeAllTypesSubMsg(
           break;
         }
         seenMask |= bit;
-        const [v, vn] = decodeVarintBigInt(buf, pos, n);
-        if (vn === 0) throw new Error('omnibuf: truncated int64');
-        out.score = decodeZigZagAuto(v);
+        const [v, vn] = $ob.decodeVarintBigInt(buf, pos, n);
+        if (vn === 0) throw new globalThis.Error('omnibuf: truncated int64');
+        out.score = $ob.decodeZigZagAuto(v);
         pos += vn;
         break;
       }
       default: {
         const valStart = pos;
-        pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+        pos = $ob.validateValue(
+          n < buf.length ? buf.subarray(0, n) : buf,
+          pos,
+          wt,
+          depth,
+          maxDepth,
+        );
         if (readUnknown) {
           if (!unknownFields) unknownFields = [];
           unknownFields.push({
@@ -1710,7 +1892,7 @@ export function decodeAllTypesSubMsg(
     }
   }
   if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {
-    Object.defineProperty(out, '$unknown', {
+    globalThis.Object.defineProperty(out, '$unknown', {
       value: unknownFields,
       enumerable: false,
       writable: true,
@@ -1721,8 +1903,8 @@ export function decodeAllTypesSubMsg(
 }
 
 export function unmarshalAllTypesSubMsgOmniBuf(
-  buf: Uint8Array,
-  options?: BinaryReadOptions,
+  buf: globalThis.Uint8Array,
+  options?: $ob.BinaryReadOptions,
 ): AllTypesSubMsg {
   return decodeAllTypesSubMsg(buf, undefined, 0, options);
 }
@@ -1732,20 +1914,39 @@ AllTypesSubMsgSchema.setGeneratedCodec({
   encode: encodeAllTypesSubMsg,
   decode: decodeAllTypesSubMsg,
 });
+$ob.registerClassSchema(
+  AllTypesSubMsgMsg as unknown as new () => AllTypesSubMsg,
+  AllTypesSubMsgSchema,
+);
 
 export class OpaqueAllTypesSubMsg {
-  private _raw: Uint8Array;
+  private _raw: globalThis.Uint8Array;
+  private _depth: number;
+  private _readCount = 0;
+  private _fieldIndex: globalThis.Map<number, $ob.OpaqueFieldSpan> | null = null;
   private _dirtyMask = 0;
   private _id?: number;
   private _label?: string;
   private _flag?: boolean;
   private _score?: number | bigint;
 
-  constructor(raw: Uint8Array) {
+  constructor(raw: globalThis.Uint8Array, depth = 0) {
     this._raw = raw;
+    this._depth = depth;
   }
 
-  raw(): Uint8Array {
+  private _sliceField(fieldNum: number): globalThis.Uint8Array | null {
+    if (this._fieldIndex === null) {
+      if (this._readCount < 2) {
+        this._readCount++;
+        return this._raw;
+      }
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+    }
+    return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
+  }
+
+  raw(): globalThis.Uint8Array {
     return this._raw;
   }
 
@@ -1753,7 +1954,8 @@ export class OpaqueAllTypesSubMsg {
     if ((this._dirtyMask & (1 << 1)) !== 0) {
       return this._id!;
     }
-    return readUint32(this._raw, 1)[0] as any;
+    const __src = this._sliceField(1);
+    return (__src ? $ob.readUint32(__src, 1)[0] : 0) as any;
   }
 
   id(): number {
@@ -1769,7 +1971,8 @@ export class OpaqueAllTypesSubMsg {
     if ((this._dirtyMask & (1 << 2)) !== 0) {
       return this._label!;
     }
-    return readString(this._raw, 2)[0];
+    const __src = this._sliceField(2);
+    return __src ? $ob.readString(__src, 2)[0] : '';
   }
 
   label(): string {
@@ -1785,7 +1988,8 @@ export class OpaqueAllTypesSubMsg {
     if ((this._dirtyMask & (1 << 3)) !== 0) {
       return this._flag!;
     }
-    return readBool(this._raw, 3)[0];
+    const __src = this._sliceField(3);
+    return __src ? $ob.readBool(__src, 3)[0] : false;
   }
 
   flag(): boolean {
@@ -1801,7 +2005,8 @@ export class OpaqueAllTypesSubMsg {
     if ((this._dirtyMask & (1 << 4)) !== 0) {
       return this._score!;
     }
-    return readIntAuto(this._raw, 4)[0];
+    const __src = this._sliceField(4);
+    return __src ? $ob.readIntAuto(__src, 4)[0] : 0;
   }
 
   score(): number | bigint {
@@ -1813,13 +2018,14 @@ export class OpaqueAllTypesSubMsg {
     this._dirtyMask |= 1 << 4;
   }
 
-  marshal(options?: MarshalOptions): Uint8Array {
+  marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
+    let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      this._raw = spliceFields(this._raw, this._dirtyMask, 4, (enc, fnum) => {
+      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 4, (enc, fnum) => {
         switch (fnum) {
           case 1: {
             const msg = { id: this._id! } as Partial<AllTypesSubMsg>;
-            enc.writeUint(1, Number(msg.id ?? 0) >>> 0);
+            enc.writeUint(1, globalThis.Number(msg.id ?? 0) >>> 0);
             break;
           }
           case 2: {
@@ -1829,7 +2035,7 @@ export class OpaqueAllTypesSubMsg {
           }
           case 3: {
             const msg = { flag: this._flag! } as Partial<AllTypesSubMsg>;
-            enc.writeBool(3, Boolean(msg.flag));
+            enc.writeBool(3, globalThis.Boolean(msg.flag));
             break;
           }
           case 4: {
@@ -1839,25 +2045,44 @@ export class OpaqueAllTypesSubMsg {
           }
         }
       });
-      this._dirtyMask = 0;
     } else {
-      validateMessage(this._raw);
+      $ob.validateMessage(this._raw, this._depth);
+      outBuf = this._raw.slice();
     }
-    if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
-      const f0 = encodeField0SchemaMeta(
+    if (options?.selfDescribing && !$ob.readField0SchemaMeta(outBuf)[1]) {
+      const f0 = $ob.encodeField0SchemaMeta(
         AllTypesSubMsgSchema.getSchemaMeta(0),
-        Boolean(options.deterministic),
+        globalThis.Boolean(options.deterministic),
       );
-      const out = new Uint8Array(f0.length + this._raw.length);
-      out.set(f0, 0);
-      out.set(this._raw, f0.length);
-      return out;
+      const withF0 = new globalThis.Uint8Array(f0.length + outBuf.length);
+      withF0.set(f0, 0);
+      withF0.set(outBuf, f0.length);
+      return withF0;
     }
-    return this._raw;
+    return outBuf;
+  }
+
+  marshalValidated(options?: $ob.MarshalOptions): globalThis.Uint8Array {
+    const out = this.marshal(options);
+    $ob.validateMessage(out, this._depth);
+    return out;
+  }
+
+  tryMarshal(
+    options?: $ob.MarshalOptions,
+  ): { ok: true; value: globalThis.Uint8Array } | { ok: false; error: globalThis.Error } {
+    try {
+      return { ok: true, value: this.marshalValidated(options) };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof globalThis.Error ? err : new globalThis.Error(globalThis.String(err)),
+      };
+    }
   }
 }
 
-export interface TestAllTypes extends Message<'omnibuf.conformance.TestAllTypes'> {
+export interface TestAllTypes extends $ob.Message<'omnibuf.conformance.TestAllTypes'> {
   f1Uint32: number;
   f1_uint32?: number;
   f2Uint64: number | bigint;
@@ -1870,8 +2095,8 @@ export interface TestAllTypes extends Message<'omnibuf.conformance.TestAllTypes'
   f5_bool?: boolean;
   f6String: string;
   f6_string?: string;
-  f7Bytes: Uint8Array;
-  f7_bytes?: Uint8Array;
+  f7Bytes: globalThis.Uint8Array;
+  f7_bytes?: globalThis.Uint8Array;
   f8SubMsg: AllTypesSubMsg | null;
   f8_sub_msg?: AllTypesSubMsg | null;
   f9StringArr: string[];
@@ -1880,8 +2105,8 @@ export interface TestAllTypes extends Message<'omnibuf.conformance.TestAllTypes'
   f10_uint32_arr?: number[];
   f11SubMsgArr: AllTypesSubMsg[];
   f11_sub_msg_arr?: AllTypesSubMsg[];
-  f12MapStrUint: Record<string, number | bigint>;
-  f12_map_str_uint?: Record<string, number | bigint>;
+  f12MapStrUint: { [key: string]: number | bigint };
+  f12_map_str_uint?: { [key: string]: number | bigint };
   f13Float32: number;
   f13_float32?: number;
   f14Float64: number;
@@ -1894,45 +2119,47 @@ export interface TestAllTypes extends Message<'omnibuf.conformance.TestAllTypes'
   f20_overflow_str?: string;
 }
 
-export const TestAllTypesSchema: MessageSchema<TestAllTypes, 'omnibuf.conformance.TestAllTypes'> =
-  defineMessage<TestAllTypes, 'omnibuf.conformance.TestAllTypes'>(
-    'omnibuf.conformance.TestAllTypes',
-    {
-      f1Uint32: { fieldNum: 1, name: 'f1_uint32', type: 'uint32' },
-      f2Uint64: { fieldNum: 2, name: 'f2_uint64', type: 'uint64' },
-      f3Sint32: { fieldNum: 3, name: 'f3_sint32', type: 'sint32' },
-      f4Sint64: { fieldNum: 4, name: 'f4_sint64', type: 'sint64' },
-      f5Bool: { fieldNum: 5, name: 'f5_bool', type: 'bool' },
-      f6String: { fieldNum: 6, name: 'f6_string', type: 'string' },
-      f7Bytes: { fieldNum: 7, name: 'f7_bytes', type: 'bytes' },
-      f8SubMsg: {
-        fieldNum: 8,
-        name: 'f8_sub_msg',
-        type: 'submsg',
-        subSchema: () => AllTypesSubMsgSchema,
-      },
-      f9StringArr: { fieldNum: 9, name: 'f9_string_arr', type: 'string[]' },
-      f10Uint32Arr: { fieldNum: 10, name: 'f10_uint32_arr', type: 'uint32[]' },
-      f11SubMsgArr: {
-        fieldNum: 11,
-        name: 'f11_sub_msg_arr',
-        type: 'submsg[]',
-        subSchema: () => AllTypesSubMsgSchema,
-      },
-      f12MapStrUint: {
-        fieldNum: 12,
-        name: 'f12_map_str_uint',
-        type: 'map',
-        mapKey: 'string',
-        mapVal: 'uint64',
-      },
-      f13Float32: { fieldNum: 13, name: 'f13_float32', type: 'float32' },
-      f14Float64: { fieldNum: 14, name: 'f14_float64', type: 'float64' },
-      f15Fixed32: { fieldNum: 15, name: 'f15_fixed32', type: 'fixed32' },
-      f16Fixed64: { fieldNum: 16, name: 'f16_fixed64', type: 'fixed64' },
-      f20OverflowStr: { fieldNum: 20, name: 'f20_overflow_str', type: 'string' },
+export const TestAllTypesSchema: $ob.MessageSchema<
+  TestAllTypes,
+  'omnibuf.conformance.TestAllTypes'
+> = $ob.defineMessage<TestAllTypes, 'omnibuf.conformance.TestAllTypes'>(
+  'omnibuf.conformance.TestAllTypes',
+  {
+    f1Uint32: { fieldNum: 1, name: 'f1_uint32', type: 'uint32' },
+    f2Uint64: { fieldNum: 2, name: 'f2_uint64', type: 'uint64' },
+    f3Sint32: { fieldNum: 3, name: 'f3_sint32', type: 'sint32' },
+    f4Sint64: { fieldNum: 4, name: 'f4_sint64', type: 'sint64' },
+    f5Bool: { fieldNum: 5, name: 'f5_bool', type: 'bool' },
+    f6String: { fieldNum: 6, name: 'f6_string', type: 'string' },
+    f7Bytes: { fieldNum: 7, name: 'f7_bytes', type: 'bytes' },
+    f8SubMsg: {
+      fieldNum: 8,
+      name: 'f8_sub_msg',
+      type: 'submsg',
+      subSchema: () => AllTypesSubMsgSchema,
     },
-  );
+    f9StringArr: { fieldNum: 9, name: 'f9_string_arr', type: 'string[]' },
+    f10Uint32Arr: { fieldNum: 10, name: 'f10_uint32_arr', type: 'uint32[]' },
+    f11SubMsgArr: {
+      fieldNum: 11,
+      name: 'f11_sub_msg_arr',
+      type: 'submsg[]',
+      subSchema: () => AllTypesSubMsgSchema,
+    },
+    f12MapStrUint: {
+      fieldNum: 12,
+      name: 'f12_map_str_uint',
+      type: 'map',
+      mapKey: 'string',
+      mapVal: 'uint64',
+    },
+    f13Float32: { fieldNum: 13, name: 'f13_float32', type: 'float32' },
+    f14Float64: { fieldNum: 14, name: 'f14_float64', type: 'float64' },
+    f15Fixed32: { fieldNum: 15, name: 'f15_fixed32', type: 'fixed32' },
+    f16Fixed64: { fieldNum: 16, name: 'f16_fixed64', type: 'fixed64' },
+    f20OverflowStr: { fieldNum: 20, name: 'f20_overflow_str', type: 'string' },
+  },
+);
 
 class TestAllTypesMsg implements TestAllTypes {
   declare $typeName: 'omnibuf.conformance.TestAllTypes';
@@ -1978,11 +2205,11 @@ class TestAllTypesMsg implements TestAllTypes {
   set f6_string(v: string | undefined) {
     this.f6String = v as any;
   }
-  f7Bytes: Uint8Array = new Uint8Array(0);
-  get f7_bytes(): Uint8Array {
+  f7Bytes: globalThis.Uint8Array = new globalThis.Uint8Array(0);
+  get f7_bytes(): globalThis.Uint8Array {
     return this.f7Bytes;
   }
-  set f7_bytes(v: Uint8Array | undefined) {
+  set f7_bytes(v: globalThis.Uint8Array | undefined) {
     this.f7Bytes = v as any;
   }
   f8SubMsg: AllTypesSubMsg | null = null;
@@ -2013,11 +2240,11 @@ class TestAllTypesMsg implements TestAllTypes {
   set f11_sub_msg_arr(v: AllTypesSubMsg[] | undefined) {
     this.f11SubMsgArr = v as any;
   }
-  f12MapStrUint: Record<string, number | bigint> = {};
-  get f12_map_str_uint(): Record<string, number | bigint> {
+  f12MapStrUint: { [key: string]: number | bigint } = {};
+  get f12_map_str_uint(): { [key: string]: number | bigint } {
     return this.f12MapStrUint;
   }
-  set f12_map_str_uint(v: Record<string, number | bigint> | undefined) {
+  set f12_map_str_uint(v: { [key: string]: number | bigint } | undefined) {
     this.f12MapStrUint = v as any;
   }
   f13Float32: number = 0;
@@ -2056,7 +2283,7 @@ class TestAllTypesMsg implements TestAllTypes {
     this.f20OverflowStr = v as any;
   }
 }
-Object.defineProperty(TestAllTypesMsg.prototype, '$typeName', {
+globalThis.Object.defineProperty(TestAllTypesMsg.prototype, '$typeName', {
   value: 'omnibuf.conformance.TestAllTypes',
   enumerable: false,
   writable: true,
@@ -2064,24 +2291,24 @@ Object.defineProperty(TestAllTypesMsg.prototype, '$typeName', {
 });
 
 export function createTestAllTypes(
-  init?: MessageInitShape<typeof TestAllTypesSchema>,
+  init?: $ob.MessageInitShape<typeof TestAllTypesSchema>,
 ): TestAllTypes {
   if (init === undefined) return new TestAllTypesMsg();
   return TestAllTypesSchema.create(init);
 }
 
 export function encodeTestAllTypes(
-  enc: Encoder,
+  enc: $ob.Encoder,
   msg: Partial<TestAllTypes>,
-  options?: MarshalOptions,
+  options?: $ob.MarshalOptions,
 ): void {
-  enc.writeUint(1, Number(msg.f1Uint32 ?? msg.f1_uint32 ?? 0) >>> 0);
+  enc.writeUint(1, globalThis.Number(msg.f1Uint32 ?? msg.f1_uint32 ?? 0) >>> 0);
   enc.writeUint(2, msg.f2Uint64 ?? msg.f2_uint64 ?? 0);
-  enc.writeInt(3, Number(msg.f3Sint32 ?? msg.f3_sint32 ?? 0) | 0);
+  enc.writeInt(3, globalThis.Number(msg.f3Sint32 ?? msg.f3_sint32 ?? 0) | 0);
   enc.writeInt(4, msg.f4Sint64 ?? msg.f4_sint64 ?? 0);
-  enc.writeBool(5, Boolean(msg.f5Bool ?? msg.f5_bool));
+  enc.writeBool(5, globalThis.Boolean(msg.f5Bool ?? msg.f5_bool));
   enc.writeString(6, msg.f6String ?? msg.f6_string ?? '');
-  enc.writeBytes(7, msg.f7Bytes ?? msg.f7_bytes ?? new Uint8Array(0));
+  enc.writeBytes(7, msg.f7Bytes ?? msg.f7_bytes ?? new globalThis.Uint8Array(0));
   {
     const subVal = msg.f8SubMsg ?? msg.f8_sub_msg;
     if (subVal !== null && subVal !== undefined) {
@@ -2103,26 +2330,26 @@ export function encodeTestAllTypes(
     enc.endSubMsgArr();
   }
   {
-    const entries = Object.entries(msg.f12MapStrUint ?? msg.f12_map_str_uint ?? {});
-    if (options?.deterministic) entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const entries = globalThis.Object.entries(msg.f12MapStrUint ?? msg.f12_map_str_uint ?? {});
+    if (options?.deterministic) entries.sort(([a], [b]) => $ob.compareUTF8Strings(a, b));
     enc.writeTag(12, 14);
-    enc.beginContainer();
+    enc.beginContainer(3 + entries.length * 2);
     enc.writeByte(10);
     enc.writeByte(0);
     enc.writeRawVarint(entries.length);
     for (const [k, v] of entries) {
       enc.writeRawStringPayload(k);
-      enc.writeRawVarint(BigInt(v));
+      enc.writeRawVarint($ob.toBigInt64Input(v));
     }
     enc.endContainer();
   }
   enc.writeFloat32(13, msg.f13Float32 ?? msg.f13_float32 ?? 0);
   enc.writeFloat64(14, msg.f14Float64 ?? msg.f14_float64 ?? 0);
-  enc.writeFixed32(15, Number(msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0) >>> 0);
+  enc.writeFixed32(15, globalThis.Number(msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0) >>> 0);
   enc.writeFixed64(16, msg.f16Fixed64 ?? msg.f16_fixed64 ?? 0);
   enc.writeString(20, msg.f20OverflowStr ?? msg.f20_overflow_str ?? '');
-  if (options?.writeUnknownFields && Array.isArray((msg as any).$unknown)) {
-    for (const uf of (msg as any).$unknown as UnknownField[]) {
+  if (options?.writeUnknownFields && globalThis.Array.isArray((msg as any).$unknown)) {
+    for (const uf of (msg as any).$unknown as $ob.UnknownField[]) {
       enc.writeTag(uf.no, uf.wireType);
       enc.writeRaw(uf.data);
     }
@@ -2131,14 +2358,14 @@ export function encodeTestAllTypes(
 
 export function marshalTestAllTypesOmniBuf(
   msg: Partial<TestAllTypes>,
-  options?: MarshalOptions,
-): Uint8Array {
-  const enc = new Encoder(256);
+  options?: $ob.MarshalOptions,
+): globalThis.Uint8Array {
+  const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
-    writeField0SchemaMeta(
+    $ob.writeField0SchemaMeta(
       enc,
-      TestAllTypesSchema.getSchemaMeta(0, msg as Record<string, any>),
-      Boolean(options.deterministic),
+      TestAllTypesSchema.getSchemaMeta(0, msg as { [key: string]: any }),
+      globalThis.Boolean(options.deterministic),
     );
   }
   encodeTestAllTypes(enc, msg, options);
@@ -2146,49 +2373,51 @@ export function marshalTestAllTypesOmniBuf(
 }
 
 export function decodeTestAllTypes(
-  buf: Uint8Array,
+  buf: globalThis.Uint8Array,
   target?: TestAllTypes,
   depth = 0,
-  options?: BinaryReadOptions,
+  options?: $ob.BinaryReadOptions,
   startPos = 0,
   endPos = buf.length,
 ): TestAllTypes {
-  const maxDepth = options?.recursionLimit ?? MaxNestingDepth;
+  const maxDepth = options?.recursionLimit ?? $ob.MaxNestingDepth;
   const readUnknown = options?.readUnknownFields ?? true;
   if (depth > maxDepth) {
-    throw new Error(`omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`);
+    throw new globalThis.Error(
+      `omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`,
+    );
   }
   const out: TestAllTypes = target ?? new TestAllTypesMsg();
   if (target !== undefined) {
     if (!(out instanceof TestAllTypesMsg)) {
-      Object.setPrototypeOf(out, TestAllTypesMsg.prototype);
+      globalThis.Object.setPrototypeOf(out, TestAllTypesMsg.prototype);
     }
     if (!options?.merge) {
-      if (Object.hasOwn(out, 'f1_uint32')) delete (out as any).f1_uint32;
-      if (Object.hasOwn(out, 'f2_uint64')) delete (out as any).f2_uint64;
-      if (Object.hasOwn(out, 'f3_sint32')) delete (out as any).f3_sint32;
-      if (Object.hasOwn(out, 'f4_sint64')) delete (out as any).f4_sint64;
-      if (Object.hasOwn(out, 'f5_bool')) delete (out as any).f5_bool;
-      if (Object.hasOwn(out, 'f6_string')) delete (out as any).f6_string;
-      if (Object.hasOwn(out, 'f7_bytes')) delete (out as any).f7_bytes;
-      if (Object.hasOwn(out, 'f8_sub_msg')) delete (out as any).f8_sub_msg;
-      if (Object.hasOwn(out, 'f9_string_arr')) delete (out as any).f9_string_arr;
-      if (Object.hasOwn(out, 'f10_uint32_arr')) delete (out as any).f10_uint32_arr;
-      if (Object.hasOwn(out, 'f11_sub_msg_arr')) delete (out as any).f11_sub_msg_arr;
-      if (Object.hasOwn(out, 'f12_map_str_uint')) delete (out as any).f12_map_str_uint;
-      if (Object.hasOwn(out, 'f13_float32')) delete (out as any).f13_float32;
-      if (Object.hasOwn(out, 'f14_float64')) delete (out as any).f14_float64;
-      if (Object.hasOwn(out, 'f15_fixed32')) delete (out as any).f15_fixed32;
-      if (Object.hasOwn(out, 'f16_fixed64')) delete (out as any).f16_fixed64;
-      if (Object.hasOwn(out, 'f20_overflow_str')) delete (out as any).f20_overflow_str;
-      Object.assign(out, new TestAllTypesMsg());
-      if (Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
+      if (globalThis.Object.hasOwn(out, 'f1_uint32')) delete (out as any).f1_uint32;
+      if (globalThis.Object.hasOwn(out, 'f2_uint64')) delete (out as any).f2_uint64;
+      if (globalThis.Object.hasOwn(out, 'f3_sint32')) delete (out as any).f3_sint32;
+      if (globalThis.Object.hasOwn(out, 'f4_sint64')) delete (out as any).f4_sint64;
+      if (globalThis.Object.hasOwn(out, 'f5_bool')) delete (out as any).f5_bool;
+      if (globalThis.Object.hasOwn(out, 'f6_string')) delete (out as any).f6_string;
+      if (globalThis.Object.hasOwn(out, 'f7_bytes')) delete (out as any).f7_bytes;
+      if (globalThis.Object.hasOwn(out, 'f8_sub_msg')) delete (out as any).f8_sub_msg;
+      if (globalThis.Object.hasOwn(out, 'f9_string_arr')) delete (out as any).f9_string_arr;
+      if (globalThis.Object.hasOwn(out, 'f10_uint32_arr')) delete (out as any).f10_uint32_arr;
+      if (globalThis.Object.hasOwn(out, 'f11_sub_msg_arr')) delete (out as any).f11_sub_msg_arr;
+      if (globalThis.Object.hasOwn(out, 'f12_map_str_uint')) delete (out as any).f12_map_str_uint;
+      if (globalThis.Object.hasOwn(out, 'f13_float32')) delete (out as any).f13_float32;
+      if (globalThis.Object.hasOwn(out, 'f14_float64')) delete (out as any).f14_float64;
+      if (globalThis.Object.hasOwn(out, 'f15_fixed32')) delete (out as any).f15_fixed32;
+      if (globalThis.Object.hasOwn(out, 'f16_fixed64')) delete (out as any).f16_fixed64;
+      if (globalThis.Object.hasOwn(out, 'f20_overflow_str')) delete (out as any).f20_overflow_str;
+      globalThis.Object.assign(out, new TestAllTypesMsg());
+      if (globalThis.Object.hasOwn(out, '$unknown')) delete (out as any).$unknown;
     }
   }
   const n = endPos;
   let pos = startPos;
   let seenMask = 0;
-  let unknownFields: UnknownField[] | null = Array.isArray((out as any).$unknown)
+  let unknownFields: $ob.UnknownField[] | null = globalThis.Array.isArray((out as any).$unknown)
     ? (out as any).$unknown
     : null;
   while (pos < n) {
@@ -2198,31 +2427,36 @@ export function decodeTestAllTypes(
       tag = b0 >>> 1;
       pos += 1;
     } else if ((b0 & 2) !== 0) {
-      if (pos + 2 > n) throw new Error('omnibuf: truncated tag');
+      if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated tag');
       tag = ((b0 | (buf[pos + 1]! << 8)) >>> 2) >>> 0;
       pos += 2;
     } else {
-      const [t64, tn] = decodeVarintBigInt(buf, pos, n);
-      if (tn === 0 || t64 >> 4n > 536870911n) throw new Error('omnibuf: invalid tag');
-      tag = Number(t64);
+      const [t64, tn] = $ob.decodeVarintBigInt(buf, pos, n);
+      if (tn === 0 || t64 >> 4n > 536870911n) throw new globalThis.Error('omnibuf: invalid tag');
+      tag = globalThis.Number(t64);
       pos += tn;
     }
-    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : Math.floor(tag / 16);
+    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
     const wt = tag & 0x0f;
     if (fieldNum === 0) {
-      if (wt !== 12) throw new Error('omnibuf: invalid Field #0 wire type');
-      const [meta, nextPos] = readLenSlice(buf, pos, 0, n);
-      $decodeSchemaMeta(meta, depth + 1, maxDepth);
+      const nextPos = $ob.validateField0At(buf, pos, wt, depth, maxDepth, n);
+      if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
       pos = nextPos;
       continue;
     }
     const bit = fieldNum <= 30 ? 1 << fieldNum : 0;
-    const alreadySeen = (seenMask & bit) !== 0 || Boolean(options?.merge);
+    const alreadySeen = (seenMask & bit) !== 0 || globalThis.Boolean(options?.merge);
     switch (fieldNum) {
       case 1: {
         if (!(wt === 0)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2234,24 +2468,24 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated uint32');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint32');
         const vb = buf[pos]!;
         let u32Val = 0;
         if ((vb & 1) !== 0) {
           u32Val = vb >>> 1;
           pos += 1;
         } else if ((vb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: truncated uint32');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated uint32');
           u32Val = (vb | (buf[pos + 1]! << 8)) >>> 2;
           pos += 2;
         } else if ((vb & 4) !== 0) {
-          if (pos + 4 > n) throw new Error('omnibuf: truncated uint32');
+          if (pos + 4 > n) throw new globalThis.Error('omnibuf: truncated uint32');
           u32Val =
             ((vb | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 3) >>>
             0;
           pos += 4;
         } else {
-          if (vb !== 0 || pos + 9 > n) throw new Error('omnibuf: truncated uint32');
+          if (vb !== 0 || pos + 9 > n) throw new globalThis.Error('omnibuf: truncated uint32');
           u32Val =
             (buf[pos + 1]! |
               (buf[pos + 2]! << 8) |
@@ -2266,7 +2500,13 @@ export function decodeTestAllTypes(
       case 2: {
         if (!(wt === 0)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2278,24 +2518,24 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated uint64');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint64');
         const vb = buf[pos]!;
         let u64Val: number | bigint;
         if ((vb & 1) !== 0) {
           u64Val = vb >>> 1;
           pos += 1;
         } else if ((vb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: truncated uint64');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated uint64');
           u64Val = (vb | (buf[pos + 1]! << 8)) >>> 2;
           pos += 2;
         } else if ((vb & 4) !== 0) {
-          if (pos + 4 > n) throw new Error('omnibuf: truncated uint64');
+          if (pos + 4 > n) throw new globalThis.Error('omnibuf: truncated uint64');
           u64Val =
             ((vb | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 3) >>>
             0;
           pos += 4;
         } else {
-          if (vb !== 0 || pos + 9 > n) throw new Error('omnibuf: truncated uint64');
+          if (vb !== 0 || pos + 9 > n) throw new globalThis.Error('omnibuf: truncated uint64');
           const lo =
             (buf[pos + 1]! |
               (buf[pos + 2]! << 8) |
@@ -2308,7 +2548,10 @@ export function decodeTestAllTypes(
               (buf[pos + 7]! << 16) |
               (buf[pos + 8]! << 24)) >>>
             0;
-          u64Val = hi <= 0x1fffff ? hi * 0x100000000 + lo : (BigInt(hi) << 32n) | BigInt(lo);
+          u64Val =
+            hi <= 0x1fffff
+              ? hi * 0x100000000 + lo
+              : (globalThis.BigInt(hi) << 32n) | globalThis.BigInt(lo);
           pos += 9;
         }
         out.f2Uint64 = u64Val;
@@ -2317,7 +2560,13 @@ export function decodeTestAllTypes(
       case 3: {
         if (!(wt === 1)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2329,7 +2578,7 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated int32/enum');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated int32/enum');
         const vb = buf[pos]!;
         let i32Val = 0;
         if ((vb & 1) !== 0) {
@@ -2337,21 +2586,21 @@ export function decodeTestAllTypes(
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 1;
         } else if ((vb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: truncated int32/enum');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated int32/enum');
           const u = (vb | (buf[pos + 1]! << 8)) >>> 2;
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 2;
         } else if ((vb & 4) !== 0) {
-          if (pos + 4 > n) throw new Error('omnibuf: truncated int32/enum');
+          if (pos + 4 > n) throw new globalThis.Error('omnibuf: truncated int32/enum');
           const u =
             ((vb | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 3) >>>
             0;
           i32Val = (u >>> 1) ^ -(u & 1);
           pos += 4;
         } else {
-          const [v, vn] = decodeVarintBigInt(buf, pos, n);
-          if (vn === 0) throw new Error('omnibuf: truncated int32/enum');
-          i32Val = decodeZigZag32(v);
+          const [v, vn] = $ob.decodeVarintBigInt(buf, pos, n);
+          if (vn === 0) throw new globalThis.Error('omnibuf: truncated int32/enum');
+          i32Val = $ob.decodeZigZag32(v);
           pos += vn;
         }
         out.f3Sint32 = i32Val as any;
@@ -2360,7 +2609,13 @@ export function decodeTestAllTypes(
       case 4: {
         if (!(wt === 1)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2372,16 +2627,22 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        const [v, vn] = decodeVarintBigInt(buf, pos, n);
-        if (vn === 0) throw new Error('omnibuf: truncated int64');
-        out.f4Sint64 = decodeZigZagAuto(v);
+        const [v, vn] = $ob.decodeVarintBigInt(buf, pos, n);
+        if (vn === 0) throw new globalThis.Error('omnibuf: truncated int64');
+        out.f4Sint64 = $ob.decodeZigZagAuto(v);
         pos += vn;
         break;
       }
       case 5: {
         if (!(wt === 2 || wt === 3)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2399,7 +2660,13 @@ export function decodeTestAllTypes(
       case 6: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2411,17 +2678,17 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.f6String = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.f6String = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.f6String = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.f6String = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
@@ -2429,7 +2696,13 @@ export function decodeTestAllTypes(
       case 7: {
         if (!(wt === 11)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2441,15 +2714,21 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        const [b, nextPos] = readLenSlice(buf, pos, 0, n);
-        out.f7Bytes = b.slice();
+        const [b, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+        out.f7Bytes = options?.zeroCopy ? b : b.slice();
         pos = nextPos;
         break;
       }
       case 8: {
         if (!(wt === 12)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2461,18 +2740,18 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated submsg');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated submsg');
         let subLen = 0;
         const lb = buf[pos]!;
         if ((lb & 1) !== 0) {
           subLen = lb >>> 1;
           pos += 1;
         } else if ((lb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: truncated submsg');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: truncated submsg');
           subLen = (lb | (buf[pos + 1]! << 8)) >>> 2;
           pos += 2;
         } else {
-          const [subBytes, nextPos] = readLenSlice(buf, pos, 0, n);
+          const [subBytes, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
           const existing = out.f8SubMsg;
           const doMerge = alreadySeen;
           const decodedSub = decodeAllTypesSubMsg(
@@ -2485,7 +2764,7 @@ export function decodeTestAllTypes(
           pos = nextPos;
           break;
         }
-        if (pos + subLen > n) throw new Error('omnibuf: truncated submsg');
+        if (pos + subLen > n) throw new globalThis.Error('omnibuf: truncated submsg');
         const existing = out.f8SubMsg;
         const doMerge = alreadySeen;
         const decodedSub = decodeAllTypesSubMsg(
@@ -2503,7 +2782,13 @@ export function decodeTestAllTypes(
       case 9: {
         if (!(wt === 13)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2516,67 +2801,69 @@ export function decodeTestAllTypes(
         }
         seenMask |= bit;
         if (depth + 1 > maxDepth)
-          throw new Error(
+          throw new globalThis.Error(
             `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
           );
-        if (pos >= n) throw new Error('omnibuf: invalid string array');
+        if (pos >= n) throw new globalThis.Error('omnibuf: invalid string array');
         const lb = buf[pos]!;
         let bodyLen = 0;
         if ((lb & 1) !== 0) {
           bodyLen = lb >>> 1;
           pos += 1;
         } else if ((lb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: invalid string array');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: invalid string array');
           bodyLen = (lb | (buf[pos + 1]! << 8)) >>> 2;
           pos += 2;
         } else {
-          const [body, nextPos] = readLenSlice(buf, pos, 2, n);
-          const prev = alreadySeen && Array.isArray(out.f9StringArr) ? out.f9StringArr : [];
-          const [arr, ok] = appendStringArrBody(prev, body);
-          if (!ok) throw new Error('omnibuf: invalid string array');
+          const [body, nextPos] = $ob.readLenSlice(buf, pos, 2, n);
+          const prev =
+            alreadySeen && globalThis.Array.isArray(out.f9StringArr) ? out.f9StringArr : [];
+          const [arr, ok] = $ob.appendStringArrBody(prev, body);
+          if (!ok) throw new globalThis.Error('omnibuf: invalid string array');
           out.f9StringArr = arr;
           pos = nextPos;
           break;
         }
         const bodyEnd = pos + bodyLen;
-        if (bodyLen < 2 || bodyEnd > n) throw new Error('omnibuf: invalid string array');
+        if (bodyLen < 2 || bodyEnd > n) throw new globalThis.Error('omnibuf: invalid string array');
         if (buf[pos]! === 10 && (buf[pos + 1]! & 1) !== 0) {
           const count = buf[pos + 1]! >>> 1;
           let p = pos + 2;
-          if (count > bodyEnd - p) throw new Error('omnibuf: invalid string array');
+          if (count > bodyEnd - p) throw new globalThis.Error('omnibuf: invalid string array');
           let dst = out.f9StringArr;
-          if (!Array.isArray(dst)) {
+          if (!globalThis.Array.isArray(dst)) {
             dst = [];
             out.f9StringArr = dst;
           } else if (!alreadySeen) {
             dst.length = 0;
           }
           for (let i = 0; i < count; i++) {
-            if (p >= bodyEnd) throw new Error('omnibuf: invalid string array');
+            if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
             const sb = buf[p]!;
             if ((sb & 1) !== 0) {
               const sLen = sb >>> 1;
               p += 1;
-              if (p + sLen > bodyEnd) throw new Error('omnibuf: invalid string array');
-              dst.push(decodeUTF8(buf, p, p + sLen));
+              if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
+              dst.push($ob.decodeUTF8(buf, p, p + sLen));
               p += sLen;
             } else {
-              const [sLen, sn] = decodeVarintBigInt(buf, p, bodyEnd);
-              if (sn === 0 || sLen > BigInt(bodyEnd - (p + sn)))
-                throw new Error('omnibuf: invalid string array');
+              const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);
+              if (sn === 0 || sLen > globalThis.BigInt(bodyEnd - (p + sn)))
+                throw new globalThis.Error('omnibuf: invalid string array');
               p += sn;
-              const sLenNum = Number(sLen);
-              dst.push(decodeUTF8(buf, p, p + sLenNum));
+              const sLenNum = globalThis.Number(sLen);
+              dst.push($ob.decodeUTF8(buf, p, p + sLenNum));
               p += sLenNum;
             }
           }
-          if (p !== bodyEnd) throw new Error('omnibuf: invalid string array');
+          if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
           pos = bodyEnd;
           break;
         }
-        const prev = alreadySeen && Array.isArray(out.f9StringArr) ? out.f9StringArr : [];
-        const [arr, ok] = appendStringArrBody(prev, buf.subarray(pos, bodyEnd));
-        if (!ok) throw new Error('omnibuf: invalid string array');
+        const prev =
+          alreadySeen && globalThis.Array.isArray(out.f9StringArr) ? out.f9StringArr : [];
+        const [arr, ok] = $ob.appendStringArrBody(prev, buf.subarray(pos, bodyEnd));
+        if (!ok) throw new globalThis.Error('omnibuf: invalid string array');
         out.f9StringArr = arr;
         pos = bodyEnd;
         break;
@@ -2584,7 +2871,13 @@ export function decodeTestAllTypes(
       case 10: {
         if (!(wt === 13)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2597,59 +2890,61 @@ export function decodeTestAllTypes(
         }
         seenMask |= bit;
         if (depth + 1 > maxDepth)
-          throw new Error(
+          throw new globalThis.Error(
             `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
           );
-        if (pos >= n) throw new Error('omnibuf: invalid uint32 array');
+        if (pos >= n) throw new globalThis.Error('omnibuf: invalid uint32 array');
         const lb = buf[pos]!;
         let bodyLen = 0;
         if ((lb & 1) !== 0) {
           bodyLen = lb >>> 1;
           pos += 1;
         } else if ((lb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: invalid uint32 array');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: invalid uint32 array');
           bodyLen = (lb | (buf[pos + 1]! << 8)) >>> 2;
           pos += 2;
         } else {
-          const [body, nextPos] = readLenSlice(buf, pos, 2, n);
-          const prev = alreadySeen && Array.isArray(out.f10Uint32Arr) ? out.f10Uint32Arr : [];
-          const [arr, ok] = appendUint32ArrBody(prev, body);
-          if (!ok) throw new Error('omnibuf: invalid uint32 array');
+          const [body, nextPos] = $ob.readLenSlice(buf, pos, 2, n);
+          const prev =
+            alreadySeen && globalThis.Array.isArray(out.f10Uint32Arr) ? out.f10Uint32Arr : [];
+          const [arr, ok] = $ob.appendUint32ArrBody(prev, body);
+          if (!ok) throw new globalThis.Error('omnibuf: invalid uint32 array');
           out.f10Uint32Arr = arr as any;
           pos = nextPos;
           break;
         }
         const bodyEnd = pos + bodyLen;
-        if (bodyLen < 2 || bodyEnd > n) throw new Error('omnibuf: invalid uint32 array');
+        if (bodyLen < 2 || bodyEnd > n) throw new globalThis.Error('omnibuf: invalid uint32 array');
         if (buf[pos]! === 0 && (buf[pos + 1]! & 1) !== 0) {
           const count = buf[pos + 1]! >>> 1;
           let p = pos + 2;
-          if (count > bodyEnd - p) throw new Error('omnibuf: invalid uint32 array');
+          if (count > bodyEnd - p) throw new globalThis.Error('omnibuf: invalid uint32 array');
           let dst = out.f10Uint32Arr as number[];
-          if (!Array.isArray(dst)) {
+          if (!globalThis.Array.isArray(dst)) {
             dst = [];
             out.f10Uint32Arr = dst as any;
           } else if (!alreadySeen) {
             dst.length = 0;
           }
           for (let i = 0; i < count; i++) {
-            if (p >= bodyEnd) throw new Error('omnibuf: invalid uint32 array');
+            if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
             const vb = buf[p]!;
             if ((vb & 1) !== 0) {
               dst.push(vb >>> 1);
               p += 1;
             } else if ((vb & 2) !== 0) {
-              if (p + 2 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');
+              if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
               dst.push((vb | (buf[p + 1]! << 8)) >>> 2);
               p += 2;
             } else if ((vb & 4) !== 0) {
-              if (p + 4 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');
+              if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
               dst.push(
                 ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0,
               );
               p += 4;
             } else {
-              if (vb !== 0 || p + 9 > bodyEnd) throw new Error('omnibuf: invalid uint32 array');
+              if (vb !== 0 || p + 9 > bodyEnd)
+                throw new globalThis.Error('omnibuf: invalid uint32 array');
               dst.push(
                 (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>>
                   0,
@@ -2657,13 +2952,14 @@ export function decodeTestAllTypes(
               p += 9;
             }
           }
-          if (p !== bodyEnd) throw new Error('omnibuf: invalid uint32 array');
+          if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
           pos = bodyEnd;
           break;
         }
-        const prev = alreadySeen && Array.isArray(out.f10Uint32Arr) ? out.f10Uint32Arr : [];
-        const [arr, ok] = appendUint32ArrBody(prev, buf.subarray(pos, bodyEnd));
-        if (!ok) throw new Error('omnibuf: invalid uint32 array');
+        const prev =
+          alreadySeen && globalThis.Array.isArray(out.f10Uint32Arr) ? out.f10Uint32Arr : [];
+        const [arr, ok] = $ob.appendUint32ArrBody(prev, buf.subarray(pos, bodyEnd));
+        if (!ok) throw new globalThis.Error('omnibuf: invalid uint32 array');
         out.f10Uint32Arr = arr as any;
         pos = bodyEnd;
         break;
@@ -2671,7 +2967,13 @@ export function decodeTestAllTypes(
       case 11: {
         if (!(wt === 13)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2684,29 +2986,30 @@ export function decodeTestAllTypes(
         }
         seenMask |= bit;
         if (depth + 1 > maxDepth)
-          throw new Error(
+          throw new globalThis.Error(
             `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
           );
-        if (pos >= n) throw new Error('omnibuf: corrupt submsg array');
+        if (pos >= n) throw new globalThis.Error('omnibuf: corrupt submsg array');
         let arrLen = 0;
         const lb = buf[pos]!;
         if ((lb & 1) !== 0) {
           arrLen = lb >>> 1;
           pos += 1;
         } else if ((lb & 2) !== 0) {
-          if (pos + 2 > n) throw new Error('omnibuf: corrupt submsg array');
+          if (pos + 2 > n) throw new globalThis.Error('omnibuf: corrupt submsg array');
           arrLen = (lb | (buf[pos + 1]! << 8)) >>> 2;
           pos += 2;
         } else {
-          const [arrPayload, nextPos] = readLenSlice(buf, pos, 2, n);
-          const [elemCount, ok] = countSubMsgArrElems(arrPayload);
-          if (!ok) throw new Error('omnibuf: corrupt submsg array');
-          const elems = alreadySeen && Array.isArray(out.f11SubMsgArr) ? out.f11SubMsgArr : [];
-          let [, , p] = parseArrayHeader(arrPayload);
+          const [arrPayload, nextPos] = $ob.readLenSlice(buf, pos, 2, n);
+          const [elemCount, ok] = $ob.countSubMsgArrElems(arrPayload);
+          if (!ok) throw new globalThis.Error('omnibuf: corrupt submsg array');
+          const elems =
+            alreadySeen && globalThis.Array.isArray(out.f11SubMsgArr) ? out.f11SubMsgArr : [];
+          let [, , p] = $ob.parseArrayHeader(arrPayload);
           for (let i = 0; i < elemCount; i++) {
-            const [el, en] = decodeVarintBigInt(arrPayload, p);
+            const [el, en] = $ob.decodeVarintBigInt(arrPayload, p);
             p += en;
-            const elNum = Number(el);
+            const elNum = globalThis.Number(el);
             elems.push(
               decodeAllTypesSubMsg(arrPayload, undefined, depth + 2, options, p, p + elNum),
             );
@@ -2717,53 +3020,54 @@ export function decodeTestAllTypes(
           break;
         }
         const arrEnd = pos + arrLen;
-        if (arrLen < 2 || arrEnd > n) throw new Error('omnibuf: corrupt submsg array');
+        if (arrLen < 2 || arrEnd > n) throw new globalThis.Error('omnibuf: corrupt submsg array');
         if (buf[pos]! === 12 && (buf[pos + 1]! & 1) !== 0) {
           const elemCount = buf[pos + 1]! >>> 1;
           let p = pos + 2;
-          if (elemCount > arrEnd - p) throw new Error('omnibuf: corrupt submsg array');
+          if (elemCount > arrEnd - p) throw new globalThis.Error('omnibuf: corrupt submsg array');
           let elems = out.f11SubMsgArr;
-          if (!Array.isArray(elems)) {
+          if (!globalThis.Array.isArray(elems)) {
             elems = [];
             out.f11SubMsgArr = elems;
           } else if (!alreadySeen) {
             elems.length = 0;
           }
           for (let i = 0; i < elemCount; i++) {
-            if (p >= arrEnd) throw new Error('omnibuf: corrupt submsg array');
+            if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
             let elNum = 0;
             const eb0 = buf[p]!;
             if ((eb0 & 1) !== 0) {
               elNum = eb0 >>> 1;
               p += 1;
             } else if ((eb0 & 2) !== 0) {
-              if (p + 2 > arrEnd) throw new Error('omnibuf: corrupt submsg array');
+              if (p + 2 > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
               elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;
               p += 2;
             } else {
-              const [el, en] = decodeVarintBigInt(buf, p, arrEnd);
-              if (en === 0 || el > BigInt(arrEnd - (p + en)))
-                throw new Error('omnibuf: corrupt submsg array');
+              const [el, en] = $ob.decodeVarintBigInt(buf, p, arrEnd);
+              if (en === 0 || el > globalThis.BigInt(arrEnd - (p + en)))
+                throw new globalThis.Error('omnibuf: corrupt submsg array');
               p += en;
-              elNum = Number(el);
+              elNum = globalThis.Number(el);
             }
-            if (p + elNum > arrEnd) throw new Error('omnibuf: corrupt submsg array');
+            if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
             elems.push(decodeAllTypesSubMsg(buf, undefined, depth + 2, options, p, p + elNum));
             p += elNum;
           }
-          if (p !== arrEnd) throw new Error('omnibuf: corrupt submsg array');
+          if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
           pos = arrEnd;
           break;
         }
         const arrPayload = buf.subarray(pos, arrEnd);
-        const [elemCount, ok] = countSubMsgArrElems(arrPayload);
-        if (!ok) throw new Error('omnibuf: corrupt submsg array');
-        const elems = alreadySeen && Array.isArray(out.f11SubMsgArr) ? out.f11SubMsgArr : [];
-        let [, , p] = parseArrayHeader(arrPayload);
+        const [elemCount, ok] = $ob.countSubMsgArrElems(arrPayload);
+        if (!ok) throw new globalThis.Error('omnibuf: corrupt submsg array');
+        const elems =
+          alreadySeen && globalThis.Array.isArray(out.f11SubMsgArr) ? out.f11SubMsgArr : [];
+        let [, , p] = $ob.parseArrayHeader(arrPayload);
         for (let i = 0; i < elemCount; i++) {
-          const [el, en] = decodeVarintBigInt(arrPayload, p);
+          const [el, en] = $ob.decodeVarintBigInt(arrPayload, p);
           p += en;
-          const elNum = Number(el);
+          const elNum = globalThis.Number(el);
           elems.push(decodeAllTypesSubMsg(arrPayload, undefined, depth + 2, options, p, p + elNum));
           p += elNum;
         }
@@ -2774,7 +3078,13 @@ export function decodeTestAllTypes(
       case 12: {
         if (!(wt === 14)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2787,47 +3097,67 @@ export function decodeTestAllTypes(
         }
         seenMask |= bit;
         if (depth + 1 > maxDepth)
-          throw new Error(
+          throw new globalThis.Error(
             `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
           );
-        const [body, nextPos] = readLenSlice(buf, pos, 3, n);
+        const [body, nextPos] = $ob.readLenSlice(buf, pos, 3, n);
         const keyWT = body[0]!;
         const valWT = body[1]!;
-        validateMapTypes(keyWT, valWT);
-        if (keyWT !== 10 || valWT !== 0) throw new Error('omnibuf: WireMap header mismatch');
-        const [count, cn] = decodeVarintBigInt(body, 2);
-        if (cn === 0 || count > BigInt(Math.floor((body.length - (2 + cn)) / 2)))
-          throw new Error('omnibuf: invalid map count');
-        const dst: Record<string, any> =
+        $ob.validateMapTypes(keyWT, valWT);
+        if (keyWT !== 10 || valWT !== 0)
+          throw new globalThis.Error('omnibuf: WireMap header mismatch');
+        const [count, cn] = $ob.decodeVarintBigInt(body, 2);
+        if (
+          cn === 0 ||
+          count > globalThis.BigInt(globalThis.Math.floor((body.length - (2 + cn)) / 2))
+        )
+          throw new globalThis.Error('omnibuf: invalid map count');
+        const dst: { [key: string]: any } =
           alreadySeen && out.f12MapStrUint && typeof out.f12MapStrUint === 'object'
             ? out.f12MapStrUint
             : {};
         let p = 2 + cn;
-        const c = Number(count);
+        const c = globalThis.Number(count);
         for (let i = 0; i < c; i++) {
           let kVal: any;
           let vVal: any;
           {
-            if (keyWT !== 10) throw new Error('omnibuf: invalid map string wire type');
-            const [__s, __np] = readLenSlice(body, p, 0);
-            kVal = decodeUTF8(__s);
-            p = __np;
+            if (keyWT !== 10 || p >= body.length)
+              throw new globalThis.Error('omnibuf: invalid map string wire type');
+            const __sb = body[p]!;
+            if ((__sb & 1) !== 0) {
+              const __sl = __sb >>> 1;
+              p += 1;
+              if (p + __sl > body.length)
+                throw new globalThis.Error('omnibuf: truncated map string');
+              kVal = $ob.decodeUTF8(body, p, p + __sl);
+              p += __sl;
+            } else {
+              const [__s, __np] = $ob.readLenSlice(body, p, 0);
+              kVal = $ob.decodeUTF8(__s);
+              p = __np;
+            }
           }
           {
-            if (valWT !== 0) throw new Error('omnibuf: invalid map uint64 wire type');
-            const [__u, __un] = decodeVarintAuto(body, p);
-            if (__un === 0) throw new Error('omnibuf: truncated map uint64');
+            if (valWT !== 0) throw new globalThis.Error('omnibuf: invalid map uint64 wire type');
+            const [__u, __un] = $ob.decodeVarintAuto(body, p);
+            if (__un === 0) throw new globalThis.Error('omnibuf: truncated map uint64');
             vVal = __u;
             p += __un;
           }
-          Object.defineProperty(dst, String(kVal), {
-            value: vVal,
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
+          const __kStr = globalThis.String(kVal);
+          if (__kStr === '__proto__') {
+            globalThis.Object.defineProperty(dst, __kStr, {
+              value: vVal,
+              writable: true,
+              enumerable: true,
+              configurable: true,
+            });
+          } else {
+            dst[__kStr] = vVal;
+          }
         }
-        if (p !== body.length) throw new Error('omnibuf: map trailing bytes');
+        if (p !== body.length) throw new globalThis.Error('omnibuf: map trailing bytes');
         out.f12MapStrUint = dst;
         pos = nextPos;
         break;
@@ -2835,7 +3165,13 @@ export function decodeTestAllTypes(
       case 13: {
         if (!(wt === 8)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2847,17 +3183,23 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (n - pos < 4) throw new Error('omnibuf: truncated float32');
+        if (n - pos < 4) throw new globalThis.Error('omnibuf: truncated float32');
         const bits =
           (buf[pos]! | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 0;
-        out.f13Float32 = roundFloat32Shortest(float32FromBits(bits));
+        out.f13Float32 = $ob.float32FromBits(bits);
         pos += 4;
         break;
       }
       case 14: {
         if (!(wt === 9)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2869,15 +3211,21 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (n - pos < 8) throw new Error('omnibuf: truncated float64');
-        out.f14Float64 = readFloat64At(buf, pos);
+        if (n - pos < 8) throw new globalThis.Error('omnibuf: truncated float64');
+        out.f14Float64 = $ob.readFloat64At(buf, pos);
         pos += 8;
         break;
       }
       case 15: {
         if (!(wt === 4)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2889,7 +3237,7 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (n - pos < 4) throw new Error('omnibuf: truncated fixed32');
+        if (n - pos < 4) throw new globalThis.Error('omnibuf: truncated fixed32');
         const bits =
           (buf[pos]! | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 0;
         out.f15Fixed32 = bits;
@@ -2899,7 +3247,13 @@ export function decodeTestAllTypes(
       case 16: {
         if (!(wt === 5)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2911,17 +3265,23 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (n - pos < 8) throw new Error('omnibuf: truncated fixed64');
+        if (n - pos < 8) throw new globalThis.Error('omnibuf: truncated fixed64');
         let u64 = 0n;
-        for (let b = 7; b >= 0; b--) u64 = (u64 << 8n) | BigInt(buf[pos + b]!);
-        out.f16Fixed64 = u64 <= 9007199254740991n ? Number(u64) : u64;
+        for (let b = 7; b >= 0; b--) u64 = (u64 << 8n) | globalThis.BigInt(buf[pos + b]!);
+        out.f16Fixed64 = u64 <= 9007199254740991n ? globalThis.Number(u64) : u64;
         pos += 8;
         break;
       }
       case 20: {
         if (!(wt === 10)) {
           const valStart = pos;
-          pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+          pos = $ob.validateValue(
+            n < buf.length ? buf.subarray(0, n) : buf,
+            pos,
+            wt,
+            depth,
+            maxDepth,
+          );
           if (readUnknown) {
             if (!unknownFields) unknownFields = [];
             unknownFields.push({
@@ -2933,24 +3293,30 @@ export function decodeTestAllTypes(
           break;
         }
         seenMask |= bit;
-        if (pos >= n) throw new Error('omnibuf: truncated string');
+        if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
-          if (pos + sLen > n) throw new Error('omnibuf: truncated string');
-          out.f20OverflowStr = decodeUTF8(buf, pos, pos + sLen);
+          if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
+          out.f20OverflowStr = $ob.decodeUTF8(buf, pos, pos + sLen);
           pos += sLen;
         } else {
-          const [s, nextPos] = readLenSlice(buf, pos, 0, n);
-          out.f20OverflowStr = decodeUTF8(s);
+          const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
+          out.f20OverflowStr = $ob.decodeUTF8(s);
           pos = nextPos;
         }
         break;
       }
       default: {
         const valStart = pos;
-        pos = validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);
+        pos = $ob.validateValue(
+          n < buf.length ? buf.subarray(0, n) : buf,
+          pos,
+          wt,
+          depth,
+          maxDepth,
+        );
         if (readUnknown) {
           if (!unknownFields) unknownFields = [];
           unknownFields.push({
@@ -2964,7 +3330,7 @@ export function decodeTestAllTypes(
     }
   }
   if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {
-    Object.defineProperty(out, '$unknown', {
+    globalThis.Object.defineProperty(out, '$unknown', {
       value: unknownFields,
       enumerable: false,
       writable: true,
@@ -2975,8 +3341,8 @@ export function decodeTestAllTypes(
 }
 
 export function unmarshalTestAllTypesOmniBuf(
-  buf: Uint8Array,
-  options?: BinaryReadOptions,
+  buf: globalThis.Uint8Array,
+  options?: $ob.BinaryReadOptions,
 ): TestAllTypes {
   return decodeTestAllTypes(buf, undefined, 0, options);
 }
@@ -2986,9 +3352,13 @@ TestAllTypesSchema.setGeneratedCodec({
   encode: encodeTestAllTypes,
   decode: decodeTestAllTypes,
 });
+$ob.registerClassSchema(TestAllTypesMsg as unknown as new () => TestAllTypes, TestAllTypesSchema);
 
 export class OpaqueTestAllTypes {
-  private _raw: Uint8Array;
+  private _raw: globalThis.Uint8Array;
+  private _depth: number;
+  private _readCount = 0;
+  private _fieldIndex: globalThis.Map<number, $ob.OpaqueFieldSpan> | null = null;
   private _dirtyMask = 0;
   private _f1Uint32?: number;
   private _f2Uint64?: number | bigint;
@@ -2996,23 +3366,36 @@ export class OpaqueTestAllTypes {
   private _f4Sint64?: number | bigint;
   private _f5Bool?: boolean;
   private _f6String?: string;
-  private _f7Bytes?: Uint8Array;
+  private _f7Bytes?: globalThis.Uint8Array;
   private _f8SubMsg?: AllTypesSubMsg | null;
   private _f9StringArr?: string[];
   private _f10Uint32Arr?: number[];
   private _f11SubMsgArr?: AllTypesSubMsg[];
-  private _f12MapStrUint?: Record<string, number | bigint>;
+  private _f12MapStrUint?: { [key: string]: number | bigint };
   private _f13Float32?: number;
   private _f14Float64?: number;
   private _f15Fixed32?: number;
   private _f16Fixed64?: number | bigint;
   private _f20OverflowStr?: string;
+  private _opaque_f8SubMsg?: OpaqueAllTypesSubMsg | null;
 
-  constructor(raw: Uint8Array) {
+  constructor(raw: globalThis.Uint8Array, depth = 0) {
     this._raw = raw;
+    this._depth = depth;
   }
 
-  raw(): Uint8Array {
+  private _sliceField(fieldNum: number): globalThis.Uint8Array | null {
+    if (this._fieldIndex === null) {
+      if (this._readCount < 2) {
+        this._readCount++;
+        return this._raw;
+      }
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+    }
+    return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
+  }
+
+  raw(): globalThis.Uint8Array {
     return this._raw;
   }
 
@@ -3020,7 +3403,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 1)) !== 0) {
       return this._f1Uint32!;
     }
-    return readUint32(this._raw, 1)[0] as any;
+    const __src = this._sliceField(1);
+    return (__src ? $ob.readUint32(__src, 1)[0] : 0) as any;
   }
 
   f1Uint32(): number {
@@ -3040,7 +3424,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 2)) !== 0) {
       return this._f2Uint64!;
     }
-    return readUintAuto(this._raw, 2)[0];
+    const __src = this._sliceField(2);
+    return __src ? $ob.readUintAuto(__src, 2)[0] : 0;
   }
 
   f2Uint64(): number | bigint {
@@ -3060,7 +3445,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 3)) !== 0) {
       return this._f3Sint32!;
     }
-    return readInt32(this._raw, 3)[0];
+    const __src = this._sliceField(3);
+    return __src ? $ob.readInt32(__src, 3)[0] : 0;
   }
 
   f3Sint32(): number {
@@ -3080,7 +3466,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 4)) !== 0) {
       return this._f4Sint64!;
     }
-    return readIntAuto(this._raw, 4)[0];
+    const __src = this._sliceField(4);
+    return __src ? $ob.readIntAuto(__src, 4)[0] : 0;
   }
 
   f4Sint64(): number | bigint {
@@ -3100,7 +3487,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 5)) !== 0) {
       return this._f5Bool!;
     }
-    return readBool(this._raw, 5)[0];
+    const __src = this._sliceField(5);
+    return __src ? $ob.readBool(__src, 5)[0] : false;
   }
 
   f5Bool(): boolean {
@@ -3120,7 +3508,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 6)) !== 0) {
       return this._f6String!;
     }
-    return readString(this._raw, 6)[0];
+    const __src = this._sliceField(6);
+    return __src ? $ob.readString(__src, 6)[0] : '';
   }
 
   f6String(): string {
@@ -3136,22 +3525,31 @@ export class OpaqueTestAllTypes {
     this._dirtyMask |= 1 << 6;
   }
 
-  getF7Bytes(): Uint8Array {
+  getF7Bytes(): globalThis.Uint8Array {
     if ((this._dirtyMask & (1 << 7)) !== 0) {
       return this._f7Bytes!;
     }
-    return readBytes(this._raw, 7)[0];
+    const __src = this._sliceField(7);
+    return __src ? $ob.readBytes(__src, 7)[0] : new globalThis.Uint8Array(0);
   }
 
-  f7Bytes(): Uint8Array {
+  getF7BytesView(): globalThis.Uint8Array {
+    if ((this._dirtyMask & (1 << 7)) !== 0) {
+      return this._f7Bytes!;
+    }
+    const __src = this._sliceField(7);
+    return __src ? $ob.readBytesView(__src, 7)[0] : new globalThis.Uint8Array(0);
+  }
+
+  f7Bytes(): globalThis.Uint8Array {
     return this.getF7Bytes();
   }
 
-  f7_bytes(): Uint8Array {
+  f7_bytes(): globalThis.Uint8Array {
     return this.getF7Bytes();
   }
 
-  setF7Bytes(val: Uint8Array): void {
+  setF7Bytes(val: globalThis.Uint8Array): void {
     this._f7Bytes = val;
     this._dirtyMask |= 1 << 7;
   }
@@ -3161,11 +3559,45 @@ export class OpaqueTestAllTypes {
       return this._f8SubMsg!;
     }
     if (this._f8SubMsg === undefined) {
-      this._f8SubMsg = readSubMsgMerged<AllTypesSubMsg>(this._raw, 8, (sub, target, merge, s, e) =>
-        decodeAllTypesSubMsg(sub, target, 0, merge ? { merge: true } : undefined, s, e),
-      )[0];
+      const __src = this._sliceField(8);
+      this._f8SubMsg = __src
+        ? $ob.readSubMsgMerged<AllTypesSubMsg>(__src, 8, (sub, target, merge, s, e) =>
+            decodeAllTypesSubMsg(
+              sub,
+              target,
+              this._depth + 1,
+              merge ? { merge: true } : undefined,
+              s,
+              e,
+            ),
+          )[0]
+        : null;
     }
     return this._f8SubMsg;
+  }
+
+  getF8SubMsgOpaque(): OpaqueAllTypesSubMsg | undefined {
+    if (this._depth + 1 > $ob.MaxNestingDepth) {
+      throw new globalThis.Error(
+        `omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`,
+      );
+    }
+    if (this._opaque_f8SubMsg !== undefined) {
+      return this._opaque_f8SubMsg ?? undefined;
+    }
+    const __src = this._sliceField(8);
+    if (!__src) {
+      this._opaque_f8SubMsg = null;
+      return undefined;
+    }
+    const [sub, ok] = $ob.readSubMsg(__src, 8);
+    if (!ok) {
+      this._opaque_f8SubMsg = null;
+      return undefined;
+    }
+    const nested = new OpaqueAllTypesSubMsg(sub, this._depth + 1);
+    this._opaque_f8SubMsg = nested;
+    return nested;
   }
 
   f8SubMsg(): AllTypesSubMsg | null {
@@ -3178,6 +3610,7 @@ export class OpaqueTestAllTypes {
 
   setF8SubMsg(val: AllTypesSubMsg | null): void {
     this._f8SubMsg = val;
+    this._opaque_f8SubMsg = undefined;
     this._dirtyMask |= 1 << 8;
   }
 
@@ -3186,7 +3619,8 @@ export class OpaqueTestAllTypes {
       return this._f9StringArr!;
     }
     if (this._f9StringArr === undefined) {
-      this._f9StringArr = readStringArr(this._raw, 9)[0];
+      const __src = this._sliceField(9);
+      this._f9StringArr = __src ? $ob.readStringArr(__src, 9)[0] : [];
     }
     return this._f9StringArr!;
   }
@@ -3209,7 +3643,8 @@ export class OpaqueTestAllTypes {
       return this._f10Uint32Arr!;
     }
     if (this._f10Uint32Arr === undefined) {
-      this._f10Uint32Arr = readUint32Arr(this._raw, 10)[0] as any;
+      const __src = this._sliceField(10);
+      this._f10Uint32Arr = __src ? ($ob.readUint32Arr(__src, 10)[0] as any) : [];
     }
     return this._f10Uint32Arr!;
   }
@@ -3232,9 +3667,12 @@ export class OpaqueTestAllTypes {
       return this._f11SubMsgArr!;
     }
     if (this._f11SubMsgArr === undefined) {
-      this._f11SubMsgArr = readSubMsgArrDecoded(this._raw, 11, (sub) =>
-        decodeAllTypesSubMsg(sub),
-      )[0];
+      const __src = this._sliceField(11);
+      this._f11SubMsgArr = __src
+        ? $ob.readSubMsgArrDecoded(__src, 11, (sub) =>
+            decodeAllTypesSubMsg(sub, undefined, this._depth + 1),
+          )[0]
+        : [];
     }
     return this._f11SubMsgArr!;
   }
@@ -3252,25 +3690,25 @@ export class OpaqueTestAllTypes {
     this._dirtyMask |= 1 << 11;
   }
 
-  getF12MapStrUint(): Record<string, number | bigint> {
+  getF12MapStrUint(): { [key: string]: number | bigint } {
     if ((this._dirtyMask & (1 << 12)) !== 0) {
       return this._f12MapStrUint!;
     }
     if (this._f12MapStrUint === undefined) {
-      this._f12MapStrUint = readTypedMap(this._raw, 12, 'string', 'uint64')[0];
+      this._f12MapStrUint = $ob.readTypedMap(this._raw, 12, 'string', 'uint64')[0];
     }
     return this._f12MapStrUint!;
   }
 
-  f12MapStrUint(): Record<string, number | bigint> {
+  f12MapStrUint(): { [key: string]: number | bigint } {
     return this.getF12MapStrUint();
   }
 
-  f12_map_str_uint(): Record<string, number | bigint> {
+  f12_map_str_uint(): { [key: string]: number | bigint } {
     return this.getF12MapStrUint();
   }
 
-  setF12MapStrUint(val: Record<string, number | bigint>): void {
+  setF12MapStrUint(val: { [key: string]: number | bigint }): void {
     this._f12MapStrUint = val;
     this._dirtyMask |= 1 << 12;
   }
@@ -3279,7 +3717,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 13)) !== 0) {
       return this._f13Float32!;
     }
-    return roundFloat32Shortest(readFloat32(this._raw, 13)[0]);
+    const __src = this._sliceField(13);
+    return __src ? $ob.readFloat32(__src, 13)[0] : 0;
   }
 
   f13Float32(): number {
@@ -3299,7 +3738,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 14)) !== 0) {
       return this._f14Float64!;
     }
-    return readFloat64(this._raw, 14)[0];
+    const __src = this._sliceField(14);
+    return __src ? $ob.readFloat64(__src, 14)[0] : 0;
   }
 
   f14Float64(): number {
@@ -3319,7 +3759,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 15)) !== 0) {
       return this._f15Fixed32!;
     }
-    return readFixed32(this._raw, 15)[0];
+    const __src = this._sliceField(15);
+    return __src ? $ob.readFixed32(__src, 15)[0] : 0;
   }
 
   f15Fixed32(): number {
@@ -3339,7 +3780,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 16)) !== 0) {
       return this._f16Fixed64!;
     }
-    return readFixed64Auto(this._raw, 16)[0];
+    const __src = this._sliceField(16);
+    return __src ? $ob.readFixed64Auto(__src, 16)[0] : 0;
   }
 
   f16Fixed64(): number | bigint {
@@ -3359,7 +3801,8 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 20)) !== 0) {
       return this._f20OverflowStr!;
     }
-    return readString(this._raw, 20)[0];
+    const __src = this._sliceField(20);
+    return __src ? $ob.readString(__src, 20)[0] : '';
   }
 
   f20OverflowStr(): string {
@@ -3375,13 +3818,14 @@ export class OpaqueTestAllTypes {
     this._dirtyMask |= 1 << 20;
   }
 
-  marshal(options?: MarshalOptions): Uint8Array {
+  marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
+    let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      this._raw = spliceFields(this._raw, this._dirtyMask, 20, (enc, fnum) => {
+      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 20, (enc, fnum) => {
         switch (fnum) {
           case 1: {
             const msg = { f1Uint32: this._f1Uint32! } as Partial<TestAllTypes>;
-            enc.writeUint(1, Number(msg.f1Uint32 ?? msg.f1_uint32 ?? 0) >>> 0);
+            enc.writeUint(1, globalThis.Number(msg.f1Uint32 ?? msg.f1_uint32 ?? 0) >>> 0);
             break;
           }
           case 2: {
@@ -3391,7 +3835,7 @@ export class OpaqueTestAllTypes {
           }
           case 3: {
             const msg = { f3Sint32: this._f3Sint32! } as Partial<TestAllTypes>;
-            enc.writeInt(3, Number(msg.f3Sint32 ?? msg.f3_sint32 ?? 0) | 0);
+            enc.writeInt(3, globalThis.Number(msg.f3Sint32 ?? msg.f3_sint32 ?? 0) | 0);
             break;
           }
           case 4: {
@@ -3401,7 +3845,7 @@ export class OpaqueTestAllTypes {
           }
           case 5: {
             const msg = { f5Bool: this._f5Bool! } as Partial<TestAllTypes>;
-            enc.writeBool(5, Boolean(msg.f5Bool ?? msg.f5_bool));
+            enc.writeBool(5, globalThis.Boolean(msg.f5Bool ?? msg.f5_bool));
             break;
           }
           case 6: {
@@ -3411,7 +3855,7 @@ export class OpaqueTestAllTypes {
           }
           case 7: {
             const msg = { f7Bytes: this._f7Bytes! } as Partial<TestAllTypes>;
-            enc.writeBytes(7, msg.f7Bytes ?? msg.f7_bytes ?? new Uint8Array(0));
+            enc.writeBytes(7, msg.f7Bytes ?? msg.f7_bytes ?? new globalThis.Uint8Array(0));
             break;
           }
           case 8: {
@@ -3454,16 +3898,18 @@ export class OpaqueTestAllTypes {
           case 12: {
             const msg = { f12MapStrUint: this._f12MapStrUint! } as Partial<TestAllTypes>;
             {
-              const entries = Object.entries(msg.f12MapStrUint ?? msg.f12_map_str_uint ?? {});
-              if (options?.deterministic) entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+              const entries = globalThis.Object.entries(
+                msg.f12MapStrUint ?? msg.f12_map_str_uint ?? {},
+              );
+              if (options?.deterministic) entries.sort(([a], [b]) => $ob.compareUTF8Strings(a, b));
               enc.writeTag(12, 14);
-              enc.beginContainer();
+              enc.beginContainer(3 + entries.length * 2);
               enc.writeByte(10);
               enc.writeByte(0);
               enc.writeRawVarint(entries.length);
               for (const [k, v] of entries) {
                 enc.writeRawStringPayload(k);
-                enc.writeRawVarint(BigInt(v));
+                enc.writeRawVarint($ob.toBigInt64Input(v));
               }
               enc.endContainer();
             }
@@ -3481,7 +3927,7 @@ export class OpaqueTestAllTypes {
           }
           case 15: {
             const msg = { f15Fixed32: this._f15Fixed32! } as Partial<TestAllTypes>;
-            enc.writeFixed32(15, Number(msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0) >>> 0);
+            enc.writeFixed32(15, globalThis.Number(msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0) >>> 0);
             break;
           }
           case 16: {
@@ -3496,20 +3942,39 @@ export class OpaqueTestAllTypes {
           }
         }
       });
-      this._dirtyMask = 0;
     } else {
-      validateMessage(this._raw);
+      $ob.validateMessage(this._raw, this._depth);
+      outBuf = this._raw.slice();
     }
-    if (options?.selfDescribing && !readField0SchemaMeta(this._raw)[1]) {
-      const f0 = encodeField0SchemaMeta(
+    if (options?.selfDescribing && !$ob.readField0SchemaMeta(outBuf)[1]) {
+      const f0 = $ob.encodeField0SchemaMeta(
         TestAllTypesSchema.getSchemaMeta(0),
-        Boolean(options.deterministic),
+        globalThis.Boolean(options.deterministic),
       );
-      const out = new Uint8Array(f0.length + this._raw.length);
-      out.set(f0, 0);
-      out.set(this._raw, f0.length);
-      return out;
+      const withF0 = new globalThis.Uint8Array(f0.length + outBuf.length);
+      withF0.set(f0, 0);
+      withF0.set(outBuf, f0.length);
+      return withF0;
     }
-    return this._raw;
+    return outBuf;
+  }
+
+  marshalValidated(options?: $ob.MarshalOptions): globalThis.Uint8Array {
+    const out = this.marshal(options);
+    $ob.validateMessage(out, this._depth);
+    return out;
+  }
+
+  tryMarshal(
+    options?: $ob.MarshalOptions,
+  ): { ok: true; value: globalThis.Uint8Array } | { ok: false; error: globalThis.Error } {
+    try {
+      return { ok: true, value: this.marshalValidated(options) };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof globalThis.Error ? err : new globalThis.Error(globalThis.String(err)),
+      };
+    }
   }
 }

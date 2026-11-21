@@ -797,11 +797,123 @@ it('generated codecs enforce Spec §10 container depth, empty map headers, 32-bi
     mod.decodeHolder(new Uint8Array(0), plainTarget);
     assert.equal(Object.hasOwn(plainTarget, 'opt_num'), false);
 
-    // 6. Clean Opaque.marshal() validates corrupt bytes while preserving zero-copy identity on valid bytes
+    // 6. Clean Opaque.marshal() validates corrupt bytes and returns an independent copy on valid bytes
     const corruptOpaque = new mod.OpaqueHolder(new Uint8Array([0x55]));
     assert.throws(() => corruptOpaque.marshal());
     const cleanOpaque = new mod.OpaqueHolder(zeroBytes);
-    assert.equal(cleanOpaque.marshal(), zeroBytes);
+    const cleanOut = cleanOpaque.marshal();
+    assert.deepEqual(cleanOut, zeroBytes);
+    assert.notEqual(cleanOut, zeroBytes);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it('generated codecs support zeroCopy decode, Opaque view helpers, lazy nested Opaque caching, and tryMarshal', async () => {
+  const fds: FileDescriptorSetJSON = {
+    file: [
+      {
+        name: 'zerocopy.proto',
+        package: 'test.zc',
+        syntax: 'proto3',
+        messageType: [
+          {
+            name: 'Leaf',
+            field: [
+              { name: 'id', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' },
+              { name: 'blob', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_BYTES' },
+            ],
+          },
+          {
+            name: 'Container',
+            field: [
+              { name: 'payload', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_BYTES' },
+              { name: 'chunks', number: 2, label: 'LABEL_REPEATED', type: 'TYPE_BYTES' },
+              {
+                name: 'leaf',
+                number: 3,
+                label: 'LABEL_OPTIONAL',
+                type: 'TYPE_MESSAGE',
+                typeName: '.test.zc.Leaf',
+              },
+              {
+                name: 'dict',
+                number: 4,
+                label: 'LABEL_REPEATED',
+                type: 'TYPE_MESSAGE',
+                typeName: '.test.zc.Container.DictEntry',
+              },
+            ],
+            nestedType: [
+              {
+                name: 'DictEntry',
+                options: { mapEntry: true },
+                field: [
+                  { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+                  { name: 'value', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_BYTES' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const { mkdtemp, rm, writeFile } = await import('node:fs/promises');
+  const { fileURLToPath, pathToFileURL } = await import('node:url');
+  const files = generateFromDescriptorSet(fds);
+  const dir = await mkdtemp(fileURLToPath(new URL('./tmp-zc-', import.meta.url)));
+  try {
+    const outPath = `${dir}/${files[0]!.name}`;
+    await writeFile(outPath, files[0]!.content);
+    const mod = await import(pathToFileURL(outPath).href);
+
+    const wire: Uint8Array = mod.marshalContainerOmniBuf({
+      payload: new Uint8Array([1, 2, 3]),
+      chunks: [new Uint8Array([4, 5]), new Uint8Array([6, 7])],
+      leaf: { id: 42, blob: new Uint8Array([8, 9]) },
+      dict: { a: new Uint8Array([10, 11]) },
+    });
+
+    // Default decode copies bytes
+    const copied = mod.decodeContainer(wire);
+    assert.notEqual(copied.payload.buffer, wire.buffer);
+    assert.notEqual(copied.chunks[0].buffer, wire.buffer);
+    assert.notEqual(copied.dict.a.buffer, wire.buffer);
+
+    // zeroCopy: true returns subarray views into input buffer
+    const viewed = mod.decodeContainer(wire, undefined, 0, { zeroCopy: true });
+    assert.equal(viewed.payload.buffer, wire.buffer);
+    assert.equal(viewed.chunks[0].buffer, wire.buffer);
+    assert.equal(viewed.dict.a.buffer, wire.buffer);
+    assert.equal(viewed.leaf.blob.buffer, wire.buffer);
+
+    // Opaque zero-copy view helpers, lazy nested Opaque caching, and tryMarshal
+    const op = new mod.OpaqueContainer(wire);
+    const pView: Uint8Array = op.getPayloadView();
+    assert.equal(pView.buffer, wire.buffer);
+    assert.deepEqual(Array.from(pView), [1, 2, 3]);
+
+    const cViews: Uint8Array[] = op.getChunksView();
+    assert.equal(cViews.length, 2);
+    assert.equal(cViews[0]!.buffer, wire.buffer);
+
+    const leafOp1 = op.getLeafOpaque();
+    const leafOp2 = op.getLeafOpaque();
+    assert.ok(leafOp1);
+    assert.equal(leafOp1, leafOp2, 'Expected lazy nested Opaque to be cached');
+    assert.equal(leafOp1.getId(), 42);
+    assert.equal(leafOp1.getBlobView().buffer, wire.buffer);
+
+    const okRes = op.tryMarshal();
+    assert.equal(okRes.ok, true);
+    assert.deepEqual(okRes.value, wire);
+
+    const badOp = new mod.OpaqueContainer(new Uint8Array([0x55]));
+    const errRes = badOp.tryMarshal();
+    assert.equal(errRes.ok, false);
+    assert.ok(errRes.error instanceof Error);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -16,6 +16,7 @@ import {
   WireString,
   WireSubMsg,
   WireUint,
+  assertValidUTF8,
   decodeVarintBigInt,
   parseArrayHeader,
   parseMapHeader,
@@ -53,6 +54,11 @@ function validateContainerEntry(
     }
     return p + 1;
   }
+  if (wt === WireString) {
+    const [strSlice, nextP] = readLenSlice(body, p, 0);
+    assertValidUTF8(strSlice);
+    return nextP;
+  }
   if (wt === WireSubMsg) {
     const [sub, nextP] = readLenSlice(body, p, 0);
     validateMessage(sub, depth + 1, limit);
@@ -73,6 +79,11 @@ export function validateValue(
   limit = MaxNestingDepth,
 ): number {
   if (depth > limit) throw new Error(`omnibuf: nesting depth exceeds ${limit}`);
+  if (wt === WireString) {
+    const [strSlice, end] = readLenSlice(data, pos, 0);
+    assertValidUTF8(strSlice);
+    return end;
+  }
   if (wt === WireSubMsg) {
     const [body, end] = readLenSlice(data, pos, 0);
     validateMessage(body, depth + 1, limit);
