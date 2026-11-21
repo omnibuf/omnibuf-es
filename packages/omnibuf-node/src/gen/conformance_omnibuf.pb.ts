@@ -130,6 +130,27 @@ export function createConformanceRequest(
   return ConformanceRequestSchema.create(init);
 }
 
+export function minBytesConformanceRequest(msg: Partial<ConformanceRequest>): number {
+  let sz = 18;
+  {
+    const s = msg.testName ?? msg.test_name;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const s = msg.messageType ?? msg.message_type;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const b = msg.omnibufPayload ?? msg.omnibuf_payload;
+    if (b !== null && b !== undefined) sz += b.length;
+  }
+  {
+    const s = msg.jsonPayload ?? msg.json_payload;
+    if (typeof s === 'string') sz += s.length;
+  }
+  return sz;
+}
+
 export function encodeConformanceRequest(
   enc: $ob.Encoder,
   msg: Partial<ConformanceRequest>,
@@ -159,6 +180,9 @@ export function marshalConformanceRequestOmniBuf(
   msg: Partial<ConformanceRequest>,
   options?: $ob.MarshalOptions,
 ): globalThis.Uint8Array {
+  if (options?.selfDescribing && ConformanceRequestSchema.isCyclicOrDeep()) {
+    return ConformanceRequestSchema.encode(msg as ConformanceRequest, options);
+  }
   const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
     $ob.writeField0SchemaMeta(
@@ -620,7 +644,7 @@ export class OpaqueConformanceRequest {
         this._readCount++;
         return this._raw;
       }
-      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw, this._depth);
     }
     return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
   }
@@ -825,70 +849,78 @@ export class OpaqueConformanceRequest {
   marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
     let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 9, (enc, fnum) => {
-        switch (fnum) {
-          case 1: {
-            const msg = { testName: this._testName! } as Partial<ConformanceRequest>;
-            enc.writeString(1, msg.testName ?? msg.test_name ?? '');
-            break;
+      outBuf = $ob.spliceFields(
+        this._raw,
+        this._dirtyMask,
+        9,
+        (enc, fnum) => {
+          switch (fnum) {
+            case 1: {
+              const msg = { testName: this._testName! } as Partial<ConformanceRequest>;
+              enc.writeString(1, msg.testName ?? msg.test_name ?? '');
+              break;
+            }
+            case 2: {
+              const msg = { messageType: this._messageType! } as Partial<ConformanceRequest>;
+              enc.writeString(2, msg.messageType ?? msg.message_type ?? '');
+              break;
+            }
+            case 3: {
+              const msg = { tier: this._tier! } as Partial<ConformanceRequest>;
+              enc.writeInt(3, globalThis.Number(msg.tier ?? 0) | 0);
+              break;
+            }
+            case 4: {
+              const msg = {
+                requestedOutputFormat: this._requestedOutputFormat!,
+              } as Partial<ConformanceRequest>;
+              enc.writeInt(
+                4,
+                globalThis.Number(msg.requestedOutputFormat ?? msg.requested_output_format ?? 0) |
+                  0,
+              );
+              break;
+            }
+            case 5: {
+              const msg = { omnibufPayload: this._omnibufPayload! } as Partial<ConformanceRequest>;
+              enc.writeBytes(
+                5,
+                msg.omnibufPayload ?? msg.omnibuf_payload ?? new globalThis.Uint8Array(0),
+              );
+              break;
+            }
+            case 6: {
+              const msg = { jsonPayload: this._jsonPayload! } as Partial<ConformanceRequest>;
+              enc.writeString(6, msg.jsonPayload ?? msg.json_payload ?? '');
+              break;
+            }
+            case 7: {
+              const msg = { selfDescribing: this._selfDescribing! } as Partial<ConformanceRequest>;
+              enc.writeBool(7, globalThis.Boolean(msg.selfDescribing ?? msg.self_describing));
+              break;
+            }
+            case 8: {
+              const msg = {
+                testOpaqueSplice: this._testOpaqueSplice!,
+              } as Partial<ConformanceRequest>;
+              enc.writeBool(8, globalThis.Boolean(msg.testOpaqueSplice ?? msg.test_opaque_splice));
+              break;
+            }
+            case 9: {
+              const msg = {
+                testOpaqueSpliceShrink: this._testOpaqueSpliceShrink!,
+              } as Partial<ConformanceRequest>;
+              enc.writeBool(
+                9,
+                globalThis.Boolean(msg.testOpaqueSpliceShrink ?? msg.test_opaque_splice_shrink),
+              );
+              break;
+            }
           }
-          case 2: {
-            const msg = { messageType: this._messageType! } as Partial<ConformanceRequest>;
-            enc.writeString(2, msg.messageType ?? msg.message_type ?? '');
-            break;
-          }
-          case 3: {
-            const msg = { tier: this._tier! } as Partial<ConformanceRequest>;
-            enc.writeInt(3, globalThis.Number(msg.tier ?? 0) | 0);
-            break;
-          }
-          case 4: {
-            const msg = {
-              requestedOutputFormat: this._requestedOutputFormat!,
-            } as Partial<ConformanceRequest>;
-            enc.writeInt(
-              4,
-              globalThis.Number(msg.requestedOutputFormat ?? msg.requested_output_format ?? 0) | 0,
-            );
-            break;
-          }
-          case 5: {
-            const msg = { omnibufPayload: this._omnibufPayload! } as Partial<ConformanceRequest>;
-            enc.writeBytes(
-              5,
-              msg.omnibufPayload ?? msg.omnibuf_payload ?? new globalThis.Uint8Array(0),
-            );
-            break;
-          }
-          case 6: {
-            const msg = { jsonPayload: this._jsonPayload! } as Partial<ConformanceRequest>;
-            enc.writeString(6, msg.jsonPayload ?? msg.json_payload ?? '');
-            break;
-          }
-          case 7: {
-            const msg = { selfDescribing: this._selfDescribing! } as Partial<ConformanceRequest>;
-            enc.writeBool(7, globalThis.Boolean(msg.selfDescribing ?? msg.self_describing));
-            break;
-          }
-          case 8: {
-            const msg = {
-              testOpaqueSplice: this._testOpaqueSplice!,
-            } as Partial<ConformanceRequest>;
-            enc.writeBool(8, globalThis.Boolean(msg.testOpaqueSplice ?? msg.test_opaque_splice));
-            break;
-          }
-          case 9: {
-            const msg = {
-              testOpaqueSpliceShrink: this._testOpaqueSpliceShrink!,
-            } as Partial<ConformanceRequest>;
-            enc.writeBool(
-              9,
-              globalThis.Boolean(msg.testOpaqueSpliceShrink ?? msg.test_opaque_splice_shrink),
-            );
-            break;
-          }
-        }
-      });
+        },
+        undefined,
+        this._depth,
+      );
     } else {
       $ob.validateMessage(this._raw, this._depth);
       outBuf = this._raw.slice();
@@ -1008,6 +1040,35 @@ export function createConformanceResponse(
   return ConformanceResponseSchema.create(init);
 }
 
+export function minBytesConformanceResponse(msg: Partial<ConformanceResponse>): number {
+  let sz = 12;
+  {
+    const s = msg.parseError ?? msg.parse_error;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const s = msg.serializeError ?? msg.serialize_error;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const s = msg.runtimeError ?? msg.runtime_error;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const s = msg.skipped;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const b = msg.omnibufPayload ?? msg.omnibuf_payload;
+    if (b !== null && b !== undefined) sz += b.length;
+  }
+  {
+    const s = msg.jsonPayload ?? msg.json_payload;
+    if (typeof s === 'string') sz += s.length;
+  }
+  return sz;
+}
+
 export function encodeConformanceResponse(
   enc: $ob.Encoder,
   msg: Partial<ConformanceResponse>,
@@ -1031,6 +1092,9 @@ export function marshalConformanceResponseOmniBuf(
   msg: Partial<ConformanceResponse>,
   options?: $ob.MarshalOptions,
 ): globalThis.Uint8Array {
+  if (options?.selfDescribing && ConformanceResponseSchema.isCyclicOrDeep()) {
+    return ConformanceResponseSchema.encode(msg as ConformanceResponse, options);
+  }
   const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
     $ob.writeField0SchemaMeta(
@@ -1385,7 +1449,7 @@ export class OpaqueConformanceResponse {
         this._readCount++;
         return this._raw;
       }
-      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw, this._depth);
     }
     return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
   }
@@ -1527,43 +1591,50 @@ export class OpaqueConformanceResponse {
   marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
     let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 6, (enc, fnum) => {
-        switch (fnum) {
-          case 1: {
-            const msg = { parseError: this._parseError! } as Partial<ConformanceResponse>;
-            enc.writeString(1, msg.parseError ?? msg.parse_error ?? '');
-            break;
+      outBuf = $ob.spliceFields(
+        this._raw,
+        this._dirtyMask,
+        6,
+        (enc, fnum) => {
+          switch (fnum) {
+            case 1: {
+              const msg = { parseError: this._parseError! } as Partial<ConformanceResponse>;
+              enc.writeString(1, msg.parseError ?? msg.parse_error ?? '');
+              break;
+            }
+            case 2: {
+              const msg = { serializeError: this._serializeError! } as Partial<ConformanceResponse>;
+              enc.writeString(2, msg.serializeError ?? msg.serialize_error ?? '');
+              break;
+            }
+            case 3: {
+              const msg = { runtimeError: this._runtimeError! } as Partial<ConformanceResponse>;
+              enc.writeString(3, msg.runtimeError ?? msg.runtime_error ?? '');
+              break;
+            }
+            case 4: {
+              const msg = { skipped: this._skipped! } as Partial<ConformanceResponse>;
+              enc.writeString(4, msg.skipped ?? '');
+              break;
+            }
+            case 5: {
+              const msg = { omnibufPayload: this._omnibufPayload! } as Partial<ConformanceResponse>;
+              enc.writeBytes(
+                5,
+                msg.omnibufPayload ?? msg.omnibuf_payload ?? new globalThis.Uint8Array(0),
+              );
+              break;
+            }
+            case 6: {
+              const msg = { jsonPayload: this._jsonPayload! } as Partial<ConformanceResponse>;
+              enc.writeString(6, msg.jsonPayload ?? msg.json_payload ?? '');
+              break;
+            }
           }
-          case 2: {
-            const msg = { serializeError: this._serializeError! } as Partial<ConformanceResponse>;
-            enc.writeString(2, msg.serializeError ?? msg.serialize_error ?? '');
-            break;
-          }
-          case 3: {
-            const msg = { runtimeError: this._runtimeError! } as Partial<ConformanceResponse>;
-            enc.writeString(3, msg.runtimeError ?? msg.runtime_error ?? '');
-            break;
-          }
-          case 4: {
-            const msg = { skipped: this._skipped! } as Partial<ConformanceResponse>;
-            enc.writeString(4, msg.skipped ?? '');
-            break;
-          }
-          case 5: {
-            const msg = { omnibufPayload: this._omnibufPayload! } as Partial<ConformanceResponse>;
-            enc.writeBytes(
-              5,
-              msg.omnibufPayload ?? msg.omnibuf_payload ?? new globalThis.Uint8Array(0),
-            );
-            break;
-          }
-          case 6: {
-            const msg = { jsonPayload: this._jsonPayload! } as Partial<ConformanceResponse>;
-            enc.writeString(6, msg.jsonPayload ?? msg.json_payload ?? '');
-            break;
-          }
-        }
-      });
+        },
+        undefined,
+        this._depth,
+      );
     } else {
       $ob.validateMessage(this._raw, this._depth);
       outBuf = this._raw.slice();
@@ -1642,6 +1713,15 @@ export function createAllTypesSubMsg(
   return AllTypesSubMsgSchema.create(init);
 }
 
+export function minBytesAllTypesSubMsg(msg: Partial<AllTypesSubMsg>): number {
+  let sz = 8;
+  {
+    const s = msg.label;
+    if (typeof s === 'string') sz += s.length;
+  }
+  return sz;
+}
+
 export function encodeAllTypesSubMsg(
   enc: $ob.Encoder,
   msg: Partial<AllTypesSubMsg>,
@@ -1663,6 +1743,9 @@ export function marshalAllTypesSubMsgOmniBuf(
   msg: Partial<AllTypesSubMsg>,
   options?: $ob.MarshalOptions,
 ): globalThis.Uint8Array {
+  if (options?.selfDescribing && AllTypesSubMsgSchema.isCyclicOrDeep()) {
+    return AllTypesSubMsgSchema.encode(msg as AllTypesSubMsg, options);
+  }
   const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
     $ob.writeField0SchemaMeta(
@@ -1941,7 +2024,7 @@ export class OpaqueAllTypesSubMsg {
         this._readCount++;
         return this._raw;
       }
-      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw, this._depth);
     }
     return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
   }
@@ -2021,30 +2104,37 @@ export class OpaqueAllTypesSubMsg {
   marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
     let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 4, (enc, fnum) => {
-        switch (fnum) {
-          case 1: {
-            const msg = { id: this._id! } as Partial<AllTypesSubMsg>;
-            enc.writeUint(1, globalThis.Number(msg.id ?? 0) >>> 0);
-            break;
+      outBuf = $ob.spliceFields(
+        this._raw,
+        this._dirtyMask,
+        4,
+        (enc, fnum) => {
+          switch (fnum) {
+            case 1: {
+              const msg = { id: this._id! } as Partial<AllTypesSubMsg>;
+              enc.writeUint(1, globalThis.Number(msg.id ?? 0) >>> 0);
+              break;
+            }
+            case 2: {
+              const msg = { label: this._label! } as Partial<AllTypesSubMsg>;
+              enc.writeString(2, msg.label ?? '');
+              break;
+            }
+            case 3: {
+              const msg = { flag: this._flag! } as Partial<AllTypesSubMsg>;
+              enc.writeBool(3, globalThis.Boolean(msg.flag));
+              break;
+            }
+            case 4: {
+              const msg = { score: this._score! } as Partial<AllTypesSubMsg>;
+              enc.writeInt(4, msg.score ?? 0);
+              break;
+            }
           }
-          case 2: {
-            const msg = { label: this._label! } as Partial<AllTypesSubMsg>;
-            enc.writeString(2, msg.label ?? '');
-            break;
-          }
-          case 3: {
-            const msg = { flag: this._flag! } as Partial<AllTypesSubMsg>;
-            enc.writeBool(3, globalThis.Boolean(msg.flag));
-            break;
-          }
-          case 4: {
-            const msg = { score: this._score! } as Partial<AllTypesSubMsg>;
-            enc.writeInt(4, msg.score ?? 0);
-            break;
-          }
-        }
-      });
+        },
+        undefined,
+        this._depth,
+      );
     } else {
       $ob.validateMessage(this._raw, this._depth);
       outBuf = this._raw.slice();
@@ -2297,6 +2387,23 @@ export function createTestAllTypes(
   return TestAllTypesSchema.create(init);
 }
 
+export function minBytesTestAllTypes(msg: Partial<TestAllTypes>): number {
+  let sz = 34;
+  {
+    const s = msg.f6String ?? msg.f6_string;
+    if (typeof s === 'string') sz += s.length;
+  }
+  {
+    const b = msg.f7Bytes ?? msg.f7_bytes;
+    if (b !== null && b !== undefined) sz += b.length;
+  }
+  {
+    const s = msg.f20OverflowStr ?? msg.f20_overflow_str;
+    if (typeof s === 'string') sz += s.length;
+  }
+  return sz;
+}
+
 export function encodeTestAllTypes(
   enc: $ob.Encoder,
   msg: Partial<TestAllTypes>,
@@ -2312,7 +2419,7 @@ export function encodeTestAllTypes(
   {
     const subVal = msg.f8SubMsg ?? msg.f8_sub_msg;
     if (subVal !== null && subVal !== undefined) {
-      enc.beginSubMsg(8);
+      enc.beginSubMsg(8, minBytesAllTypesSubMsg(subVal));
       encodeAllTypesSubMsg(enc, subVal, options);
       enc.endSubMsg();
     }
@@ -2321,10 +2428,20 @@ export function encodeTestAllTypes(
   enc.writeUint32Arr(10, msg.f10Uint32Arr ?? msg.f10_uint32_arr ?? []);
   {
     const arr = msg.f11SubMsgArr ?? msg.f11_sub_msg_arr ?? [];
-    enc.beginSubMsgArr(11);
+    let arrMin = 2 + arr.length * 2;
+    if (arr.length <= 64) {
+      for (let i = 0; i < arr.length; i++) {
+        const item = arr[i];
+        if (item !== null && item !== undefined) arrMin += minBytesAllTypesSubMsg(item);
+      }
+    }
+    enc.beginSubMsgArr(11, arrMin);
     for (let i = 0; i < arr.length; i++) {
-      enc.beginSubMsgElem();
-      if (arr[i] !== null && arr[i] !== undefined) encodeAllTypesSubMsg(enc, arr[i]!, options);
+      const item = arr[i];
+      const elemMin =
+        arrMin > 16383 && item !== null && item !== undefined ? minBytesAllTypesSubMsg(item) : 0;
+      enc.beginSubMsgElem(elemMin);
+      if (item !== null && item !== undefined) encodeAllTypesSubMsg(enc, item, options);
       enc.endSubMsgElem();
     }
     enc.endSubMsgArr();
@@ -2360,6 +2477,9 @@ export function marshalTestAllTypesOmniBuf(
   msg: Partial<TestAllTypes>,
   options?: $ob.MarshalOptions,
 ): globalThis.Uint8Array {
+  if (options?.selfDescribing && TestAllTypesSchema.isCyclicOrDeep()) {
+    return TestAllTypesSchema.encode(msg as TestAllTypes, options);
+  }
   const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
     $ob.writeField0SchemaMeta(
@@ -3390,7 +3510,7 @@ export class OpaqueTestAllTypes {
         this._readCount++;
         return this._raw;
       }
-      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw, this._depth);
     }
     return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
   }
@@ -3670,7 +3790,7 @@ export class OpaqueTestAllTypes {
       const __src = this._sliceField(11);
       this._f11SubMsgArr = __src
         ? $ob.readSubMsgArrDecoded(__src, 11, (sub) =>
-            decodeAllTypesSubMsg(sub, undefined, this._depth + 1),
+            decodeAllTypesSubMsg(sub, undefined, this._depth + 2),
           )[0]
         : [];
     }
@@ -3821,127 +3941,146 @@ export class OpaqueTestAllTypes {
   marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
     let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 20, (enc, fnum) => {
-        switch (fnum) {
-          case 1: {
-            const msg = { f1Uint32: this._f1Uint32! } as Partial<TestAllTypes>;
-            enc.writeUint(1, globalThis.Number(msg.f1Uint32 ?? msg.f1_uint32 ?? 0) >>> 0);
-            break;
-          }
-          case 2: {
-            const msg = { f2Uint64: this._f2Uint64! } as Partial<TestAllTypes>;
-            enc.writeUint(2, msg.f2Uint64 ?? msg.f2_uint64 ?? 0);
-            break;
-          }
-          case 3: {
-            const msg = { f3Sint32: this._f3Sint32! } as Partial<TestAllTypes>;
-            enc.writeInt(3, globalThis.Number(msg.f3Sint32 ?? msg.f3_sint32 ?? 0) | 0);
-            break;
-          }
-          case 4: {
-            const msg = { f4Sint64: this._f4Sint64! } as Partial<TestAllTypes>;
-            enc.writeInt(4, msg.f4Sint64 ?? msg.f4_sint64 ?? 0);
-            break;
-          }
-          case 5: {
-            const msg = { f5Bool: this._f5Bool! } as Partial<TestAllTypes>;
-            enc.writeBool(5, globalThis.Boolean(msg.f5Bool ?? msg.f5_bool));
-            break;
-          }
-          case 6: {
-            const msg = { f6String: this._f6String! } as Partial<TestAllTypes>;
-            enc.writeString(6, msg.f6String ?? msg.f6_string ?? '');
-            break;
-          }
-          case 7: {
-            const msg = { f7Bytes: this._f7Bytes! } as Partial<TestAllTypes>;
-            enc.writeBytes(7, msg.f7Bytes ?? msg.f7_bytes ?? new globalThis.Uint8Array(0));
-            break;
-          }
-          case 8: {
-            const msg = { f8SubMsg: this._f8SubMsg! } as Partial<TestAllTypes>;
-            {
-              const subVal = msg.f8SubMsg ?? msg.f8_sub_msg;
-              if (subVal !== null && subVal !== undefined) {
-                enc.beginSubMsg(8);
-                encodeAllTypesSubMsg(enc, subVal, options);
-                enc.endSubMsg();
-              }
+      outBuf = $ob.spliceFields(
+        this._raw,
+        this._dirtyMask,
+        20,
+        (enc, fnum) => {
+          switch (fnum) {
+            case 1: {
+              const msg = { f1Uint32: this._f1Uint32! } as Partial<TestAllTypes>;
+              enc.writeUint(1, globalThis.Number(msg.f1Uint32 ?? msg.f1_uint32 ?? 0) >>> 0);
+              break;
             }
-            break;
-          }
-          case 9: {
-            const msg = { f9StringArr: this._f9StringArr! } as Partial<TestAllTypes>;
-            enc.writeStringArr(9, msg.f9StringArr ?? msg.f9_string_arr ?? []);
-            break;
-          }
-          case 10: {
-            const msg = { f10Uint32Arr: this._f10Uint32Arr! } as Partial<TestAllTypes>;
-            enc.writeUint32Arr(10, msg.f10Uint32Arr ?? msg.f10_uint32_arr ?? []);
-            break;
-          }
-          case 11: {
-            const msg = { f11SubMsgArr: this._f11SubMsgArr! } as Partial<TestAllTypes>;
-            {
-              const arr = msg.f11SubMsgArr ?? msg.f11_sub_msg_arr ?? [];
-              enc.beginSubMsgArr(11);
-              for (let i = 0; i < arr.length; i++) {
-                enc.beginSubMsgElem();
-                if (arr[i] !== null && arr[i] !== undefined)
-                  encodeAllTypesSubMsg(enc, arr[i]!, options);
-                enc.endSubMsgElem();
-              }
-              enc.endSubMsgArr();
+            case 2: {
+              const msg = { f2Uint64: this._f2Uint64! } as Partial<TestAllTypes>;
+              enc.writeUint(2, msg.f2Uint64 ?? msg.f2_uint64 ?? 0);
+              break;
             }
-            break;
-          }
-          case 12: {
-            const msg = { f12MapStrUint: this._f12MapStrUint! } as Partial<TestAllTypes>;
-            {
-              const entries = globalThis.Object.entries(
-                msg.f12MapStrUint ?? msg.f12_map_str_uint ?? {},
-              );
-              if (options?.deterministic) entries.sort(([a], [b]) => $ob.compareUTF8Strings(a, b));
-              enc.writeTag(12, 14);
-              enc.beginContainer(3 + entries.length * 2);
-              enc.writeByte(10);
-              enc.writeByte(0);
-              enc.writeRawVarint(entries.length);
-              for (const [k, v] of entries) {
-                enc.writeRawStringPayload(k);
-                enc.writeRawVarint($ob.toBigInt64Input(v));
-              }
-              enc.endContainer();
+            case 3: {
+              const msg = { f3Sint32: this._f3Sint32! } as Partial<TestAllTypes>;
+              enc.writeInt(3, globalThis.Number(msg.f3Sint32 ?? msg.f3_sint32 ?? 0) | 0);
+              break;
             }
-            break;
+            case 4: {
+              const msg = { f4Sint64: this._f4Sint64! } as Partial<TestAllTypes>;
+              enc.writeInt(4, msg.f4Sint64 ?? msg.f4_sint64 ?? 0);
+              break;
+            }
+            case 5: {
+              const msg = { f5Bool: this._f5Bool! } as Partial<TestAllTypes>;
+              enc.writeBool(5, globalThis.Boolean(msg.f5Bool ?? msg.f5_bool));
+              break;
+            }
+            case 6: {
+              const msg = { f6String: this._f6String! } as Partial<TestAllTypes>;
+              enc.writeString(6, msg.f6String ?? msg.f6_string ?? '');
+              break;
+            }
+            case 7: {
+              const msg = { f7Bytes: this._f7Bytes! } as Partial<TestAllTypes>;
+              enc.writeBytes(7, msg.f7Bytes ?? msg.f7_bytes ?? new globalThis.Uint8Array(0));
+              break;
+            }
+            case 8: {
+              const msg = { f8SubMsg: this._f8SubMsg! } as Partial<TestAllTypes>;
+              {
+                const subVal = msg.f8SubMsg ?? msg.f8_sub_msg;
+                if (subVal !== null && subVal !== undefined) {
+                  enc.beginSubMsg(8, minBytesAllTypesSubMsg(subVal));
+                  encodeAllTypesSubMsg(enc, subVal, options);
+                  enc.endSubMsg();
+                }
+              }
+              break;
+            }
+            case 9: {
+              const msg = { f9StringArr: this._f9StringArr! } as Partial<TestAllTypes>;
+              enc.writeStringArr(9, msg.f9StringArr ?? msg.f9_string_arr ?? []);
+              break;
+            }
+            case 10: {
+              const msg = { f10Uint32Arr: this._f10Uint32Arr! } as Partial<TestAllTypes>;
+              enc.writeUint32Arr(10, msg.f10Uint32Arr ?? msg.f10_uint32_arr ?? []);
+              break;
+            }
+            case 11: {
+              const msg = { f11SubMsgArr: this._f11SubMsgArr! } as Partial<TestAllTypes>;
+              {
+                const arr = msg.f11SubMsgArr ?? msg.f11_sub_msg_arr ?? [];
+                let arrMin = 2 + arr.length * 2;
+                if (arr.length <= 64) {
+                  for (let i = 0; i < arr.length; i++) {
+                    const item = arr[i];
+                    if (item !== null && item !== undefined) arrMin += minBytesAllTypesSubMsg(item);
+                  }
+                }
+                enc.beginSubMsgArr(11, arrMin);
+                for (let i = 0; i < arr.length; i++) {
+                  const item = arr[i];
+                  const elemMin =
+                    arrMin > 16383 && item !== null && item !== undefined
+                      ? minBytesAllTypesSubMsg(item)
+                      : 0;
+                  enc.beginSubMsgElem(elemMin);
+                  if (item !== null && item !== undefined) encodeAllTypesSubMsg(enc, item, options);
+                  enc.endSubMsgElem();
+                }
+                enc.endSubMsgArr();
+              }
+              break;
+            }
+            case 12: {
+              const msg = { f12MapStrUint: this._f12MapStrUint! } as Partial<TestAllTypes>;
+              {
+                const entries = globalThis.Object.entries(
+                  msg.f12MapStrUint ?? msg.f12_map_str_uint ?? {},
+                );
+                if (options?.deterministic)
+                  entries.sort(([a], [b]) => $ob.compareUTF8Strings(a, b));
+                enc.writeTag(12, 14);
+                enc.beginContainer(3 + entries.length * 2);
+                enc.writeByte(10);
+                enc.writeByte(0);
+                enc.writeRawVarint(entries.length);
+                for (const [k, v] of entries) {
+                  enc.writeRawStringPayload(k);
+                  enc.writeRawVarint($ob.toBigInt64Input(v));
+                }
+                enc.endContainer();
+              }
+              break;
+            }
+            case 13: {
+              const msg = { f13Float32: this._f13Float32! } as Partial<TestAllTypes>;
+              enc.writeFloat32(13, msg.f13Float32 ?? msg.f13_float32 ?? 0);
+              break;
+            }
+            case 14: {
+              const msg = { f14Float64: this._f14Float64! } as Partial<TestAllTypes>;
+              enc.writeFloat64(14, msg.f14Float64 ?? msg.f14_float64 ?? 0);
+              break;
+            }
+            case 15: {
+              const msg = { f15Fixed32: this._f15Fixed32! } as Partial<TestAllTypes>;
+              enc.writeFixed32(15, globalThis.Number(msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0) >>> 0);
+              break;
+            }
+            case 16: {
+              const msg = { f16Fixed64: this._f16Fixed64! } as Partial<TestAllTypes>;
+              enc.writeFixed64(16, msg.f16Fixed64 ?? msg.f16_fixed64 ?? 0);
+              break;
+            }
+            case 20: {
+              const msg = { f20OverflowStr: this._f20OverflowStr! } as Partial<TestAllTypes>;
+              enc.writeString(20, msg.f20OverflowStr ?? msg.f20_overflow_str ?? '');
+              break;
+            }
           }
-          case 13: {
-            const msg = { f13Float32: this._f13Float32! } as Partial<TestAllTypes>;
-            enc.writeFloat32(13, msg.f13Float32 ?? msg.f13_float32 ?? 0);
-            break;
-          }
-          case 14: {
-            const msg = { f14Float64: this._f14Float64! } as Partial<TestAllTypes>;
-            enc.writeFloat64(14, msg.f14Float64 ?? msg.f14_float64 ?? 0);
-            break;
-          }
-          case 15: {
-            const msg = { f15Fixed32: this._f15Fixed32! } as Partial<TestAllTypes>;
-            enc.writeFixed32(15, globalThis.Number(msg.f15Fixed32 ?? msg.f15_fixed32 ?? 0) >>> 0);
-            break;
-          }
-          case 16: {
-            const msg = { f16Fixed64: this._f16Fixed64! } as Partial<TestAllTypes>;
-            enc.writeFixed64(16, msg.f16Fixed64 ?? msg.f16_fixed64 ?? 0);
-            break;
-          }
-          case 20: {
-            const msg = { f20OverflowStr: this._f20OverflowStr! } as Partial<TestAllTypes>;
-            enc.writeString(20, msg.f20OverflowStr ?? msg.f20_overflow_str ?? '');
-            break;
-          }
-        }
-      });
+        },
+        undefined,
+        this._depth,
+      );
     } else {
       $ob.validateMessage(this._raw, this._depth);
       outBuf = this._raw.slice();

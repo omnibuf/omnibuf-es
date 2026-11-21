@@ -38,7 +38,6 @@ import {
   readLenSlice,
   roundFloat32Shortest,
   skipValidatedValue,
-  skipValue,
   validateField0At,
 } from './wire.js';
 
@@ -588,7 +587,7 @@ function validateCountedArrBody(
         p += sn;
         const end = p + Number(sLen);
         try {
-          validateMessage(body.subarray(p, end), 1);
+          validateMessage(body.subarray(p, end), 2);
         } catch {
           return false;
         }
@@ -691,6 +690,7 @@ export function appendBytesArrBody(
   body: Uint8Array,
   zeroCopy = false,
 ): [out: Uint8Array[], ok: boolean] {
+  const origLen = dst.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireBytes) {
     return [[], false];
@@ -699,6 +699,7 @@ export function appendBytesArrBody(
   for (let i = 0; i < c; i++) {
     const [sLen, sn] = decodeVarintBigInt(body, p);
     if (sn === 0 || sLen > BigInt(body.length - (p + sn))) {
+      dst.length = origLen;
       return [[], false];
     }
     p += sn;
@@ -708,47 +709,65 @@ export function appendBytesArrBody(
     p += lenNum;
   }
   if (p !== body.length) {
+    dst.length = origLen;
     return [[], false];
   }
   return [dst, true];
 }
 
 export function appendBoolArrBody(dst: boolean[], body: Uint8Array): [out: boolean[], ok: boolean] {
+  const origLen = dst.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireBoolFalse || body.length - startP !== c) {
     return [[], false];
   }
   for (let i = 0; i < c; i++) {
     const b = body[startP + i]!;
-    if (b !== 0 && b !== 1) return [[], false];
+    if (b !== 0 && b !== 1) {
+      dst.length = origLen;
+      return [[], false];
+    }
     dst.push(b === 1);
   }
   return [dst, true];
 }
 
 export function appendUint32ArrBody(dst: number[], body: Uint8Array): [out: number[], ok: boolean] {
+  const origLen = dst.length;
   const n = body.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireUint) return [[], false];
   let p = startP;
   for (let i = 0; i < c; i++) {
-    if (p >= n) return [[], false];
+    if (p >= n) {
+      dst.length = origLen;
+      return [[], false];
+    }
     const vb = body[p]!;
     if ((vb & 1) !== 0) {
       dst.push(vb >>> 1);
       p += 1;
     } else if ((vb & 2) !== 0) {
-      if (p + 2 > n) return [[], false];
+      if (p + 2 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
       dst.push((vb | (body[p + 1]! << 8)) >>> 2);
       p += 2;
     } else if ((vb & 4) !== 0) {
-      if (p + 4 > n) return [[], false];
+      if (p + 4 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
       dst.push(
         ((vb | (body[p + 1]! << 8) | (body[p + 2]! << 16) | (body[p + 3]! << 24)) >>> 3) >>> 0,
       );
       p += 4;
     } else {
-      if (vb !== 0 || p + 9 > n) return [[], false];
+      if (vb !== 0 || p + 9 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
       const lo =
         (body[p + 1]! | (body[p + 2]! << 8) | (body[p + 3]! << 16) | (body[p + 4]! << 24)) >>> 0;
       dst.push(lo);
@@ -756,12 +775,14 @@ export function appendUint32ArrBody(dst: number[], body: Uint8Array): [out: numb
     }
   }
   if (p !== n) {
+    dst.length = origLen;
     return [[], false];
   }
   return [dst, true];
 }
 
 export function appendEnumArrBody(dst: number[], body: Uint8Array): [out: number[], ok: boolean] {
+  const origLen = dst.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireSint) {
     return [[], false];
@@ -769,11 +790,15 @@ export function appendEnumArrBody(dst: number[], body: Uint8Array): [out: number
   let p = startP;
   for (let i = 0; i < c; i++) {
     const [v, vn] = decodeVarintBigInt(body, p);
-    if (vn === 0) return [[], false];
+    if (vn === 0) {
+      dst.length = origLen;
+      return [[], false];
+    }
     p += vn;
     dst.push(decodeZigZag32(v));
   }
   if (p !== body.length) {
+    dst.length = origLen;
     return [[], false];
   }
   return [dst, true];
@@ -785,6 +810,7 @@ export function appendUintArrAutoBody(
   dst: (number | bigint)[],
   body: Uint8Array,
 ): [out: (number | bigint)[], ok: boolean] {
+  const origLen = dst.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireUint) {
     return [[], false];
@@ -792,11 +818,15 @@ export function appendUintArrAutoBody(
   let p = startP;
   for (let i = 0; i < c; i++) {
     const [v, vn] = decodeVarintAuto(body, p);
-    if (vn === 0) return [[], false];
+    if (vn === 0) {
+      dst.length = origLen;
+      return [[], false];
+    }
     p += vn;
     dst.push(v);
   }
   if (p !== body.length) {
+    dst.length = origLen;
     return [[], false];
   }
   return [dst, true];
@@ -806,6 +836,7 @@ export function appendSintArrAutoBody(
   dst: (number | bigint)[],
   body: Uint8Array,
 ): [out: (number | bigint)[], ok: boolean] {
+  const origLen = dst.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireSint) {
     return [[], false];
@@ -813,11 +844,15 @@ export function appendSintArrAutoBody(
   let p = startP;
   for (let i = 0; i < c; i++) {
     const [v, vn] = decodeVarintBigInt(body, p);
-    if (vn === 0) return [[], false];
+    if (vn === 0) {
+      dst.length = origLen;
+      return [[], false];
+    }
     p += vn;
     dst.push(decodeZigZagAuto(v));
   }
   if (p !== body.length) {
+    dst.length = origLen;
     return [[], false];
   }
   return [dst, true];
@@ -1535,7 +1570,10 @@ export function readTypedMap<V = any>(
           out[kStr] = vVal;
         }
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && /MaxNestingDepth|nesting depth/i.test(err.message)) {
+        throw err;
+      }
       return [{}, false];
     }
     if (p !== body.length) {
@@ -1721,11 +1759,12 @@ export function spliceFields(
   maxField: number,
   appendDirty: (enc: Encoder, fieldNum: number) => void,
   enc?: Encoder,
+  depth = 0,
 ): Uint8Array {
   if (maxField <= 30 && (typeof dirtyMask === 'number' || typeof dirtyMask === 'bigint')) {
     const mask32 = typeof dirtyMask === 'bigint' ? Number(dirtyMask & 0x7fffffffn) : dirtyMask | 0;
     if (mask32 === 0) {
-      validateMessage(raw, 0);
+      validateMessage(raw, depth);
       if (enc !== undefined) {
         enc.detachIfOverlaps(raw, 0);
         enc.writeRaw(raw);
@@ -1775,10 +1814,10 @@ export function spliceFields(
             throw new Error('omnibuf: invalid Field #0 wire type');
           }
           const [f0Body, f0End] = readLenSlice(raw, pos, 0);
-          decodeSchemaMeta(f0Body, 1);
+          decodeSchemaMeta(f0Body, depth + 1);
           pos = f0End;
         } else {
-          pos = validateValue(raw, pos, wt, 0);
+          pos = validateValue(raw, pos, wt, depth);
         }
         const fieldEnd = pos;
 
@@ -1825,7 +1864,7 @@ export function spliceFields(
         );
 
   if (dirtySet.size === 0) {
-    validateMessage(raw, 0);
+    validateMessage(raw, depth);
     if (enc !== undefined) {
       enc.detachIfOverlaps(raw, 0);
       enc.writeRaw(raw);
@@ -1868,10 +1907,10 @@ export function spliceFields(
         throw new Error('omnibuf: invalid Field #0 wire type');
       }
       const [f0Body, f0End] = readLenSlice(raw, pos, 0);
-      decodeSchemaMeta(f0Body, 1);
+      decodeSchemaMeta(f0Body, depth + 1);
       pos = f0End;
     } else {
-      pos = validateValue(raw, pos, wt, 0);
+      pos = validateValue(raw, pos, wt, depth);
     }
     const fieldEnd = pos;
 
@@ -1919,7 +1958,7 @@ export interface OpaqueFieldSpan {
  * Performs a single linear header-hop scan over top-level fields in `packet` and records
  * byte ranges by field number for O(1) subsequent field access on Opaque views.
  */
-export function indexTopLevelFields(packet: Uint8Array): Map<number, OpaqueFieldSpan> {
+export function indexTopLevelFields(packet: Uint8Array, depth = 0): Map<number, OpaqueFieldSpan> {
   const index = new Map<number, OpaqueFieldSpan>();
   let pos = 0;
   const n = packet.length;
@@ -1927,19 +1966,27 @@ export function indexTopLevelFields(packet: Uint8Array): Map<number, OpaqueField
     const tagStart = pos;
     const [tag, tn] = decodeVarintBigInt(packet, pos, n);
     if (tn === 0 || tag >> 4n > 536870911n) {
-      break;
+      index.clear();
+      return index;
     }
     pos += tn;
     const fnum = Number(tag >> 4n);
     const wt = Number(tag & 0x0fn);
-    let valEnd: number;
-    try {
-      valEnd = skipValue(packet, pos, wt);
-    } catch {
-      break;
+    if (fnum === 0) {
+      const f0End = validateField0At(packet, pos, wt, depth);
+      if (f0End < 0) {
+        index.clear();
+        return index;
+      }
+      pos = f0End;
+      continue;
+    }
+    const valEnd = skipValidatedValue(packet, pos, wt);
+    if (valEnd < 0) {
+      index.clear();
+      return index;
     }
     pos = valEnd;
-    if (fnum === 0) continue;
     const prev = index.get(fnum);
     if (prev) {
       prev.tagStart = tagStart;

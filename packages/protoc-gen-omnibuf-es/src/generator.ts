@@ -1290,7 +1290,9 @@ function emitOpaqueGetterBody(f: ResolvedField, oneof?: ResolvedOneof): string {
   if (f.isMap) {
     const keyKind = schemaTypeString({ type: f.mapKeyType, repeated: false, isMap: false });
     const valKind = schemaTypeString({ type: f.mapValType, repeated: false, isMap: false });
-    const subDecoder = f.mapValMsgSymbol ? `, (sub) => decode${f.mapValMsgSymbol}(sub)` : '';
+    const subDecoder = f.mapValMsgSymbol
+      ? `, (sub) => decode${f.mapValMsgSymbol}(sub, undefined, this._depth + 2)`
+      : '';
     return `if (this.${f.storageProp} === undefined) { this.${f.storageProp} = $ob.readTypedMap(this._raw, ${num}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}${subDecoder})[0]; } return this.${f.storageProp}!;`;
   }
   if (f.repeated) {
@@ -1341,7 +1343,7 @@ function emitOpaqueGetterBody(f: ResolvedField, oneof?: ResolvedOneof): string {
         readExpr = `$ob.readSfixed64Arr(__src, ${num})[0]`;
         break;
       case ProtoScalarType.MESSAGE:
-        readExpr = `$ob.readSubMsgArrDecoded(__src, ${num}, (sub) => decode${f.subMsgSymbol}(sub, undefined, this._depth + 1))[0]`;
+        readExpr = `$ob.readSubMsgArrDecoded(__src, ${num}, (sub) => decode${f.subMsgSymbol}(sub, undefined, this._depth + 2))[0]`;
         break;
       default:
         readExpr = `[]`;
@@ -1991,6 +1993,9 @@ export function generateFileCode(
     lines.push(
       `export function marshal${msgName}OmniBuf(msg: Partial<${msgName}>, options?: $ob.MarshalOptions): globalThis.Uint8Array {`,
     );
+    lines.push(`  if (options?.selfDescribing && ${msgName}Schema.isCyclicOrDeep()) {`);
+    lines.push(`    return ${msgName}Schema.encode(msg as ${msgName}, options);`);
+    lines.push('  }');
     lines.push('  const enc = new $ob.Encoder(256);');
     lines.push('  if (options?.selfDescribing) {');
     lines.push(
@@ -2205,7 +2210,7 @@ export function generateFileCode(
     lines.push('        this._readCount++;');
     lines.push('        return this._raw;');
     lines.push('      }');
-    lines.push('      this._fieldIndex = $ob.indexTopLevelFields(this._raw);');
+    lines.push('      this._fieldIndex = $ob.indexTopLevelFields(this._raw, this._depth);');
     lines.push('    }');
     lines.push('    return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);');
     lines.push('  }');
@@ -2402,7 +2407,7 @@ export function generateFileCode(
       lines.push('          }');
     }
     lines.push('        }');
-    lines.push('      });');
+    lines.push('      }, undefined, this._depth);');
     lines.push('    } else {');
     lines.push('      $ob.validateMessage(this._raw, this._depth);');
     lines.push('      outBuf = this._raw.slice();');

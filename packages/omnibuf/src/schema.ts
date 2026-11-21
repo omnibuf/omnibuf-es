@@ -2266,8 +2266,8 @@ function compareMapKeys(keyType: ScalarFieldType, a: any, b: any): number {
       return compareUTF8Strings(String(a), String(b));
     }
     case 'bool': {
-      const ba = a === true || a === 'true' ? 1 : 0;
-      const bb = b === true || b === 'true' ? 1 : 0;
+      const ba = a === true || a === 'true' || a === 1 ? 1 : 0;
+      const bb = b === true || b === 'true' || b === 1 ? 1 : 0;
       return ba - bb;
     }
     default: {

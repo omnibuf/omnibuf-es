@@ -6,6 +6,7 @@ import {
   Encoder,
   MaxNestingDepth,
   WireString,
+  decodeBlind,
   marshal,
   readFloat32,
   type FileDescriptorSetJSON,
@@ -113,6 +114,36 @@ const PEER_AND_CONFORMANCE_FDS: FileDescriptorSetJSON = {
               typeName: '.omnibuf.audit.Node',
             },
             { name: 'leaf', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' },
+            {
+              name: 'children',
+              number: 3,
+              label: 'LABEL_REPEATED',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.audit.Node',
+            },
+            {
+              name: 'child_map',
+              number: 4,
+              label: 'LABEL_REPEATED',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.audit.Node.ChildMapEntry',
+            },
+          ],
+          nestedType: [
+            {
+              name: 'ChildMapEntry',
+              options: { mapEntry: true },
+              field: [
+                { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+                {
+                  name: 'value',
+                  number: 2,
+                  label: 'LABEL_OPTIONAL',
+                  type: 'TYPE_MESSAGE',
+                  typeName: '.omnibuf.audit.Node',
+                },
+              ],
+            },
           ],
         },
       ],
@@ -331,6 +362,102 @@ describe('Audit Regressions - @omnibuf/protoc-gen-omnibuf-es', () => {
       const bytes = marshal(msg);
       const decoded = mod.decodePeerUpdate(bytes);
       assert.equal(decoded.asn, 100);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('ES-Audit-1: Opaque getters return defaults on 3rd+ call for corrupt Field #0 or truncated packets', async () => {
+    const { mod, cleanup } = await compileAndImportGenerated(PEER_AND_CONFORMANCE_FDS);
+    try {
+      const valid: Uint8Array = mod.marshalPeerUpdateOmniBuf({ asn: 64512, routerId: 'rtr-1' });
+      // Prepend invalid Field #0 (field 0, WireUint = 0x01, val = 0x03)
+      const badF0 = new Uint8Array(2 + valid.length);
+      badF0.set([0x01, 0x03], 0);
+      badF0.set(valid, 2);
+
+      const opBadF0 = new mod.OpaquePeerUpdate(badF0);
+      // 1st, 2nd, 3rd, and 4th calls (crossing _readCount >= 2 index build) must all return default 0 / ''
+      for (let i = 0; i < 4; i++) {
+        assert.equal(opBadF0.getAsn(), 0, `call ${i + 1} getAsn should be 0 on invalid Field #0`);
+        assert.equal(
+          opBadF0.getRouterId(),
+          '',
+          `call ${i + 1} getRouterId should be '' on invalid Field #0`,
+        );
+      }
+
+      // Append trailing truncated tag
+      const truncated = new Uint8Array(valid.length + 1);
+      truncated.set(valid, 0);
+      truncated[valid.length] = 0x61; // field #3 WireUint tag with missing value
+      const opTrunc = new mod.OpaquePeerUpdate(truncated);
+      for (let i = 0; i < 4; i++) {
+        assert.equal(opTrunc.getAsn(), 0, `call ${i + 1} getAsn should be 0 on truncated packet`);
+      }
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('ES-Audit-2: Opaque map/repeated submessage getters and spliceFields enforce MaxNestingDepth', async () => {
+    const { mod, cleanup } = await compileAndImportGenerated(PEER_AND_CONFORMANCE_FDS);
+    try {
+      // Build a chain of depth 31: inside repeated children or childMap (depth + 2), total depth is 33 > 32
+      let chain: Record<string, any> = { leaf: 1 };
+      for (let i = 0; i < MaxNestingDepth - 1; i++) {
+        chain = { child: chain };
+      }
+
+      const arrBytes: Uint8Array = mod.marshalNodeOmniBuf({ children: [chain] });
+      assert.throws(() => mod.decodeNode(arrBytes), /MaxNestingDepth|nesting depth/i);
+      const opArr = new mod.OpaqueNode(arrBytes);
+      assert.throws(
+        () => opArr.getChildren(),
+        /MaxNestingDepth|nesting depth/i,
+        'OpaqueNode.getChildren() must pass depth + 2',
+      );
+
+      const mapBytes: Uint8Array = mod.marshalNodeOmniBuf({ childMap: { a: chain } });
+      assert.throws(() => mod.decodeNode(mapBytes), /MaxNestingDepth|nesting depth/i);
+      const opMap = new mod.OpaqueNode(mapBytes);
+      assert.throws(
+        () => opMap.getChildMap(),
+        /MaxNestingDepth|nesting depth/i,
+        'OpaqueNode.getChildMap() must pass depth + 2 and rethrow depth errors',
+      );
+
+      // OpaqueNode at depth = MaxNestingDepth with a child submessage must reject dirty marshal via spliceFields
+      const oneChildBytes: Uint8Array = mod.marshalNodeOmniBuf({ child: { leaf: 5 } });
+      const opDeep = new mod.OpaqueNode(oneChildBytes, MaxNestingDepth);
+      opDeep.setLeaf(9);
+      assert.throws(
+        () => opDeep.marshal(),
+        /nesting depth/i,
+        'OpaqueNode.marshal() must thread this._depth into spliceFields',
+      );
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('ES-Audit-5: generated marshalNodeOmniBuf preserves Field #0 names past depth 15 on cyclic messages', async () => {
+    const { mod, cleanup } = await compileAndImportGenerated(PEER_AND_CONFORMANCE_FDS);
+    try {
+      let nested: Record<string, any> = { leaf: 77 };
+      for (let i = 0; i < 20; i++) {
+        nested = { child: nested };
+      }
+      const bytes: Uint8Array = mod.marshalNodeOmniBuf(nested, { selfDescribing: true });
+      let cur: any = decodeBlind(bytes);
+      for (let i = 0; i < 20; i++) {
+        assert.ok(
+          cur && typeof cur === 'object' && 'child' in cur,
+          `Expected named 'child' field at depth ${i}, got keys [${Object.keys(cur ?? {}).join(', ')}]`,
+        );
+        cur = cur.child;
+      }
+      assert.equal(cur.leaf, 77);
     } finally {
       await cleanup();
     }

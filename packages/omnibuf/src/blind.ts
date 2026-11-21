@@ -2,7 +2,7 @@
 // Field #0 (omnibuf.v1.SchemaMeta) & Schema-Less Inspection (DecodeBlind)
 // ============================================================================
 
-import { validateMapTypes, validateMessage, validateValue } from './validation.js';
+import { validateMapTypes, validateValue } from './validation.js';
 import { Encoder } from './encoder.js';
 import {
   appendBoolArrBody,
@@ -728,7 +728,6 @@ function decodeBlindWithSchema(
       }
       case WireSubMsg: {
         const [subBytes, nextPos] = readLenSlice(data, pos, 0);
-        validateMessage(subBytes, depth + 1);
         let chunks = subPackets.get(fieldNum);
         if (!chunks) {
           chunks = [];
@@ -851,7 +850,10 @@ function decodeBlindWithSchema(
       combined = chunks[0]!;
     } else {
       let totalLen = 0;
-      for (const c of chunks) totalLen += c.length;
+      for (const c of chunks) {
+        validateSubMsgChunkBoundaries(c);
+        totalLen += c.length;
+      }
       combined = new Uint8Array(totalLen);
       let off = 0;
       for (const c of chunks) {
@@ -863,6 +865,20 @@ function decodeBlindWithSchema(
   }
 
   return out;
+}
+
+function validateSubMsgChunkBoundaries(chunk: Uint8Array): void {
+  let p = 0;
+  const len = chunk.length;
+  while (p < len) {
+    const [tag, tn] = decodeVarintBigInt(chunk, p, len);
+    if (tn === 0 || tag >> 4n > 536870911n) {
+      throw new Error(`omnibuf: truncated or invalid tag at ${p}`);
+    }
+    p += tn;
+    const wt = Number(tag & 0x0fn);
+    p = skipValue(chunk, p, wt);
+  }
 }
 
 function decodeArrayBodyBlind(

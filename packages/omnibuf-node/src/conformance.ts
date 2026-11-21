@@ -64,6 +64,8 @@ export const ConformanceRequestSchema: MessageSchema<ConformanceRequest> =
   defineMessage<ConformanceRequest>('ConformanceRequest', {
     test_name: { fieldNum: 1, type: 'string' },
     message_type: { fieldNum: 2, type: 'string' },
+    // Upstream conformance-runner (omnibuf-go/internal/conformance/protocol.go) encodes
+    // tier and requested_output_format as uint32 (WireUint) on the IPC wire.
     tier: { fieldNum: 3, type: 'uint32' },
     requested_output_format: { fieldNum: 4, type: 'uint32' },
     omnibuf_payload: { fieldNum: 5, type: 'bytes' },

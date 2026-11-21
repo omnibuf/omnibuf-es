@@ -44,7 +44,7 @@ export function createLocation(init?: $ob.MessageInitShape<typeof LocationSchema
   return LocationSchema.create(init);
 }
 
-function minBytesLocation(msg: Partial<Location>): number {
+export function minBytesLocation(msg: Partial<Location>): number {
   let sz = 12;
   {
     const s = msg.region;
@@ -84,6 +84,9 @@ export function marshalLocationOmniBuf(
   msg: Partial<Location>,
   options?: $ob.MarshalOptions,
 ): globalThis.Uint8Array {
+  if (options?.selfDescribing && LocationSchema.isCyclicOrDeep()) {
+    return LocationSchema.encode(msg as Location, options);
+  }
   const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
     $ob.writeField0SchemaMeta(
@@ -438,7 +441,7 @@ export class OpaqueLocation {
         this._readCount++;
         return this._raw;
       }
-      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw, this._depth);
     }
     return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
   }
@@ -552,40 +555,47 @@ export class OpaqueLocation {
   marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
     let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 6, (enc, fnum) => {
-        switch (fnum) {
-          case 1: {
-            const msg = { region: this._region! } as Partial<Location>;
-            enc.writeString(1, msg.region ?? '');
-            break;
+      outBuf = $ob.spliceFields(
+        this._raw,
+        this._dirtyMask,
+        6,
+        (enc, fnum) => {
+          switch (fnum) {
+            case 1: {
+              const msg = { region: this._region! } as Partial<Location>;
+              enc.writeString(1, msg.region ?? '');
+              break;
+            }
+            case 2: {
+              const msg = { datacenter: this._datacenter! } as Partial<Location>;
+              enc.writeString(2, msg.datacenter ?? '');
+              break;
+            }
+            case 3: {
+              const msg = { city: this._city! } as Partial<Location>;
+              enc.writeString(3, msg.city ?? '');
+              break;
+            }
+            case 4: {
+              const msg = { rack: this._rack! } as Partial<Location>;
+              enc.writeUint(4, globalThis.Number(msg.rack ?? 0) >>> 0);
+              break;
+            }
+            case 5: {
+              const msg = { latitude: this._latitude! } as Partial<Location>;
+              enc.writeFloat32(5, msg.latitude ?? 0);
+              break;
+            }
+            case 6: {
+              const msg = { longitude: this._longitude! } as Partial<Location>;
+              enc.writeFloat32(6, msg.longitude ?? 0);
+              break;
+            }
           }
-          case 2: {
-            const msg = { datacenter: this._datacenter! } as Partial<Location>;
-            enc.writeString(2, msg.datacenter ?? '');
-            break;
-          }
-          case 3: {
-            const msg = { city: this._city! } as Partial<Location>;
-            enc.writeString(3, msg.city ?? '');
-            break;
-          }
-          case 4: {
-            const msg = { rack: this._rack! } as Partial<Location>;
-            enc.writeUint(4, globalThis.Number(msg.rack ?? 0) >>> 0);
-            break;
-          }
-          case 5: {
-            const msg = { latitude: this._latitude! } as Partial<Location>;
-            enc.writeFloat32(5, msg.latitude ?? 0);
-            break;
-          }
-          case 6: {
-            const msg = { longitude: this._longitude! } as Partial<Location>;
-            enc.writeFloat32(6, msg.longitude ?? 0);
-            break;
-          }
-        }
-      });
+        },
+        undefined,
+        this._depth,
+      );
     } else {
       $ob.validateMessage(this._raw, this._depth);
       outBuf = this._raw.slice();
@@ -671,7 +681,7 @@ export function createNeighbor(init?: $ob.MessageInitShape<typeof NeighborSchema
   return NeighborSchema.create(init);
 }
 
-function minBytesNeighbor(msg: Partial<Neighbor>): number {
+export function minBytesNeighbor(msg: Partial<Neighbor>): number {
   let sz = 8;
   {
     const s = msg.router;
@@ -701,6 +711,9 @@ export function marshalNeighborOmniBuf(
   msg: Partial<Neighbor>,
   options?: $ob.MarshalOptions,
 ): globalThis.Uint8Array {
+  if (options?.selfDescribing && NeighborSchema.isCyclicOrDeep()) {
+    return NeighborSchema.encode(msg as Neighbor, options);
+  }
   const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
     $ob.writeField0SchemaMeta(
@@ -1001,7 +1014,7 @@ export class OpaqueNeighbor {
         this._readCount++;
         return this._raw;
       }
-      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw, this._depth);
     }
     return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
   }
@@ -1089,30 +1102,37 @@ export class OpaqueNeighbor {
   marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
     let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 4, (enc, fnum) => {
-        switch (fnum) {
-          case 1: {
-            const msg = { peerAsn: this._peerAsn! } as Partial<Neighbor>;
-            enc.writeUint(1, globalThis.Number(msg.peerAsn ?? msg.peer_asn ?? 0) >>> 0);
-            break;
+      outBuf = $ob.spliceFields(
+        this._raw,
+        this._dirtyMask,
+        4,
+        (enc, fnum) => {
+          switch (fnum) {
+            case 1: {
+              const msg = { peerAsn: this._peerAsn! } as Partial<Neighbor>;
+              enc.writeUint(1, globalThis.Number(msg.peerAsn ?? msg.peer_asn ?? 0) >>> 0);
+              break;
+            }
+            case 2: {
+              const msg = { router: this._router! } as Partial<Neighbor>;
+              enc.writeString(2, msg.router ?? '');
+              break;
+            }
+            case 3: {
+              const msg = { latencyUs: this._latencyUs! } as Partial<Neighbor>;
+              enc.writeUint(3, globalThis.Number(msg.latencyUs ?? msg.latency_us ?? 0) >>> 0);
+              break;
+            }
+            case 4: {
+              const msg = { established: this._established! } as Partial<Neighbor>;
+              enc.writeBool(4, globalThis.Boolean(msg.established));
+              break;
+            }
           }
-          case 2: {
-            const msg = { router: this._router! } as Partial<Neighbor>;
-            enc.writeString(2, msg.router ?? '');
-            break;
-          }
-          case 3: {
-            const msg = { latencyUs: this._latencyUs! } as Partial<Neighbor>;
-            enc.writeUint(3, globalThis.Number(msg.latencyUs ?? msg.latency_us ?? 0) >>> 0);
-            break;
-          }
-          case 4: {
-            const msg = { established: this._established! } as Partial<Neighbor>;
-            enc.writeBool(4, globalThis.Boolean(msg.established));
-            break;
-          }
-        }
-      });
+        },
+        undefined,
+        this._depth,
+      );
     } else {
       $ob.validateMessage(this._raw, this._depth);
       outBuf = this._raw.slice();
@@ -1233,6 +1253,15 @@ export function createPeerUpdate(init?: $ob.MessageInitShape<typeof PeerUpdateSc
   return PeerUpdateSchema.create(init);
 }
 
+export function minBytesPeerUpdate(msg: Partial<PeerUpdate>): number {
+  let sz = 22;
+  {
+    const s = msg.routerId ?? msg.router_id;
+    if (typeof s === 'string') sz += s.length;
+  }
+  return sz;
+}
+
 export function encodePeerUpdate(
   enc: $ob.Encoder,
   msg: Partial<PeerUpdate>,
@@ -1287,6 +1316,9 @@ export function marshalPeerUpdateOmniBuf(
   msg: Partial<PeerUpdate>,
   options?: $ob.MarshalOptions,
 ): globalThis.Uint8Array {
+  if (options?.selfDescribing && PeerUpdateSchema.isCyclicOrDeep()) {
+    return PeerUpdateSchema.encode(msg as PeerUpdate, options);
+  }
   const enc = new $ob.Encoder(256);
   if (options?.selfDescribing) {
     $ob.writeField0SchemaMeta(
@@ -2090,7 +2122,7 @@ export class OpaquePeerUpdate {
         this._readCount++;
         return this._raw;
       }
-      this._fieldIndex = $ob.indexTopLevelFields(this._raw);
+      this._fieldIndex = $ob.indexTopLevelFields(this._raw, this._depth);
     }
     return $ob.sliceIndexedField(this._raw, this._fieldIndex, fieldNum);
   }
@@ -2314,7 +2346,7 @@ export class OpaquePeerUpdate {
       const __src = this._sliceField(10);
       this._neighbors = __src
         ? $ob.readSubMsgArrDecoded(__src, 10, (sub) =>
-            decodeNeighbor(sub, undefined, this._depth + 1),
+            decodeNeighbor(sub, undefined, this._depth + 2),
           )[0]
         : [];
     }
@@ -2350,81 +2382,100 @@ export class OpaquePeerUpdate {
   marshal(options?: $ob.MarshalOptions): globalThis.Uint8Array {
     let outBuf: globalThis.Uint8Array;
     if (this._dirtyMask !== 0) {
-      outBuf = $ob.spliceFields(this._raw, this._dirtyMask, 11, (enc, fnum) => {
-        switch (fnum) {
-          case 1: {
-            const msg = { asn: this._asn! } as Partial<PeerUpdate>;
-            enc.writeUint(1, globalThis.Number(msg.asn ?? 0) >>> 0);
-            break;
-          }
-          case 2: {
-            const msg = { routerId: this._routerId! } as Partial<PeerUpdate>;
-            enc.writeString(2, msg.routerId ?? msg.router_id ?? '');
-            break;
-          }
-          case 3: {
-            const msg = { active: this._active! } as Partial<PeerUpdate>;
-            enc.writeBool(3, globalThis.Boolean(msg.active));
-            break;
-          }
-          case 4: {
-            const msg = { uptimeSec: this._uptimeSec! } as Partial<PeerUpdate>;
-            enc.writeUint(4, msg.uptimeSec ?? msg.uptime_sec ?? 0);
-            break;
-          }
-          case 5: {
-            const msg = { rssiDbm: this._rssiDbm! } as Partial<PeerUpdate>;
-            enc.writeInt(5, globalThis.Number(msg.rssiDbm ?? msg.rssi_dbm ?? 0) | 0);
-            break;
-          }
-          case 6: {
-            const msg = { cpuLoad: this._cpuLoad! } as Partial<PeerUpdate>;
-            enc.writeFloat64(6, msg.cpuLoad ?? msg.cpu_load ?? 0);
-            break;
-          }
-          case 7: {
-            const msg = { tags: this._tags! } as Partial<PeerUpdate>;
-            enc.writeStringArr(7, msg.tags ?? []);
-            break;
-          }
-          case 8: {
-            const msg = { prefixes: this._prefixes! } as Partial<PeerUpdate>;
-            enc.writeUint32Arr(8, msg.prefixes ?? []);
-            break;
-          }
-          case 9: {
-            const msg = { location: this._location! } as Partial<PeerUpdate>;
-            {
-              const subVal = msg.location;
-              if (subVal !== null && subVal !== undefined) {
-                enc.beginSubMsg(9);
-                encodeLocation(enc, subVal, options);
-                enc.endSubMsg();
-              }
+      outBuf = $ob.spliceFields(
+        this._raw,
+        this._dirtyMask,
+        11,
+        (enc, fnum) => {
+          switch (fnum) {
+            case 1: {
+              const msg = { asn: this._asn! } as Partial<PeerUpdate>;
+              enc.writeUint(1, globalThis.Number(msg.asn ?? 0) >>> 0);
+              break;
             }
-            break;
-          }
-          case 10: {
-            const msg = { neighbors: this._neighbors! } as Partial<PeerUpdate>;
-            {
-              const arr = msg.neighbors ?? [];
-              enc.beginSubMsgArr(10);
-              for (let i = 0; i < arr.length; i++) {
-                enc.beginSubMsgElem();
-                if (arr[i] !== null && arr[i] !== undefined) encodeNeighbor(enc, arr[i]!, options);
-                enc.endSubMsgElem();
-              }
-              enc.endSubMsgArr();
+            case 2: {
+              const msg = { routerId: this._routerId! } as Partial<PeerUpdate>;
+              enc.writeString(2, msg.routerId ?? msg.router_id ?? '');
+              break;
             }
-            break;
+            case 3: {
+              const msg = { active: this._active! } as Partial<PeerUpdate>;
+              enc.writeBool(3, globalThis.Boolean(msg.active));
+              break;
+            }
+            case 4: {
+              const msg = { uptimeSec: this._uptimeSec! } as Partial<PeerUpdate>;
+              enc.writeUint(4, msg.uptimeSec ?? msg.uptime_sec ?? 0);
+              break;
+            }
+            case 5: {
+              const msg = { rssiDbm: this._rssiDbm! } as Partial<PeerUpdate>;
+              enc.writeInt(5, globalThis.Number(msg.rssiDbm ?? msg.rssi_dbm ?? 0) | 0);
+              break;
+            }
+            case 6: {
+              const msg = { cpuLoad: this._cpuLoad! } as Partial<PeerUpdate>;
+              enc.writeFloat64(6, msg.cpuLoad ?? msg.cpu_load ?? 0);
+              break;
+            }
+            case 7: {
+              const msg = { tags: this._tags! } as Partial<PeerUpdate>;
+              enc.writeStringArr(7, msg.tags ?? []);
+              break;
+            }
+            case 8: {
+              const msg = { prefixes: this._prefixes! } as Partial<PeerUpdate>;
+              enc.writeUint32Arr(8, msg.prefixes ?? []);
+              break;
+            }
+            case 9: {
+              const msg = { location: this._location! } as Partial<PeerUpdate>;
+              {
+                const subVal = msg.location;
+                if (subVal !== null && subVal !== undefined) {
+                  enc.beginSubMsg(9, minBytesLocation(subVal));
+                  encodeLocation(enc, subVal, options);
+                  enc.endSubMsg();
+                }
+              }
+              break;
+            }
+            case 10: {
+              const msg = { neighbors: this._neighbors! } as Partial<PeerUpdate>;
+              {
+                const arr = msg.neighbors ?? [];
+                let arrMin = 2 + arr.length * 2;
+                if (arr.length <= 64) {
+                  for (let i = 0; i < arr.length; i++) {
+                    const item = arr[i];
+                    if (item !== null && item !== undefined) arrMin += minBytesNeighbor(item);
+                  }
+                }
+                enc.beginSubMsgArr(10, arrMin);
+                for (let i = 0; i < arr.length; i++) {
+                  const item = arr[i];
+                  const elemMin =
+                    arrMin > 16383 && item !== null && item !== undefined
+                      ? minBytesNeighbor(item)
+                      : 0;
+                  enc.beginSubMsgElem(elemMin);
+                  if (item !== null && item !== undefined) encodeNeighbor(enc, item, options);
+                  enc.endSubMsgElem();
+                }
+                enc.endSubMsgArr();
+              }
+              break;
+            }
+            case 11: {
+              const msg = { sequence: this._sequence! } as Partial<PeerUpdate>;
+              enc.writeUint(11, msg.sequence ?? 0);
+              break;
+            }
           }
-          case 11: {
-            const msg = { sequence: this._sequence! } as Partial<PeerUpdate>;
-            enc.writeUint(11, msg.sequence ?? 0);
-            break;
-          }
-        }
-      });
+        },
+        undefined,
+        this._depth,
+      );
     } else {
       $ob.validateMessage(this._raw, this._depth);
       outBuf = this._raw.slice();

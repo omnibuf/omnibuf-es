@@ -558,6 +558,7 @@ export class DescriptorRegistry {
                 type: 'map',
                 mapKey,
                 mapVal: 'submsg',
+                useBigInt,
                 subSchema: () =>
                   this.schemas.get(valTargetName) ?? compile(valTargetName, valTarget),
               };

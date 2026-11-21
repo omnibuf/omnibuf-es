@@ -555,6 +555,7 @@ export class Encoder {
    */
   writeUint(fieldNum: number, v: number | bigint): void {
     if (
+      (fieldNum | 0) === fieldNum &&
       fieldNum >= 1 &&
       fieldNum <= 1023 &&
       typeof v === 'number' &&
@@ -614,6 +615,7 @@ export class Encoder {
    */
   writeInt(fieldNum: number, v: number | bigint): void {
     if (
+      (fieldNum | 0) === fieldNum &&
       fieldNum >= 1 &&
       fieldNum <= 1023 &&
       typeof v === 'number' &&
@@ -659,7 +661,7 @@ export class Encoder {
    */
   writeBool(fieldNum: number, v: boolean): void {
     const wt = v ? WireBoolTrue : WireBoolFalse;
-    if (fieldNum >= 1 && fieldNum <= 7) {
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 7) {
       if (this.pos + 1 > this.buf.length) {
         this.ensureCapacity(1);
       }
@@ -689,7 +691,7 @@ export class Encoder {
    * Writes a 4-byte IEEE-754 float32 field (`WireFloat32 = 8`).
    */
   writeFloat32(fieldNum: number, v: number): void {
-    if (fieldNum >= 1 && fieldNum <= 7) {
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 7) {
       if (this.pos + 5 > this.buf.length) {
         this.ensureCapacity(5);
       }
@@ -722,7 +724,7 @@ export class Encoder {
    * Writes an 8-byte IEEE-754 float64 field (`WireFloat64 = 9`).
    */
   writeFloat64(fieldNum: number, v: number): void {
-    if (fieldNum >= 1 && fieldNum <= 7) {
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 7) {
       if (this.pos + 9 > this.buf.length) {
         this.ensureCapacity(9);
       }
