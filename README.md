@@ -108,6 +108,12 @@ const decoded = fromBinary(PeerSchema, packet);
 
 ---
 
+## Benchmarks
+
+TypeScript and JavaScript benchmark results, methodology, and cross-language comparisons live at [omnibuf.com/benchmarks?lang=es](https://omnibuf.com/benchmarks?lang=es) (all languages at [omnibuf.com/benchmarks](https://omnibuf.com/benchmarks)). Run `just bench` to execute the local suite and update [`testdata/benchmarks.json`](testdata/benchmarks.json).
+
+---
+
 ## Development & Conformance Testing
 
 ```bash
