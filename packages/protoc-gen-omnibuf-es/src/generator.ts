@@ -560,41 +560,39 @@ function emitEncodeScalarOrSubMsgWithVar(f: ResolvedField, val: string, indent: 
   }
 }
 
-function expectedWireTypeExpr(f: ResolvedField, wtVar: string): string {
-  if (f.isMap) return `${wtVar} === 14`;
-  if (f.repeated) return `${wtVar} === 13`;
+function expectedWireTypeNum(f: ResolvedField): number {
+  if (f.isMap) return 14;
+  if (f.repeated) return 13;
   switch (f.type) {
     case ProtoScalarType.UINT32:
     case ProtoScalarType.UINT64:
-      return `${wtVar} === 0`;
+      return 0;
     case ProtoScalarType.INT32:
     case ProtoScalarType.INT64:
     case ProtoScalarType.SINT32:
     case ProtoScalarType.SINT64:
     case ProtoScalarType.ENUM:
-      return `${wtVar} === 1`;
-    case ProtoScalarType.BOOL:
-      return `(${wtVar} === 2 || ${wtVar} === 3)`;
+      return 1;
     case ProtoScalarType.FIXED32:
-      return `${wtVar} === 4`;
+      return 4;
     case ProtoScalarType.FIXED64:
-      return `${wtVar} === 5`;
+      return 5;
     case ProtoScalarType.SFIXED32:
-      return `${wtVar} === 6`;
+      return 6;
     case ProtoScalarType.SFIXED64:
-      return `${wtVar} === 7`;
+      return 7;
     case ProtoScalarType.FLOAT:
-      return `${wtVar} === 8`;
+      return 8;
     case ProtoScalarType.DOUBLE:
-      return `${wtVar} === 9`;
+      return 9;
     case ProtoScalarType.STRING:
-      return `${wtVar} === 10`;
+      return 10;
     case ProtoScalarType.BYTES:
-      return `${wtVar} === 11`;
+      return 11;
     case ProtoScalarType.MESSAGE:
-      return `${wtVar} === 12`;
+      return 12;
     default:
-      return `${wtVar} === 0`;
+      return 0;
   }
 }
 
@@ -785,8 +783,12 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
             `${indent}  const count = buf[pos + 1]! >>> 1;`,
             `${indent}  let p = pos + 2;`,
             `${indent}  if (count > bodyEnd - p) throw new globalThis.Error('omnibuf: invalid string array');`,
-            `${indent}  let dst = ${prop};`,
-            `${indent}  if (!globalThis.Array.isArray(dst)) { dst = []; ${prop} = dst; } else if (!alreadySeen) { dst.length = 0; }`,
+            `${indent}  let dst: string[];`,
+            `${indent}  let baseIdx = 0;`,
+            `${indent}  if (!alreadySeen) { dst = new globalThis.Array<string>(count); ${prop} = dst; } else {`,
+            `${indent}    dst = ${prop};`,
+            `${indent}    if (!globalThis.Array.isArray(dst)) { dst = new globalThis.Array<string>(count); ${prop} = dst; } else { baseIdx = dst.length; dst.length = baseIdx + count; }`,
+            `${indent}  }`,
             `${indent}  for (let i = 0; i < count; i++) {`,
             `${indent}    if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');`,
             `${indent}    const sb = buf[p]!;`,
@@ -794,14 +796,14 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
             `${indent}      const sLen = sb >>> 1;`,
             `${indent}      p += 1;`,
             `${indent}      if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');`,
-            `${indent}      dst.push($ob.decodeUTF8(buf, p, p + sLen));`,
+            `${indent}      dst[baseIdx + i] = $ob.decodeUTF8Len(buf, p, sLen);`,
             `${indent}      p += sLen;`,
             `${indent}    } else {`,
             `${indent}      const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);`,
             `${indent}      if (sn === 0 || sLen > globalThis.BigInt(bodyEnd - (p + sn))) throw new globalThis.Error('omnibuf: invalid string array');`,
             `${indent}      p += sn;`,
             `${indent}      const sLenNum = globalThis.Number(sLen);`,
-            `${indent}      dst.push($ob.decodeUTF8(buf, p, p + sLenNum));`,
+            `${indent}      dst[baseIdx + i] = $ob.decodeUTF8(buf, p, p + sLenNum);`,
             `${indent}      p += sLenNum;`,
             `${indent}    }`,
             `${indent}  }`,
@@ -856,25 +858,29 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
             `${indent}  const count = buf[pos + 1]! >>> 1;`,
             `${indent}  let p = pos + 2;`,
             `${indent}  if (count > bodyEnd - p) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
-            `${indent}  let dst = ${prop} as number[];`,
-            `${indent}  if (!globalThis.Array.isArray(dst)) { dst = []; ${prop} = dst as any; } else if (!alreadySeen) { dst.length = 0; }`,
+            `${indent}  let dst: number[];`,
+            `${indent}  let baseIdx = 0;`,
+            `${indent}  if (!alreadySeen) { dst = new globalThis.Array<number>(count); ${prop} = dst as any; } else {`,
+            `${indent}    dst = ${prop} as number[];`,
+            `${indent}    if (!globalThis.Array.isArray(dst)) { dst = new globalThis.Array<number>(count); ${prop} = dst as any; } else { baseIdx = dst.length; dst.length = baseIdx + count; }`,
+            `${indent}  }`,
             `${indent}  for (let i = 0; i < count; i++) {`,
             `${indent}    if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
             `${indent}    const vb = buf[p]!;`,
             `${indent}    if ((vb & 1) !== 0) {`,
-            `${indent}      dst.push(vb >>> 1);`,
+            `${indent}      dst[baseIdx + i] = vb >>> 1;`,
             `${indent}      p += 1;`,
             `${indent}    } else if ((vb & 2) !== 0) {`,
             `${indent}      if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
-            `${indent}      dst.push((vb | (buf[p + 1]! << 8)) >>> 2);`,
+            `${indent}      dst[baseIdx + i] = (vb | (buf[p + 1]! << 8)) >>> 2;`,
             `${indent}      p += 2;`,
             `${indent}    } else if ((vb & 4) !== 0) {`,
             `${indent}      if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
-            `${indent}      dst.push(((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0);`,
+            `${indent}      dst[baseIdx + i] = ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0;`,
             `${indent}      p += 4;`,
             `${indent}    } else {`,
             `${indent}      if (vb !== 0 || p + 9 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
-            `${indent}      dst.push((buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>> 0);`,
+            `${indent}      dst[baseIdx + i] = (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>> 0;`,
             `${indent}      p += 9;`,
             `${indent}    }`,
             `${indent}  }`,
@@ -1007,8 +1013,12 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
             `${indent}  const elemCount = buf[pos + 1]! >>> 1;`,
             `${indent}  let p = pos + 2;`,
             `${indent}  if (elemCount > arrEnd - p) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
-            `${indent}  let elems = ${prop};`,
-            `${indent}  if (!globalThis.Array.isArray(elems)) { elems = []; ${prop} = elems; } else if (!alreadySeen) { elems.length = 0; }`,
+            `${indent}  let elems: ${sub}[];`,
+            `${indent}  let baseIdx = 0;`,
+            `${indent}  if (!alreadySeen) { elems = new globalThis.Array<${sub}>(elemCount); ${prop} = elems; } else {`,
+            `${indent}    elems = ${prop};`,
+            `${indent}    if (!globalThis.Array.isArray(elems)) { elems = new globalThis.Array<${sub}>(elemCount); ${prop} = elems; } else { baseIdx = elems.length; elems.length = baseIdx + elemCount; }`,
+            `${indent}  }`,
             `${indent}  for (let i = 0; i < elemCount; i++) {`,
             `${indent}    if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
             `${indent}    let elNum = 0;`,
@@ -1027,7 +1037,7 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
             `${indent}      elNum = globalThis.Number(el);`,
             `${indent}    }`,
             `${indent}    if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
-            `${indent}    elems.push(decode${sub}(buf, undefined, depth + 2, options, p, p + elNum));`,
+            `${indent}    elems[baseIdx + i] = decode${sub}(buf, undefined, depth + 2, options, p, p + elNum);`,
             `${indent}    p += elNum;`,
             `${indent}  }`,
             `${indent}  if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
@@ -1152,7 +1162,7 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
         `${indent}  const sLen = sb >>> 1;`,
         `${indent}  pos += 1;`,
         `${indent}  if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');`,
-        `${indent}  ${emitAssignDecodedField(f, '$ob.decodeUTF8(buf, pos, pos + sLen)')}`,
+        `${indent}  ${emitAssignDecodedField(f, '$ob.decodeUTF8Len(buf, pos, sLen)')}`,
         `${indent}  pos += sLen;`,
         `${indent}} else {`,
         `${indent}  const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);`,
@@ -1169,8 +1179,7 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
     case ProtoScalarType.FLOAT:
       return [
         `${indent}if (n - pos < 4) throw new globalThis.Error('omnibuf: truncated float32');`,
-        `${indent}const bits = (buf[pos]! | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 0;`,
-        `${indent}${emitAssignDecodedField(f, '$ob.float32FromBits(bits)')}`,
+        `${indent}${emitAssignDecodedField(f, '$ob.readFloat32At(buf, pos)')}`,
         `${indent}pos += 4;`,
       ].join('\n');
     case ProtoScalarType.FIXED32:
@@ -2009,6 +2018,11 @@ export function generateFileCode(
 
     // 5. Reflection-Free Specialized Decoder
     const use32Mask = maxField <= 30;
+    const seenTrackedFields = fields.filter(
+      (f) => f.repeated || f.isMap || f.type === ProtoScalarType.MESSAGE,
+    );
+    const needsSeenTracking = seenTrackedFields.length > 0;
+    const needsSeenSet = seenTrackedFields.some((f) => f.number > 30);
     lines.push(
       `export function decode${msgName}(buf: globalThis.Uint8Array, target?: ${msgName}, depth = 0, options?: $ob.BinaryReadOptions, startPos = 0, endPos = buf.length): ${msgName} {`,
     );
@@ -2052,14 +2066,15 @@ export function generateFileCode(
     lines.push('  }');
     lines.push('  const n = endPos;');
     lines.push('  let pos = startPos;');
-    if (use32Mask) {
+    if (needsSeenTracking) {
+      lines.push('  const isMerge = options?.merge === true;');
       lines.push('  let seenMask = 0;');
-    } else {
-      lines.push('  let seenMask = 0;');
-      lines.push('  let seenSet: globalThis.Set<number> | null = null;');
+      if (needsSeenSet) {
+        lines.push('  let seenSet: globalThis.Set<number> | null = null;');
+      }
     }
     lines.push(
-      '  let unknownFields: $ob.UnknownField[] | null = globalThis.Array.isArray((out as any).$unknown) ? (out as any).$unknown : null;',
+      '  let unknownFields: $ob.UnknownField[] | null = target !== undefined && globalThis.Array.isArray((out as any).$unknown) ? (out as any).$unknown : null;',
     );
     lines.push('  while (pos < n) {');
     lines.push('    let tag = 0;');
@@ -2079,53 +2094,52 @@ export function generateFileCode(
     lines.push('      tag = globalThis.Number(t64);');
     lines.push('      pos += tn;');
     lines.push('    }');
-    lines.push(
-      '    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);',
-    );
-    lines.push('    const wt = tag & 0x0f;');
-    lines.push('    if (fieldNum === 0) {');
-    lines.push('      const nextPos = $ob.validateField0At(buf, pos, wt, depth, maxDepth, n);');
-    lines.push("      if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');");
-    lines.push('      pos = nextPos;');
-    lines.push('      continue;');
-    lines.push('    }');
-    lines.push('    const bit = fieldNum <= 30 ? 1 << fieldNum : 0;');
-    if (use32Mask) {
-      lines.push(
-        '    const alreadySeen = (seenMask & bit) !== 0 || globalThis.Boolean(options?.merge);',
-      );
-    } else {
-      lines.push(
-        '    const alreadySeen = (bit !== 0 ? (seenMask & bit) !== 0 : seenSet !== null && seenSet.has(fieldNum)) || globalThis.Boolean(options?.merge);',
-      );
-    }
-    lines.push('    switch (fieldNum) {');
+    lines.push('    switch (tag) {');
+    lines.push('      case 12: {');
+    lines.push('        const nextPos = $ob.validateField0At(buf, pos, 12, depth, maxDepth, n);');
+    lines.push("        if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');");
+    lines.push('        pos = nextPos;');
+    lines.push('        break;');
+    lines.push('      }');
     for (const f of fields) {
-      lines.push(`      case ${f.number}: {`);
-      lines.push(`        if (!(${expectedWireTypeExpr(f, 'wt')})) {`);
-      lines.push('          const valStart = pos;');
-      lines.push(
-        '          pos = $ob.validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);',
-      );
-      lines.push('          if (readUnknown) {');
-      lines.push('            if (!unknownFields) unknownFields = [];');
-      lines.push(
-        '            unknownFields.push({ no: fieldNum, wireType: wt, data: buf.subarray(valStart, pos).slice() });',
-      );
-      lines.push('          }');
-      lines.push('          break;');
-      lines.push('        }');
-      if (f.number <= 30) {
-        lines.push('        seenMask |= bit;');
-      } else {
-        lines.push('        if (!seenSet) seenSet = new globalThis.Set<number>();');
-        lines.push('        seenSet.add(fieldNum);');
+      if (!f.isMap && !f.repeated && f.type === ProtoScalarType.BOOL) {
+        lines.push(`      case ${f.number * 16 + 2}: {`);
+        lines.push(`        ${emitAssignDecodedField(f, 'false')}`);
+        lines.push('        break;');
+        lines.push('      }');
+        lines.push(`      case ${f.number * 16 + 3}: {`);
+        lines.push(`        ${emitAssignDecodedField(f, 'true')}`);
+        lines.push('        break;');
+        lines.push('      }');
+        continue;
+      }
+      const tagVal = f.number * 16 + expectedWireTypeNum(f);
+      lines.push(`      case ${tagVal}: {`);
+      if (f.repeated || f.isMap || f.type === ProtoScalarType.MESSAGE) {
+        if (f.number <= 30) {
+          const bitLit = 1 << f.number;
+          lines.push(`        const alreadySeen = isMerge || (seenMask & ${bitLit}) !== 0;`);
+          lines.push(`        seenMask |= ${bitLit};`);
+        } else {
+          lines.push(
+            `        const alreadySeen = isMerge || (seenSet !== null && seenSet.has(${f.number}));`,
+          );
+          lines.push('        if (!seenSet) seenSet = new globalThis.Set<number>();');
+          lines.push(`        seenSet.add(${f.number});`);
+        }
       }
       lines.push(emitDecodeFieldCaseBody(f, '        '));
       lines.push('        break;');
       lines.push('      }');
     }
     lines.push('      default: {');
+    lines.push(
+      '        const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);',
+    );
+    lines.push('        const wt = tag & 0x0f;');
+    lines.push(
+      "        if (fieldNum === 0) throw new globalThis.Error('omnibuf: invalid Field #0');",
+    );
     lines.push('        const valStart = pos;');
     lines.push(
       '        pos = $ob.validateValue(n < buf.length ? buf.subarray(0, n) : buf, pos, wt, depth, maxDepth);',
@@ -2140,7 +2154,9 @@ export function generateFileCode(
     lines.push('      }');
     lines.push('    }');
     lines.push('  }');
-    lines.push("  if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {");
+    lines.push(
+      "  if (unknownFields !== null && unknownFields.length > 0 && !('$unknown' in out)) {",
+    );
     lines.push(
       "    globalThis.Object.defineProperty(out, '$unknown', { value: unknownFields, enumerable: false, writable: true, configurable: true });",
     );

@@ -741,6 +741,74 @@ export class Encoder {
    * Writes a UTF-8 string field (`WireString = 10`).
    */
   writeString(fieldNum: number, s: string): void {
+    const n = s.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && n <= 42) {
+      const tag = (fieldNum << 4) | WireString;
+      const tagBytes = tag <= 127 ? 1 : 2;
+      if (n === 0) {
+        if (this.pos + tagBytes + 1 > this.buf.length) {
+          this.ensureCapacity(tagBytes + 1);
+        }
+        const buf = this.buf;
+        let p = this.pos;
+        if (tagBytes === 1) {
+          buf[p++] = (tag << 1) | 1;
+        } else {
+          const t16 = (tag << 2) | 2;
+          buf[p++] = t16 & 0xff;
+          buf[p++] = (t16 >>> 8) & 0xff;
+        }
+        buf[p++] = 0x01;
+        this.pos = p;
+        return;
+      }
+      if (this.pos + tagBytes + 1 + n * 3 > this.buf.length) {
+        this.ensureCapacity(tagBytes + 1 + n * 3);
+      }
+      const buf = this.buf;
+      let p = this.pos;
+      if (tagBytes === 1) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      const lenPos = p;
+      p = lenPos + 1;
+      for (let i = 0; i < n; i++) {
+        const c = s.charCodeAt(i);
+        if (c < 0x80) {
+          buf[p++] = c;
+        } else if (c < 0x800) {
+          buf[p++] = 0xc0 | (c >> 6);
+          buf[p++] = 0x80 | (c & 0x3f);
+        } else if (
+          c >= 0xd800 &&
+          c <= 0xdbff &&
+          i + 1 < n &&
+          s.charCodeAt(i + 1) >= 0xdc00 &&
+          s.charCodeAt(i + 1) <= 0xdfff
+        ) {
+          const cp = 0x10000 + (((c & 0x3ff) << 10) | (s.charCodeAt(++i) & 0x3ff));
+          buf[p++] = 0xf0 | (cp >> 18);
+          buf[p++] = 0x80 | ((cp >> 12) & 0x3f);
+          buf[p++] = 0x80 | ((cp >> 6) & 0x3f);
+          buf[p++] = 0x80 | (cp & 0x3f);
+        } else if (c >= 0xd800 && c <= 0xdfff) {
+          buf[p++] = 0xef;
+          buf[p++] = 0xbf;
+          buf[p++] = 0xbd;
+        } else {
+          buf[p++] = 0xe0 | (c >> 12);
+          buf[p++] = 0x80 | ((c >> 6) & 0x3f);
+          buf[p++] = 0x80 | (c & 0x3f);
+        }
+      }
+      buf[lenPos] = ((p - (lenPos + 1)) << 1) | 1;
+      this.pos = p;
+      return;
+    }
     this.writeTag(fieldNum, WireString);
     this.writeRawStringPayload(s);
   }
@@ -794,11 +862,64 @@ export class Encoder {
    * Writes a packed unsigned integer array (`WireArray = 13`, `ElementType = WireUint = 0`) with an outer backpatched length prefix.
    */
   writeUint32Arr(fieldNum: number, items: ArrayLike<number>): void {
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 127) {
+      const maxBytes = 2 + 2 + 1 + 1 + count * 9;
+      if (this.pos + maxBytes > this.buf.length) {
+        this.ensureCapacity(maxBytes);
+      }
+      const buf = this.buf;
+      let p = this.pos;
+      const tag = (fieldNum << 4) | WireArray;
+      if (tag <= 127) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      const lenPos = p;
+      p += 2;
+      buf[p++] = WireUint;
+      buf[p++] = (count << 1) | 1;
+      for (let i = 0; i < count; i++) {
+        const v = items[i]! >>> 0;
+        if (v <= 127) {
+          buf[p++] = (v << 1) | 1;
+        } else if (v <= 16383) {
+          const u16 = (v << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else if (v <= 536870911) {
+          const w32 = ((v << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        } else {
+          buf[p++] = 0x00;
+          buf[p++] = v & 0xff;
+          buf[p++] = (v >>> 8) & 0xff;
+          buf[p++] = (v >>> 16) & 0xff;
+          buf[p++] = (v >>> 24) & 0xff;
+          buf[p++] = 0;
+          buf[p++] = 0;
+          buf[p++] = 0;
+          buf[p++] = 0;
+        }
+      }
+      const subLen = p - (lenPos + 2);
+      const u16 = ((subLen << 2) | 2) & 0xffff;
+      buf[lenPos] = u16 & 0xff;
+      buf[lenPos + 1] = (u16 >>> 8) & 0xff;
+      this.pos = p;
+      return;
+    }
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length);
+    this.beginContainer(2 + count);
     this.writeByte(WireUint);
-    this.writeRawVarint(items.length);
-    for (let i = 0; i < items.length; i++) {
+    this.writeRawVarint(count);
+    for (let i = 0; i < count; i++) {
       this.writeRawVarint(items[i]! >>> 0);
     }
     this.endContainer();

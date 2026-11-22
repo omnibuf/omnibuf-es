@@ -1813,8 +1813,10 @@ export function spliceFields(
           if (wt !== WireSubMsg) {
             throw new Error('omnibuf: invalid Field #0 wire type');
           }
-          const [f0Body, f0End] = readLenSlice(raw, pos, 0);
-          decodeSchemaMeta(f0Body, depth + 1);
+          const f0End = validateField0At(raw, pos, wt, depth);
+          if (f0End < 0) {
+            throw new Error('omnibuf: invalid Field #0');
+          }
           pos = f0End;
         } else {
           pos = validateValue(raw, pos, wt, depth);

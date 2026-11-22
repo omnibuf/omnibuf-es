@@ -188,6 +188,3534 @@ export interface StringCodec {
 const sharedTextEncoder = new TextEncoder();
 const sharedTextDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
+const fromCharCode = String.fromCharCode;
+
+/**
+ * Unchecked single-shot pure-JS ASCII decoder for lengths 1..48.
+ * Caller must ensure `start >= 0`, `len >= 1 && len <= 48`, and `start + len <= bytes.length`.
+ * Returns `null` if any byte is `>= 0x80`.
+ */
+function decodeASCII1To48(bytes: Uint8Array, i: number, len: number): string | null {
+  switch (len) {
+    case 1: {
+      const b0 = bytes[i]!;
+      return b0 >= 0x80 ? null : fromCharCode(b0);
+    }
+    case 2: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!;
+      return (b0 | b1) >= 0x80 ? null : fromCharCode(b0, b1);
+    }
+    case 3: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!;
+      return (b0 | b1 | b2) >= 0x80 ? null : fromCharCode(b0, b1, b2);
+    }
+    case 4: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!;
+      return (b0 | b1 | b2 | b3) >= 0x80 ? null : fromCharCode(b0, b1, b2, b3);
+    }
+    case 5: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!;
+      return (b0 | b1 | b2 | b3 | b4) >= 0x80 ? null : fromCharCode(b0, b1, b2, b3, b4);
+    }
+    case 6: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5) >= 0x80 ? null : fromCharCode(b0, b1, b2, b3, b4, b5);
+    }
+    case 7: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6);
+    }
+    case 8: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7);
+    }
+    case 9: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8);
+    }
+    case 10: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9);
+    }
+    case 11: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10);
+    }
+    case 12: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11);
+    }
+    case 13: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11 | b12) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12);
+    }
+    case 14: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11 | b12 | b13) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13);
+    }
+    case 15: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11 | b12 | b13 | b14) >= 0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14);
+    }
+    case 16: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15) >=
+        0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15);
+    }
+    case 17: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16) >=
+        0x80
+        ? null
+        : fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16);
+    }
+    case 18: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+          );
+    }
+    case 19: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+          );
+    }
+    case 20: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+          );
+    }
+    case 21: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+          );
+    }
+    case 22: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+          );
+    }
+    case 23: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+          );
+    }
+    case 24: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+          );
+    }
+    case 25: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+          );
+    }
+    case 26: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+          );
+    }
+    case 27: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+          );
+    }
+    case 28: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+          );
+    }
+    case 29: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+          );
+    }
+    case 30: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+          );
+    }
+    case 31: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+          );
+    }
+    case 32: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+          );
+    }
+    case 33: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+          );
+    }
+    case 34: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+          );
+    }
+    case 35: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+          );
+    }
+    case 36: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+          );
+    }
+    case 37: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+          );
+    }
+    case 38: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+          );
+    }
+    case 39: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+          );
+    }
+    case 40: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+          );
+    }
+    case 41: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!,
+        b40 = bytes[i + 40]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39 |
+        b40) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+            b40,
+          );
+    }
+    case 42: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!,
+        b40 = bytes[i + 40]!,
+        b41 = bytes[i + 41]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39 |
+        b40 |
+        b41) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+            b40,
+            b41,
+          );
+    }
+    case 43: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!,
+        b40 = bytes[i + 40]!,
+        b41 = bytes[i + 41]!,
+        b42 = bytes[i + 42]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39 |
+        b40 |
+        b41 |
+        b42) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+            b40,
+            b41,
+            b42,
+          );
+    }
+    case 44: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!,
+        b40 = bytes[i + 40]!,
+        b41 = bytes[i + 41]!,
+        b42 = bytes[i + 42]!,
+        b43 = bytes[i + 43]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39 |
+        b40 |
+        b41 |
+        b42 |
+        b43) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+            b40,
+            b41,
+            b42,
+            b43,
+          );
+    }
+    case 45: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!,
+        b40 = bytes[i + 40]!,
+        b41 = bytes[i + 41]!,
+        b42 = bytes[i + 42]!,
+        b43 = bytes[i + 43]!,
+        b44 = bytes[i + 44]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39 |
+        b40 |
+        b41 |
+        b42 |
+        b43 |
+        b44) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+            b40,
+            b41,
+            b42,
+            b43,
+            b44,
+          );
+    }
+    case 46: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!,
+        b40 = bytes[i + 40]!,
+        b41 = bytes[i + 41]!,
+        b42 = bytes[i + 42]!,
+        b43 = bytes[i + 43]!,
+        b44 = bytes[i + 44]!,
+        b45 = bytes[i + 45]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39 |
+        b40 |
+        b41 |
+        b42 |
+        b43 |
+        b44 |
+        b45) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+            b40,
+            b41,
+            b42,
+            b43,
+            b44,
+            b45,
+          );
+    }
+    case 47: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!,
+        b40 = bytes[i + 40]!,
+        b41 = bytes[i + 41]!,
+        b42 = bytes[i + 42]!,
+        b43 = bytes[i + 43]!,
+        b44 = bytes[i + 44]!,
+        b45 = bytes[i + 45]!,
+        b46 = bytes[i + 46]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39 |
+        b40 |
+        b41 |
+        b42 |
+        b43 |
+        b44 |
+        b45 |
+        b46) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+            b40,
+            b41,
+            b42,
+            b43,
+            b44,
+            b45,
+            b46,
+          );
+    }
+    case 48: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!,
+        b16 = bytes[i + 16]!,
+        b17 = bytes[i + 17]!,
+        b18 = bytes[i + 18]!,
+        b19 = bytes[i + 19]!,
+        b20 = bytes[i + 20]!,
+        b21 = bytes[i + 21]!,
+        b22 = bytes[i + 22]!,
+        b23 = bytes[i + 23]!,
+        b24 = bytes[i + 24]!,
+        b25 = bytes[i + 25]!,
+        b26 = bytes[i + 26]!,
+        b27 = bytes[i + 27]!,
+        b28 = bytes[i + 28]!,
+        b29 = bytes[i + 29]!,
+        b30 = bytes[i + 30]!,
+        b31 = bytes[i + 31]!,
+        b32 = bytes[i + 32]!,
+        b33 = bytes[i + 33]!,
+        b34 = bytes[i + 34]!,
+        b35 = bytes[i + 35]!,
+        b36 = bytes[i + 36]!,
+        b37 = bytes[i + 37]!,
+        b38 = bytes[i + 38]!,
+        b39 = bytes[i + 39]!,
+        b40 = bytes[i + 40]!,
+        b41 = bytes[i + 41]!,
+        b42 = bytes[i + 42]!,
+        b43 = bytes[i + 43]!,
+        b44 = bytes[i + 44]!,
+        b45 = bytes[i + 45]!,
+        b46 = bytes[i + 46]!,
+        b47 = bytes[i + 47]!;
+      return (b0 |
+        b1 |
+        b2 |
+        b3 |
+        b4 |
+        b5 |
+        b6 |
+        b7 |
+        b8 |
+        b9 |
+        b10 |
+        b11 |
+        b12 |
+        b13 |
+        b14 |
+        b15 |
+        b16 |
+        b17 |
+        b18 |
+        b19 |
+        b20 |
+        b21 |
+        b22 |
+        b23 |
+        b24 |
+        b25 |
+        b26 |
+        b27 |
+        b28 |
+        b29 |
+        b30 |
+        b31 |
+        b32 |
+        b33 |
+        b34 |
+        b35 |
+        b36 |
+        b37 |
+        b38 |
+        b39 |
+        b40 |
+        b41 |
+        b42 |
+        b43 |
+        b44 |
+        b45 |
+        b46 |
+        b47) >=
+        0x80
+        ? null
+        : fromCharCode(
+            b0,
+            b1,
+            b2,
+            b3,
+            b4,
+            b5,
+            b6,
+            b7,
+            b8,
+            b9,
+            b10,
+            b11,
+            b12,
+            b13,
+            b14,
+            b15,
+            b16,
+            b17,
+            b18,
+            b19,
+            b20,
+            b21,
+            b22,
+            b23,
+            b24,
+            b25,
+            b26,
+            b27,
+            b28,
+            b29,
+            b30,
+            b31,
+            b32,
+            b33,
+            b34,
+            b35,
+            b36,
+            b37,
+            b38,
+            b39,
+            b40,
+            b41,
+            b42,
+            b43,
+            b44,
+            b45,
+            b46,
+            b47,
+          );
+    }
+    default:
+      return null;
+  }
+}
+
 /**
  * Fast-path pure-JS decoder for short ASCII strings (`<= 64` bytes).
  * Returns `null` if any byte is non-ASCII (`>= 0x80`) or if `end - start > 64`.
@@ -197,126 +3725,12 @@ export function fastDecodeShortASCII(bytes: Uint8Array, start: number, end: numb
   if (end > bytes.length) end = bytes.length;
   const len = end - start;
   if (len <= 0) return '';
+  if (len <= 48) return decodeASCII1To48(bytes, start, len);
   if (len > 64) return null;
-  let i = start;
-  let out = '';
-  while (i + 16 <= end) {
-    const b0 = bytes[i]!;
-    const b1 = bytes[i + 1]!;
-    const b2 = bytes[i + 2]!;
-    const b3 = bytes[i + 3]!;
-    const b4 = bytes[i + 4]!;
-    const b5 = bytes[i + 5]!;
-    const b6 = bytes[i + 6]!;
-    const b7 = bytes[i + 7]!;
-    const b8 = bytes[i + 8]!;
-    const b9 = bytes[i + 9]!;
-    const b10 = bytes[i + 10]!;
-    const b11 = bytes[i + 11]!;
-    const b12 = bytes[i + 12]!;
-    const b13 = bytes[i + 13]!;
-    const b14 = bytes[i + 14]!;
-    const b15 = bytes[i + 15]!;
-    if (
-      (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11 | b12 | b13 | b14 | b15) >=
-      0x80
-    ) {
-      return null;
-    }
-    out += String.fromCharCode(
-      b0,
-      b1,
-      b2,
-      b3,
-      b4,
-      b5,
-      b6,
-      b7,
-      b8,
-      b9,
-      b10,
-      b11,
-      b12,
-      b13,
-      b14,
-      b15,
-    );
-    i += 16;
-  }
-  if (i + 8 <= end) {
-    const b0 = bytes[i]!;
-    const b1 = bytes[i + 1]!;
-    const b2 = bytes[i + 2]!;
-    const b3 = bytes[i + 3]!;
-    const b4 = bytes[i + 4]!;
-    const b5 = bytes[i + 5]!;
-    const b6 = bytes[i + 6]!;
-    const b7 = bytes[i + 7]!;
-    if ((b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7) >= 0x80) return null;
-    out += String.fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7);
-    i += 8;
-  }
-  const rem = end - i;
-  if (rem === 0) return out;
-  switch (rem) {
-    case 1: {
-      const b0 = bytes[i]!;
-      if (b0 >= 0x80) return null;
-      return out + String.fromCharCode(b0);
-    }
-    case 2: {
-      const b0 = bytes[i]!;
-      const b1 = bytes[i + 1]!;
-      if ((b0 | b1) >= 0x80) return null;
-      return out + String.fromCharCode(b0, b1);
-    }
-    case 3: {
-      const b0 = bytes[i]!;
-      const b1 = bytes[i + 1]!;
-      const b2 = bytes[i + 2]!;
-      if ((b0 | b1 | b2) >= 0x80) return null;
-      return out + String.fromCharCode(b0, b1, b2);
-    }
-    case 4: {
-      const b0 = bytes[i]!;
-      const b1 = bytes[i + 1]!;
-      const b2 = bytes[i + 2]!;
-      const b3 = bytes[i + 3]!;
-      if ((b0 | b1 | b2 | b3) >= 0x80) return null;
-      return out + String.fromCharCode(b0, b1, b2, b3);
-    }
-    case 5: {
-      const b0 = bytes[i]!;
-      const b1 = bytes[i + 1]!;
-      const b2 = bytes[i + 2]!;
-      const b3 = bytes[i + 3]!;
-      const b4 = bytes[i + 4]!;
-      if ((b0 | b1 | b2 | b3 | b4) >= 0x80) return null;
-      return out + String.fromCharCode(b0, b1, b2, b3, b4);
-    }
-    case 6: {
-      const b0 = bytes[i]!;
-      const b1 = bytes[i + 1]!;
-      const b2 = bytes[i + 2]!;
-      const b3 = bytes[i + 3]!;
-      const b4 = bytes[i + 4]!;
-      const b5 = bytes[i + 5]!;
-      if ((b0 | b1 | b2 | b3 | b4 | b5) >= 0x80) return null;
-      return out + String.fromCharCode(b0, b1, b2, b3, b4, b5);
-    }
-    case 7: {
-      const b0 = bytes[i]!;
-      const b1 = bytes[i + 1]!;
-      const b2 = bytes[i + 2]!;
-      const b3 = bytes[i + 3]!;
-      const b4 = bytes[i + 4]!;
-      const b5 = bytes[i + 5]!;
-      const b6 = bytes[i + 6]!;
-      if ((b0 | b1 | b2 | b3 | b4 | b5 | b6) >= 0x80) return null;
-      return out + String.fromCharCode(b0, b1, b2, b3, b4, b5, b6);
-    }
-  }
-  return out;
+  const head = decodeASCII1To48(bytes, start, 32);
+  if (head === null) return null;
+  const tail = decodeASCII1To48(bytes, start + 32, len - 32);
+  return tail === null ? null : head + tail;
 }
 
 const defaultStringCodec: StringCodec = {
@@ -388,12 +3802,35 @@ export function encodeUTF8(str: string): Uint8Array {
 }
 
 export function decodeUTF8(bytes: Uint8Array, start = 0, end = bytes.length): string {
-  if (end <= start) return '';
-  if (end - start <= 64) {
+  const len = end - start;
+  if (len <= 0) return '';
+  if (len <= 48 && start >= 0 && end <= bytes.length) {
+    const ascii = decodeASCII1To48(bytes, start, len);
+    if (ascii !== null) return ascii;
+  } else if (len <= 64) {
     const ascii = fastDecodeShortASCII(bytes, start, end);
     if (ascii !== null) return ascii;
   }
   return activeStringCodec.decode(bytes, start, end);
+}
+
+/**
+ * Decodes `len` UTF-8 bytes starting at `start` when the caller has already verified
+ * `start >= 0 && start + len <= bytes.length`.
+ */
+export function decodeUTF8Len(bytes: Uint8Array, start: number, len: number): string {
+  if (len <= 0) return '';
+  if (len <= 48) {
+    const ascii = decodeASCII1To48(bytes, start, len);
+    if (ascii !== null) return ascii;
+  } else if (len <= 64) {
+    const head = decodeASCII1To48(bytes, start, 32);
+    if (head !== null) {
+      const tail = decodeASCII1To48(bytes, start + 32, len - 32);
+      if (tail !== null) return head + tail;
+    }
+  }
+  return activeStringCodec.decode(bytes, start, start + len);
 }
 
 /**
@@ -1791,15 +5228,27 @@ export function readLenSlice(
 // IEEE-754 Float32 Shortest Decimal Representation (Ryū 32-bit matching Go)
 // ============================================================================
 
+const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 const f32ScratchBuf = new ArrayBuffer(8);
 const f32ScratchView = new DataView(f32ScratchBuf);
+const f32ScratchU32 = new Uint32Array(f32ScratchBuf);
+const f32ScratchF32 = new Float32Array(f32ScratchBuf);
+const f32ScratchF64 = new Float64Array(f32ScratchBuf);
 
 export function float32Bits(v: number): number {
+  if (IS_LITTLE_ENDIAN) {
+    f32ScratchF32[0] = v;
+    return f32ScratchU32[0]!;
+  }
   f32ScratchView.setFloat32(0, v, true);
   return f32ScratchView.getUint32(0, true);
 }
 
 export function float32FromBits(bits: number): number {
+  if (IS_LITTLE_ENDIAN) {
+    f32ScratchU32[0] = bits >>> 0;
+    return f32ScratchF32[0]!;
+  }
   f32ScratchView.setUint32(0, bits >>> 0, true);
   return f32ScratchView.getFloat32(0, true);
 }
@@ -1817,6 +5266,10 @@ export function float64FromBits(bits: bigint): number {
 export function readFloat32At(buf: Uint8Array, pos: number): number {
   const bits =
     (buf[pos]! | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 0;
+  if (IS_LITTLE_ENDIAN) {
+    f32ScratchU32[0] = bits;
+    return f32ScratchF32[0]!;
+  }
   f32ScratchView.setUint32(0, bits, true);
   return f32ScratchView.getFloat32(0, true);
 }
@@ -1826,6 +5279,11 @@ export function readFloat64At(buf: Uint8Array, pos: number): number {
     (buf[pos]! | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 0;
   const hi =
     (buf[pos + 4]! | (buf[pos + 5]! << 8) | (buf[pos + 6]! << 16) | (buf[pos + 7]! << 24)) >>> 0;
+  if (IS_LITTLE_ENDIAN) {
+    f32ScratchU32[0] = lo;
+    f32ScratchU32[1] = hi;
+    return f32ScratchF64[0]!;
+  }
   f32ScratchView.setUint32(0, lo, true);
   f32ScratchView.setUint32(4, hi, true);
   return f32ScratchView.getFloat64(0, true);

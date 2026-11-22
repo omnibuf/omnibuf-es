@@ -532,6 +532,14 @@ export class MessageSchema<
   private readonly factory?: () => T;
   private readonly precomputedDescMap: PropertyDescriptorMap | null;
   private generatedHooks?: GeneratedCodecHooks<T>;
+  private generatedCreate?: () => T;
+  private generatedEncode?: (enc: Encoder, msg: Partial<T>, options?: MarshalOptions) => void;
+  private generatedDecode?: (
+    data: Uint8Array,
+    target?: T,
+    depth?: number,
+    options?: BinaryReadOptions,
+  ) => T;
   private readonly typeNameDesc: PropertyDescriptor;
   private cachedMeta: SchemaMeta | null = null;
   private cachedShallowMeta: SchemaMeta | null = null;
@@ -548,6 +556,9 @@ export class MessageSchema<
     this.shortName = shortMessageName(typeName);
     this.factory = factory;
     this.generatedHooks = generatedHooks;
+    this.generatedCreate = generatedHooks?.create;
+    this.generatedEncode = generatedHooks?.encode;
+    this.generatedDecode = generatedHooks?.decode;
     this.typeNameDesc = {
       value: typeName,
       enumerable: false,
@@ -897,6 +908,9 @@ export class MessageSchema<
    */
   setGeneratedCodec(hooks: GeneratedCodecHooks<T>): this {
     this.generatedHooks = hooks;
+    this.generatedCreate = hooks.create;
+    this.generatedEncode = hooks.encode;
+    this.generatedDecode = hooks.decode;
     return this;
   }
 
@@ -1390,8 +1404,8 @@ export class MessageSchema<
         );
       }
     }
-    if (this.generatedHooks?.encode && (!selfDescribing || !this.isCyclicOrDeep())) {
-      this.generatedHooks.encode(enc, msg, options);
+    if (this.generatedEncode !== undefined && (!selfDescribing || !this.isCyclicOrDeep())) {
+      this.generatedEncode(enc, msg, options);
       return;
     }
     const rootCoveredHops = Math.floor((MaxNestingDepth - 2) / 2);
@@ -1530,8 +1544,8 @@ export class MessageSchema<
     startOffset = 0,
     endOffset = data.length,
   ): T {
-    if (this.generatedHooks?.decode && startOffset === 0 && endOffset === data.length) {
-      return this.generatedHooks.decode(data, target, depth, options);
+    if (this.generatedDecode !== undefined && startOffset === 0 && endOffset === data.length) {
+      return this.generatedDecode(data, target, depth, options);
     }
     const maxDepth = options?.recursionLimit ?? MaxNestingDepth;
     const readUnknown = options?.readUnknownFields ?? true;

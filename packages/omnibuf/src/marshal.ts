@@ -1,10 +1,10 @@
 import {
+  MessageSchema,
   getClassSchema,
   type BinaryReadOptions,
   type BinaryWriteOptions,
   type MarshalOptions,
   type MessageInitShape,
-  type MessageSchema,
   type MessageShape,
 } from './schema.js';
 import {
@@ -24,6 +24,9 @@ export type SchemaInput<T extends object = Record<string, any>> =
   MessageSchema<T> | ProtobufDescMessage | (new (...args: any[]) => T);
 
 function resolveSchema<T extends object>(schema: SchemaInput<T>): MessageSchema<T> {
+  if (schema instanceof MessageSchema) {
+    return schema;
+  }
   if (isMessageSchema<T>(schema)) {
     return schema;
   }
@@ -75,7 +78,7 @@ export function toBinary<T extends object>(
   message: T,
   options?: BinaryWriteOptions,
 ): Uint8Array {
-  const resolved = resolveSchema<T>(schema);
+  const resolved = schema instanceof MessageSchema ? schema : resolveSchema<T>(schema);
   return resolved.encode(
     message,
     options === undefined
@@ -98,7 +101,7 @@ export function fromBinary<T extends object>(
   bytes: Uint8Array,
   options?: BinaryReadOptions,
 ): T {
-  const resolved = resolveSchema<T>(schema);
+  const resolved = schema instanceof MessageSchema ? schema : resolveSchema<T>(schema);
   return resolved.decode(bytes, undefined, 0, options);
 }
 

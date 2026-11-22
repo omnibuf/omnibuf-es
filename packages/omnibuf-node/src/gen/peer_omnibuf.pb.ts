@@ -126,10 +126,10 @@ export function decodeLocation(
   }
   const n = endPos;
   let pos = startPos;
-  let seenMask = 0;
-  let unknownFields: $ob.UnknownField[] | null = globalThis.Array.isArray((out as any).$unknown)
-    ? (out as any).$unknown
-    : null;
+  let unknownFields: $ob.UnknownField[] | null =
+    target !== undefined && globalThis.Array.isArray((out as any).$unknown)
+      ? (out as any).$unknown
+      : null;
   while (pos < n) {
     let tag = 0;
     const b0 = buf[pos]!;
@@ -146,45 +146,21 @@ export function decodeLocation(
       tag = globalThis.Number(t64);
       pos += tn;
     }
-    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
-    const wt = tag & 0x0f;
-    if (fieldNum === 0) {
-      const nextPos = $ob.validateField0At(buf, pos, wt, depth, maxDepth, n);
-      if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
-      pos = nextPos;
-      continue;
-    }
-    const bit = fieldNum <= 30 ? 1 << fieldNum : 0;
-    const alreadySeen = (seenMask & bit) !== 0 || globalThis.Boolean(options?.merge);
-    switch (fieldNum) {
-      case 1: {
-        if (!(wt === 10)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+    switch (tag) {
+      case 12: {
+        const nextPos = $ob.validateField0At(buf, pos, 12, depth, maxDepth, n);
+        if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
+        pos = nextPos;
+        break;
+      }
+      case 26: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
           if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
-          out.region = $ob.decodeUTF8(buf, pos, pos + sLen);
+          out.region = $ob.decodeUTF8Len(buf, pos, sLen);
           pos += sLen;
         } else {
           const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
@@ -193,34 +169,14 @@ export function decodeLocation(
         }
         break;
       }
-      case 2: {
-        if (!(wt === 10)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 42: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
           if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
-          out.datacenter = $ob.decodeUTF8(buf, pos, pos + sLen);
+          out.datacenter = $ob.decodeUTF8Len(buf, pos, sLen);
           pos += sLen;
         } else {
           const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
@@ -229,34 +185,14 @@ export function decodeLocation(
         }
         break;
       }
-      case 3: {
-        if (!(wt === 10)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 58: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
           if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
-          out.city = $ob.decodeUTF8(buf, pos, pos + sLen);
+          out.city = $ob.decodeUTF8Len(buf, pos, sLen);
           pos += sLen;
         } else {
           const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
@@ -265,27 +201,7 @@ export function decodeLocation(
         }
         break;
       }
-      case 4: {
-        if (!(wt === 0)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 64: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint32');
         const vb = buf[pos]!;
         let u32Val = 0;
@@ -315,63 +231,22 @@ export function decodeLocation(
         out.rack = u32Val as any;
         break;
       }
-      case 5: {
-        if (!(wt === 8)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 88: {
         if (n - pos < 4) throw new globalThis.Error('omnibuf: truncated float32');
-        const bits =
-          (buf[pos]! | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 0;
-        out.latitude = $ob.float32FromBits(bits);
+        out.latitude = $ob.readFloat32At(buf, pos);
         pos += 4;
         break;
       }
-      case 6: {
-        if (!(wt === 8)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 104: {
         if (n - pos < 4) throw new globalThis.Error('omnibuf: truncated float32');
-        const bits =
-          (buf[pos]! | (buf[pos + 1]! << 8) | (buf[pos + 2]! << 16) | (buf[pos + 3]! << 24)) >>> 0;
-        out.longitude = $ob.float32FromBits(bits);
+        out.longitude = $ob.readFloat32At(buf, pos);
         pos += 4;
         break;
       }
       default: {
+        const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
+        const wt = tag & 0x0f;
+        if (fieldNum === 0) throw new globalThis.Error('omnibuf: invalid Field #0');
         const valStart = pos;
         pos = $ob.validateValue(
           n < buf.length ? buf.subarray(0, n) : buf,
@@ -392,7 +267,7 @@ export function decodeLocation(
       }
     }
   }
-  if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {
+  if (unknownFields !== null && unknownFields.length > 0 && !('$unknown' in out)) {
     globalThis.Object.defineProperty(out, '$unknown', {
       value: unknownFields,
       enumerable: false,
@@ -755,10 +630,10 @@ export function decodeNeighbor(
   }
   const n = endPos;
   let pos = startPos;
-  let seenMask = 0;
-  let unknownFields: $ob.UnknownField[] | null = globalThis.Array.isArray((out as any).$unknown)
-    ? (out as any).$unknown
-    : null;
+  let unknownFields: $ob.UnknownField[] | null =
+    target !== undefined && globalThis.Array.isArray((out as any).$unknown)
+      ? (out as any).$unknown
+      : null;
   while (pos < n) {
     let tag = 0;
     const b0 = buf[pos]!;
@@ -775,38 +650,14 @@ export function decodeNeighbor(
       tag = globalThis.Number(t64);
       pos += tn;
     }
-    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
-    const wt = tag & 0x0f;
-    if (fieldNum === 0) {
-      const nextPos = $ob.validateField0At(buf, pos, wt, depth, maxDepth, n);
-      if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
-      pos = nextPos;
-      continue;
-    }
-    const bit = fieldNum <= 30 ? 1 << fieldNum : 0;
-    const alreadySeen = (seenMask & bit) !== 0 || globalThis.Boolean(options?.merge);
-    switch (fieldNum) {
-      case 1: {
-        if (!(wt === 0)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+    switch (tag) {
+      case 12: {
+        const nextPos = $ob.validateField0At(buf, pos, 12, depth, maxDepth, n);
+        if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
+        pos = nextPos;
+        break;
+      }
+      case 16: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint32');
         const vb = buf[pos]!;
         let u32Val = 0;
@@ -836,34 +687,14 @@ export function decodeNeighbor(
         out.peerAsn = u32Val as any;
         break;
       }
-      case 2: {
-        if (!(wt === 10)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 42: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
           if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
-          out.router = $ob.decodeUTF8(buf, pos, pos + sLen);
+          out.router = $ob.decodeUTF8Len(buf, pos, sLen);
           pos += sLen;
         } else {
           const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
@@ -872,27 +703,7 @@ export function decodeNeighbor(
         }
         break;
       }
-      case 3: {
-        if (!(wt === 0)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 48: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint32');
         const vb = buf[pos]!;
         let u32Val = 0;
@@ -922,31 +733,18 @@ export function decodeNeighbor(
         out.latencyUs = u32Val as any;
         break;
       }
-      case 4: {
-        if (!(wt === 2 || wt === 3)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
-        out.established = wt === 3;
+      case 66: {
+        out.established = false;
+        break;
+      }
+      case 67: {
+        out.established = true;
         break;
       }
       default: {
+        const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
+        const wt = tag & 0x0f;
+        if (fieldNum === 0) throw new globalThis.Error('omnibuf: invalid Field #0');
         const valStart = pos;
         pos = $ob.validateValue(
           n < buf.length ? buf.subarray(0, n) : buf,
@@ -967,7 +765,7 @@ export function decodeNeighbor(
       }
     }
   }
-  if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {
+  if (unknownFields !== null && unknownFields.length > 0 && !('$unknown' in out)) {
     globalThis.Object.defineProperty(out, '$unknown', {
       value: unknownFields,
       enumerable: false,
@@ -1362,10 +1160,12 @@ export function decodePeerUpdate(
   }
   const n = endPos;
   let pos = startPos;
+  const isMerge = options?.merge === true;
   let seenMask = 0;
-  let unknownFields: $ob.UnknownField[] | null = globalThis.Array.isArray((out as any).$unknown)
-    ? (out as any).$unknown
-    : null;
+  let unknownFields: $ob.UnknownField[] | null =
+    target !== undefined && globalThis.Array.isArray((out as any).$unknown)
+      ? (out as any).$unknown
+      : null;
   while (pos < n) {
     let tag = 0;
     const b0 = buf[pos]!;
@@ -1382,38 +1182,14 @@ export function decodePeerUpdate(
       tag = globalThis.Number(t64);
       pos += tn;
     }
-    const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
-    const wt = tag & 0x0f;
-    if (fieldNum === 0) {
-      const nextPos = $ob.validateField0At(buf, pos, wt, depth, maxDepth, n);
-      if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
-      pos = nextPos;
-      continue;
-    }
-    const bit = fieldNum <= 30 ? 1 << fieldNum : 0;
-    const alreadySeen = (seenMask & bit) !== 0 || globalThis.Boolean(options?.merge);
-    switch (fieldNum) {
-      case 1: {
-        if (!(wt === 0)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+    switch (tag) {
+      case 12: {
+        const nextPos = $ob.validateField0At(buf, pos, 12, depth, maxDepth, n);
+        if (nextPos < 0) throw new globalThis.Error('omnibuf: invalid Field #0');
+        pos = nextPos;
+        break;
+      }
+      case 16: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint32');
         const vb = buf[pos]!;
         let u32Val = 0;
@@ -1443,34 +1219,14 @@ export function decodePeerUpdate(
         out.asn = u32Val as any;
         break;
       }
-      case 2: {
-        if (!(wt === 10)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 42: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated string');
         const sb = buf[pos]!;
         if ((sb & 1) !== 0) {
           const sLen = sb >>> 1;
           pos += 1;
           if (pos + sLen > n) throw new globalThis.Error('omnibuf: truncated string');
-          out.routerId = $ob.decodeUTF8(buf, pos, pos + sLen);
+          out.routerId = $ob.decodeUTF8Len(buf, pos, sLen);
           pos += sLen;
         } else {
           const [s, nextPos] = $ob.readLenSlice(buf, pos, 0, n);
@@ -1479,51 +1235,15 @@ export function decodePeerUpdate(
         }
         break;
       }
-      case 3: {
-        if (!(wt === 2 || wt === 3)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
-        out.active = wt === 3;
+      case 50: {
+        out.active = false;
         break;
       }
-      case 4: {
-        if (!(wt === 0)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 51: {
+        out.active = true;
+        break;
+      }
+      case 64: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint64');
         const vb = buf[pos]!;
         let u64Val: number | bigint;
@@ -1563,27 +1283,7 @@ export function decodePeerUpdate(
         out.uptimeSec = u64Val;
         break;
       }
-      case 5: {
-        if (!(wt === 1)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 81: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated int32/enum');
         const vb = buf[pos]!;
         let i32Val = 0;
@@ -1612,53 +1312,15 @@ export function decodePeerUpdate(
         out.rssiDbm = i32Val as any;
         break;
       }
-      case 6: {
-        if (!(wt === 9)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 105: {
         if (n - pos < 8) throw new globalThis.Error('omnibuf: truncated float64');
         out.cpuLoad = $ob.readFloat64At(buf, pos);
         pos += 8;
         break;
       }
-      case 7: {
-        if (!(wt === 13)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 125: {
+        const alreadySeen = isMerge || (seenMask & 128) !== 0;
+        seenMask |= 128;
         if (depth + 1 > maxDepth)
           throw new globalThis.Error(
             `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
@@ -1688,12 +1350,20 @@ export function decodePeerUpdate(
           const count = buf[pos + 1]! >>> 1;
           let p = pos + 2;
           if (count > bodyEnd - p) throw new globalThis.Error('omnibuf: invalid string array');
-          let dst = out.tags;
-          if (!globalThis.Array.isArray(dst)) {
-            dst = [];
+          let dst: string[];
+          let baseIdx = 0;
+          if (!alreadySeen) {
+            dst = new globalThis.Array<string>(count);
             out.tags = dst;
-          } else if (!alreadySeen) {
-            dst.length = 0;
+          } else {
+            dst = out.tags;
+            if (!globalThis.Array.isArray(dst)) {
+              dst = new globalThis.Array<string>(count);
+              out.tags = dst;
+            } else {
+              baseIdx = dst.length;
+              dst.length = baseIdx + count;
+            }
           }
           for (let i = 0; i < count; i++) {
             if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
@@ -1702,7 +1372,7 @@ export function decodePeerUpdate(
               const sLen = sb >>> 1;
               p += 1;
               if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
-              dst.push($ob.decodeUTF8(buf, p, p + sLen));
+              dst[baseIdx + i] = $ob.decodeUTF8Len(buf, p, sLen);
               p += sLen;
             } else {
               const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);
@@ -1710,7 +1380,7 @@ export function decodePeerUpdate(
                 throw new globalThis.Error('omnibuf: invalid string array');
               p += sn;
               const sLenNum = globalThis.Number(sLen);
-              dst.push($ob.decodeUTF8(buf, p, p + sLenNum));
+              dst[baseIdx + i] = $ob.decodeUTF8(buf, p, p + sLenNum);
               p += sLenNum;
             }
           }
@@ -1725,27 +1395,9 @@ export function decodePeerUpdate(
         pos = bodyEnd;
         break;
       }
-      case 8: {
-        if (!(wt === 13)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 141: {
+        const alreadySeen = isMerge || (seenMask & 256) !== 0;
+        seenMask |= 256;
         if (depth + 1 > maxDepth)
           throw new globalThis.Error(
             `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
@@ -1775,36 +1427,42 @@ export function decodePeerUpdate(
           const count = buf[pos + 1]! >>> 1;
           let p = pos + 2;
           if (count > bodyEnd - p) throw new globalThis.Error('omnibuf: invalid uint32 array');
-          let dst = out.prefixes as number[];
-          if (!globalThis.Array.isArray(dst)) {
-            dst = [];
+          let dst: number[];
+          let baseIdx = 0;
+          if (!alreadySeen) {
+            dst = new globalThis.Array<number>(count);
             out.prefixes = dst as any;
-          } else if (!alreadySeen) {
-            dst.length = 0;
+          } else {
+            dst = out.prefixes as number[];
+            if (!globalThis.Array.isArray(dst)) {
+              dst = new globalThis.Array<number>(count);
+              out.prefixes = dst as any;
+            } else {
+              baseIdx = dst.length;
+              dst.length = baseIdx + count;
+            }
           }
           for (let i = 0; i < count; i++) {
             if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
             const vb = buf[p]!;
             if ((vb & 1) !== 0) {
-              dst.push(vb >>> 1);
+              dst[baseIdx + i] = vb >>> 1;
               p += 1;
             } else if ((vb & 2) !== 0) {
               if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst.push((vb | (buf[p + 1]! << 8)) >>> 2);
+              dst[baseIdx + i] = (vb | (buf[p + 1]! << 8)) >>> 2;
               p += 2;
             } else if ((vb & 4) !== 0) {
               if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst.push(
-                ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0,
-              );
+              dst[baseIdx + i] =
+                ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0;
               p += 4;
             } else {
               if (vb !== 0 || p + 9 > bodyEnd)
                 throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst.push(
+              dst[baseIdx + i] =
                 (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>>
-                  0,
-              );
+                0;
               p += 9;
             }
           }
@@ -1819,27 +1477,9 @@ export function decodePeerUpdate(
         pos = bodyEnd;
         break;
       }
-      case 9: {
-        if (!(wt === 12)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 156: {
+        const alreadySeen = isMerge || (seenMask & 512) !== 0;
+        seenMask |= 512;
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated submsg');
         let subLen = 0;
         const lb = buf[pos]!;
@@ -1879,27 +1519,9 @@ export function decodePeerUpdate(
         pos += subLen;
         break;
       }
-      case 10: {
-        if (!(wt === 13)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 173: {
+        const alreadySeen = isMerge || (seenMask & 1024) !== 0;
+        seenMask |= 1024;
         if (depth + 1 > maxDepth)
           throw new globalThis.Error(
             `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${maxDepth})`,
@@ -1937,12 +1559,20 @@ export function decodePeerUpdate(
           const elemCount = buf[pos + 1]! >>> 1;
           let p = pos + 2;
           if (elemCount > arrEnd - p) throw new globalThis.Error('omnibuf: corrupt submsg array');
-          let elems = out.neighbors;
-          if (!globalThis.Array.isArray(elems)) {
-            elems = [];
+          let elems: Neighbor[];
+          let baseIdx = 0;
+          if (!alreadySeen) {
+            elems = new globalThis.Array<Neighbor>(elemCount);
             out.neighbors = elems;
-          } else if (!alreadySeen) {
-            elems.length = 0;
+          } else {
+            elems = out.neighbors;
+            if (!globalThis.Array.isArray(elems)) {
+              elems = new globalThis.Array<Neighbor>(elemCount);
+              out.neighbors = elems;
+            } else {
+              baseIdx = elems.length;
+              elems.length = baseIdx + elemCount;
+            }
           }
           for (let i = 0; i < elemCount; i++) {
             if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
@@ -1963,7 +1593,7 @@ export function decodePeerUpdate(
               elNum = globalThis.Number(el);
             }
             if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
-            elems.push(decodeNeighbor(buf, undefined, depth + 2, options, p, p + elNum));
+            elems[baseIdx + i] = decodeNeighbor(buf, undefined, depth + 2, options, p, p + elNum);
             p += elNum;
           }
           if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
@@ -1986,27 +1616,7 @@ export function decodePeerUpdate(
         pos = arrEnd;
         break;
       }
-      case 11: {
-        if (!(wt === 0)) {
-          const valStart = pos;
-          pos = $ob.validateValue(
-            n < buf.length ? buf.subarray(0, n) : buf,
-            pos,
-            wt,
-            depth,
-            maxDepth,
-          );
-          if (readUnknown) {
-            if (!unknownFields) unknownFields = [];
-            unknownFields.push({
-              no: fieldNum,
-              wireType: wt,
-              data: buf.subarray(valStart, pos).slice(),
-            });
-          }
-          break;
-        }
-        seenMask |= bit;
+      case 176: {
         if (pos >= n) throw new globalThis.Error('omnibuf: truncated uint64');
         const vb = buf[pos]!;
         let u64Val: number | bigint;
@@ -2047,6 +1657,9 @@ export function decodePeerUpdate(
         break;
       }
       default: {
+        const fieldNum = tag <= 0x7fffffff ? tag >>> 4 : globalThis.Math.floor(tag / 16);
+        const wt = tag & 0x0f;
+        if (fieldNum === 0) throw new globalThis.Error('omnibuf: invalid Field #0');
         const valStart = pos;
         pos = $ob.validateValue(
           n < buf.length ? buf.subarray(0, n) : buf,
@@ -2067,7 +1680,7 @@ export function decodePeerUpdate(
       }
     }
   }
-  if (unknownFields && unknownFields.length > 0 && !('$unknown' in out)) {
+  if (unknownFields !== null && unknownFields.length > 0 && !('$unknown' in out)) {
     globalThis.Object.defineProperty(out, '$unknown', {
       value: unknownFields,
       enumerable: false,
