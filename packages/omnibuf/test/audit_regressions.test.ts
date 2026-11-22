@@ -7,11 +7,13 @@ import {
   WireArray,
   WireBoolFalse,
   WireBytes,
+  WireFloat32,
   WireMap,
   WireSint,
   WireString,
   WireSubMsg,
   WireUint,
+  activeOneofSlice,
   appendBoolArrBody,
   appendBytesArrBody,
   appendEnumArrBody,
@@ -22,10 +24,17 @@ import {
   decodeBlind,
   decodeVarintBigInt,
   defineMessage,
+  encodeField0SchemaMeta,
   getClassSchema,
   indexTopLevelFields,
+  locateField,
+  nextContainerField,
   omnibufField,
+  readBytes,
+  readBytesView,
   readFloat32,
+  readSubMsg,
+  readSubMsgMerged,
   readTypedMap,
   spliceFields,
   stringifyBlindJSON,
@@ -557,5 +566,137 @@ describe('Audit Regressions - @omnibuf/core', () => {
     assert.throws(() => enc.writeBool(1.5, true), /invalid field number/);
     assert.throws(() => enc.writeFloat32(1.5, 1.0), /invalid field number/);
     assert.throws(() => enc.writeFloat64(1.5, 1.0), /invalid field number/);
+  });
+
+  it('ES-Audit-7: readBytes() returns an independent copy while readBytesView() remains zero-copy', () => {
+    const enc = new Encoder();
+    enc.writeBytes(1, Uint8Array.from([10, 20, 30, 40]));
+    const pkt = enc.finish();
+
+    const [copied, okCopy] = readBytes(pkt, 1);
+    assert.equal(okCopy, true);
+    assert.notEqual(copied.buffer, pkt.buffer);
+    copied[0] = 0xff;
+    assert.equal(readBytes(pkt, 1)[0][0], 10);
+
+    const [view, okView] = readBytesView(pkt, 1);
+    assert.equal(okView, true);
+    assert.equal(view.buffer, pkt.buffer);
+    assert.deepEqual(Array.from(view), [10, 20, 30, 40]);
+  });
+
+  it('ES-Audit-8: Encoder.abortMessage shrinks oversized slabs on error in MessageSchema.encode and spliceFields', () => {
+    const enc = new Encoder(8192);
+    const start = enc.beginMessage();
+    enc.writeBytes(1, new Uint8Array(300 * 1024));
+    assert.ok((enc as unknown as { buf: Uint8Array }).buf.length > 256 * 1024);
+    enc.abortMessage(start);
+    assert.equal(enc.bytesView().length, 0);
+    assert.equal((enc as unknown as { buf: Uint8Array }).buf.length, 8192);
+
+    const LargeSchema = defineMessage<{ big: Uint8Array; fail: string }>('audit.LargeFail', {
+      big: { fieldNum: 1, type: 'bytes' },
+      fail: { fieldNum: 2, type: 'string' },
+    });
+    const throwingMsg = {
+      big: new Uint8Array(300 * 1024),
+      get fail(): string {
+        throw new Error('boom');
+      },
+    };
+    assert.throws(() => LargeSchema.encode(throwingMsg), /boom/);
+    const okEncoded = LargeSchema.encode({ big: Uint8Array.from([1, 2]), fail: 'ok' });
+    const decoded = LargeSchema.decode(okEncoded);
+    assert.equal(decoded.fail, 'ok');
+    assert.deepEqual(Array.from(decoded.big), [1, 2]);
+
+    const bigEnc = new Encoder();
+    bigEnc.writeBytes(1, new Uint8Array(300 * 1024));
+    const bigRaw = bigEnc.finish();
+    assert.throws(
+      () =>
+        spliceFields(bigRaw, 1 << 1, 2, () => {
+          throw new Error('splice boom');
+        }),
+      /splice boom/,
+    );
+    const smallEnc = new Encoder();
+    smallEnc.writeUint(1, 42);
+    const spliced = spliceFields(smallEnc.finish(), 1 << 1, 2, (e, fn) => {
+      if (fn === 1) e.writeUint(1, 99);
+    });
+    assert.equal(decodeBlind(spliced).field_1, 99);
+  });
+
+  it('ES-Audit-9: locateField, nextContainerField, readSubMsg, readSubMsgMerged, activeOneofSlice, and readTypedMap propagate depth', () => {
+    const f0 = encodeField0SchemaMeta({ fields: { 1: 'x' } }, true);
+    const bodyEnc = new Encoder();
+    bodyEnc.writeUint(1, 7);
+    const withF0 = new Uint8Array(f0.length + bodyEnc.bytesView().length);
+    withF0.set(f0, 0);
+    withF0.set(bodyEnc.bytesView(), f0.length);
+
+    // At depth = 0, Field #0 is at depth 1 <= MaxNestingDepth -> valid
+    assert.equal(locateField(withF0, 1, 1 << WireUint, 0).ok, true);
+    assert.ok(activeOneofSlice(withF0, 1, [[1, 1 << WireUint]], 0) !== null);
+
+    // At depth = MaxNestingDepth, Field #0 is at depth 33 > MaxNestingDepth -> rejected
+    assert.equal(locateField(withF0, 1, 1 << WireUint, MaxNestingDepth).ok, false);
+    assert.equal(activeOneofSlice(withF0, 1, [[1, 1 << WireUint]], MaxNestingDepth), null);
+    assert.equal(nextContainerField(withF0, 0, 1, WireSubMsg, 0, MaxNestingDepth).valid, false);
+    assert.equal(readSubMsg(withF0, 1, MaxNestingDepth)[1], false);
+    assert.equal(readSubMsgMerged(withF0, 1, (s) => s, MaxNestingDepth)[1], false);
+
+    // Multi-chunk readSubMsg validates merged chunks at depth + 1
+    const nestedEnc = new Encoder();
+    nestedEnc.beginSubMsg(1);
+    nestedEnc.writeUint(1, 5);
+    nestedEnc.endSubMsg();
+    const nestedChild = nestedEnc.finish();
+    const twoChunks = new Encoder();
+    twoChunks.beginSubMsg(1);
+    twoChunks.writeRaw(nestedChild);
+    twoChunks.endSubMsg();
+    twoChunks.beginSubMsg(1);
+    twoChunks.writeRaw(nestedChild);
+    twoChunks.endSubMsg();
+    const twoChunkPkt = twoChunks.finish();
+    assert.equal(readSubMsg(twoChunkPkt, 1, 0)[1], true);
+    assert.equal(readSubMsg(twoChunkPkt, 1, MaxNestingDepth - 1)[1], false);
+
+    // readTypedMap rejects depth + 1 > MaxNestingDepth
+    const mapEnc = new Encoder();
+    mapEnc.writeTag(1, WireMap);
+    mapEnc.beginContainer();
+    mapEnc.writeByte(WireString);
+    mapEnc.writeByte(WireUint);
+    mapEnc.writeRawVarint(1);
+    mapEnc.writeRawStringPayload('a');
+    mapEnc.writeRawVarint(1);
+    mapEnc.endContainer();
+    assert.throws(
+      () => readTypedMap(mapEnc.finish(), 1, 'string', 'uint32', undefined, MaxNestingDepth),
+      /MaxNestingDepth|nesting depth/i,
+    );
+  });
+
+  it('ES-Audit-10: readTypedMap preserves exact IEEE-754 binary32 float values without decimal rounding', () => {
+    const expected = Math.fround(0.1);
+    const enc = new Encoder();
+    enc.writeTag(1, WireMap);
+    enc.beginContainer();
+    enc.writeByte(WireString);
+    enc.writeByte(WireFloat32);
+    enc.writeRawVarint(1);
+    enc.writeRawStringPayload('f');
+    const fbuf = new Uint8Array(4);
+    new DataView(fbuf.buffer).setFloat32(0, expected, true);
+    enc.writeRaw(fbuf);
+    enc.endContainer();
+
+    const [m, ok] = readTypedMap<number>(enc.finish(), 1, 'string', 'float32');
+    assert.equal(ok, true);
+    assert.equal(m['f'], expected);
+    assert.notEqual(m['f'], 0.1);
   });
 });

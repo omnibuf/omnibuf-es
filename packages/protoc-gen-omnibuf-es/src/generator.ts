@@ -789,25 +789,30 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
             `${indent}    dst = ${prop};`,
             `${indent}    if (!globalThis.Array.isArray(dst)) { dst = new globalThis.Array<string>(count); ${prop} = dst; } else { baseIdx = dst.length; dst.length = baseIdx + count; }`,
             `${indent}  }`,
-            `${indent}  for (let i = 0; i < count; i++) {`,
-            `${indent}    if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');`,
-            `${indent}    const sb = buf[p]!;`,
-            `${indent}    if ((sb & 1) !== 0) {`,
-            `${indent}      const sLen = sb >>> 1;`,
-            `${indent}      p += 1;`,
-            `${indent}      if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');`,
-            `${indent}      dst[baseIdx + i] = $ob.decodeUTF8Len(buf, p, sLen);`,
-            `${indent}      p += sLen;`,
-            `${indent}    } else {`,
-            `${indent}      const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);`,
-            `${indent}      if (sn === 0 || sLen > globalThis.BigInt(bodyEnd - (p + sn))) throw new globalThis.Error('omnibuf: invalid string array');`,
-            `${indent}      p += sn;`,
-            `${indent}      const sLenNum = globalThis.Number(sLen);`,
-            `${indent}      dst[baseIdx + i] = $ob.decodeUTF8(buf, p, p + sLenNum);`,
-            `${indent}      p += sLenNum;`,
+            `${indent}  try {`,
+            `${indent}    for (let i = 0; i < count; i++) {`,
+            `${indent}      if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');`,
+            `${indent}      const sb = buf[p]!;`,
+            `${indent}      if ((sb & 1) !== 0) {`,
+            `${indent}        const sLen = sb >>> 1;`,
+            `${indent}        p += 1;`,
+            `${indent}        if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');`,
+            `${indent}        dst[baseIdx + i] = $ob.decodeUTF8Len(buf, p, sLen);`,
+            `${indent}        p += sLen;`,
+            `${indent}      } else {`,
+            `${indent}        const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);`,
+            `${indent}        if (sn === 0 || sLen > globalThis.BigInt(bodyEnd - (p + sn))) throw new globalThis.Error('omnibuf: invalid string array');`,
+            `${indent}        p += sn;`,
+            `${indent}        const sLenNum = globalThis.Number(sLen);`,
+            `${indent}        dst[baseIdx + i] = $ob.decodeUTF8(buf, p, p + sLenNum);`,
+            `${indent}        p += sLenNum;`,
+            `${indent}      }`,
             `${indent}    }`,
+            `${indent}    if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');`,
+            `${indent}  } catch (err) {`,
+            `${indent}    if (alreadySeen) dst.length = baseIdx;`,
+            `${indent}    throw err;`,
             `${indent}  }`,
-            `${indent}  if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');`,
             `${indent}  pos = bodyEnd;`,
             `${indent}  break;`,
             `${indent}}`,
@@ -864,27 +869,32 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
             `${indent}    dst = ${prop} as number[];`,
             `${indent}    if (!globalThis.Array.isArray(dst)) { dst = new globalThis.Array<number>(count); ${prop} = dst as any; } else { baseIdx = dst.length; dst.length = baseIdx + count; }`,
             `${indent}  }`,
-            `${indent}  for (let i = 0; i < count; i++) {`,
-            `${indent}    if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
-            `${indent}    const vb = buf[p]!;`,
-            `${indent}    if ((vb & 1) !== 0) {`,
-            `${indent}      dst[baseIdx + i] = vb >>> 1;`,
-            `${indent}      p += 1;`,
-            `${indent}    } else if ((vb & 2) !== 0) {`,
-            `${indent}      if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
-            `${indent}      dst[baseIdx + i] = (vb | (buf[p + 1]! << 8)) >>> 2;`,
-            `${indent}      p += 2;`,
-            `${indent}    } else if ((vb & 4) !== 0) {`,
-            `${indent}      if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
-            `${indent}      dst[baseIdx + i] = ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0;`,
-            `${indent}      p += 4;`,
-            `${indent}    } else {`,
-            `${indent}      if (vb !== 0 || p + 9 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
-            `${indent}      dst[baseIdx + i] = (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>> 0;`,
-            `${indent}      p += 9;`,
+            `${indent}  try {`,
+            `${indent}    for (let i = 0; i < count; i++) {`,
+            `${indent}      if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
+            `${indent}      const vb = buf[p]!;`,
+            `${indent}      if ((vb & 1) !== 0) {`,
+            `${indent}        dst[baseIdx + i] = vb >>> 1;`,
+            `${indent}        p += 1;`,
+            `${indent}      } else if ((vb & 2) !== 0) {`,
+            `${indent}        if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
+            `${indent}        dst[baseIdx + i] = (vb | (buf[p + 1]! << 8)) >>> 2;`,
+            `${indent}        p += 2;`,
+            `${indent}      } else if ((vb & 4) !== 0) {`,
+            `${indent}        if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
+            `${indent}        dst[baseIdx + i] = ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0;`,
+            `${indent}        p += 4;`,
+            `${indent}      } else {`,
+            `${indent}        if (vb !== 0 || p + 9 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
+            `${indent}        dst[baseIdx + i] = (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>> 0;`,
+            `${indent}        p += 9;`,
+            `${indent}      }`,
             `${indent}    }`,
+            `${indent}    if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
+            `${indent}  } catch (err) {`,
+            `${indent}    if (alreadySeen) dst.length = baseIdx;`,
+            `${indent}    throw err;`,
             `${indent}  }`,
-            `${indent}  if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');`,
             `${indent}  pos = bodyEnd;`,
             `${indent}  break;`,
             `${indent}}`,
@@ -1019,28 +1029,33 @@ function emitDecodeFieldCaseBody(f: ResolvedField, indent: string): string {
             `${indent}    elems = ${prop};`,
             `${indent}    if (!globalThis.Array.isArray(elems)) { elems = new globalThis.Array<${sub}>(elemCount); ${prop} = elems; } else { baseIdx = elems.length; elems.length = baseIdx + elemCount; }`,
             `${indent}  }`,
-            `${indent}  for (let i = 0; i < elemCount; i++) {`,
-            `${indent}    if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
-            `${indent}    let elNum = 0;`,
-            `${indent}    const eb0 = buf[p]!;`,
-            `${indent}    if ((eb0 & 1) !== 0) {`,
-            `${indent}      elNum = eb0 >>> 1;`,
-            `${indent}      p += 1;`,
-            `${indent}    } else if ((eb0 & 2) !== 0) {`,
-            `${indent}      if (p + 2 > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
-            `${indent}      elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;`,
-            `${indent}      p += 2;`,
-            `${indent}    } else {`,
-            `${indent}      const [el, en] = $ob.decodeVarintBigInt(buf, p, arrEnd);`,
-            `${indent}      if (en === 0 || el > globalThis.BigInt(arrEnd - (p + en))) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
-            `${indent}      p += en;`,
-            `${indent}      elNum = globalThis.Number(el);`,
+            `${indent}  try {`,
+            `${indent}    for (let i = 0; i < elemCount; i++) {`,
+            `${indent}      if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
+            `${indent}      let elNum = 0;`,
+            `${indent}      const eb0 = buf[p]!;`,
+            `${indent}      if ((eb0 & 1) !== 0) {`,
+            `${indent}        elNum = eb0 >>> 1;`,
+            `${indent}        p += 1;`,
+            `${indent}      } else if ((eb0 & 2) !== 0) {`,
+            `${indent}        if (p + 2 > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
+            `${indent}        elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;`,
+            `${indent}        p += 2;`,
+            `${indent}      } else {`,
+            `${indent}        const [el, en] = $ob.decodeVarintBigInt(buf, p, arrEnd);`,
+            `${indent}        if (en === 0 || el > globalThis.BigInt(arrEnd - (p + en))) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
+            `${indent}        p += en;`,
+            `${indent}        elNum = globalThis.Number(el);`,
+            `${indent}      }`,
+            `${indent}      if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
+            `${indent}      elems[baseIdx + i] = decode${sub}(buf, undefined, depth + 2, options, p, p + elNum);`,
+            `${indent}      p += elNum;`,
             `${indent}    }`,
-            `${indent}    if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
-            `${indent}    elems[baseIdx + i] = decode${sub}(buf, undefined, depth + 2, options, p, p + elNum);`,
-            `${indent}    p += elNum;`,
+            `${indent}    if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
+            `${indent}  } catch (err) {`,
+            `${indent}    if (alreadySeen) elems.length = baseIdx;`,
+            `${indent}    throw err;`,
             `${indent}  }`,
-            `${indent}  if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');`,
             `${indent}  pos = arrEnd;`,
             `${indent}  break;`,
             `${indent}}`,
@@ -1300,143 +1315,143 @@ function emitOpaqueGetterBody(f: ResolvedField, oneof?: ResolvedOneof): string {
     const keyKind = schemaTypeString({ type: f.mapKeyType, repeated: false, isMap: false });
     const valKind = schemaTypeString({ type: f.mapValType, repeated: false, isMap: false });
     const subDecoder = f.mapValMsgSymbol
-      ? `, (sub) => decode${f.mapValMsgSymbol}(sub, undefined, this._depth + 2)`
-      : '';
-    return `if (this.${f.storageProp} === undefined) { this.${f.storageProp} = $ob.readTypedMap(this._raw, ${num}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}${subDecoder})[0]; } return this.${f.storageProp}!;`;
+      ? `(sub) => decode${f.mapValMsgSymbol}(sub, undefined, this._depth + 2)`
+      : 'undefined';
+    return `if (this._depth + 1 > $ob.MaxNestingDepth) { throw new globalThis.Error(\`omnibuf: nesting depth \${this._depth + 1} exceeds MaxNestingDepth (\${$ob.MaxNestingDepth})\`); } if (this.${f.storageProp} === undefined) { this.${f.storageProp} = $ob.readTypedMap(this._raw, ${num}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${subDecoder}, this._depth)[0]; } return this.${f.storageProp}!;`;
   }
   if (f.repeated) {
     let readExpr: string;
     switch (f.type) {
       case ProtoScalarType.STRING:
-        readExpr = `$ob.readStringArr(__src, ${num})[0]`;
+        readExpr = `$ob.readStringArr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.BYTES:
-        readExpr = `$ob.readBytesArr(__src, ${num})[0]`;
+        readExpr = `$ob.readBytesArr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.BOOL:
-        readExpr = `$ob.readBoolArr(__src, ${num})[0]`;
+        readExpr = `$ob.readBoolArr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.UINT32:
-        readExpr = `$ob.readUint32Arr(__src, ${num})[0] as any`;
+        readExpr = `$ob.readUint32Arr(__src, ${num}, this._depth)[0] as any`;
         break;
       case ProtoScalarType.ENUM:
-        readExpr = `$ob.readEnumArr(__src, ${num})[0] as any`;
+        readExpr = `$ob.readEnumArr(__src, ${num}, this._depth)[0] as any`;
         break;
       case ProtoScalarType.UINT64:
-        readExpr = `$ob.readUintArr(__src, ${num})[0]`;
+        readExpr = `$ob.readUintArr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.SINT32:
       case ProtoScalarType.INT32:
-        readExpr = `$ob.readSint32Arr(__src, ${num})[0]`;
+        readExpr = `$ob.readSint32Arr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.SINT64:
       case ProtoScalarType.INT64:
-        readExpr = `$ob.readSintArr(__src, ${num})[0]`;
+        readExpr = `$ob.readSintArr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.FLOAT:
-        readExpr = `$ob.readFloat32Arr(__src, ${num})[0]`;
+        readExpr = `$ob.readFloat32Arr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.DOUBLE:
-        readExpr = `$ob.readFloat64Arr(__src, ${num})[0]`;
+        readExpr = `$ob.readFloat64Arr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.FIXED32:
-        readExpr = `$ob.readFixed32Arr(__src, ${num})[0]`;
+        readExpr = `$ob.readFixed32Arr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.SFIXED32:
-        readExpr = `$ob.readSfixed32Arr(__src, ${num})[0]`;
+        readExpr = `$ob.readSfixed32Arr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.FIXED64:
-        readExpr = `$ob.readFixed64Arr(__src, ${num})[0]`;
+        readExpr = `$ob.readFixed64Arr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.SFIXED64:
-        readExpr = `$ob.readSfixed64Arr(__src, ${num})[0]`;
+        readExpr = `$ob.readSfixed64Arr(__src, ${num}, this._depth)[0]`;
         break;
       case ProtoScalarType.MESSAGE:
-        readExpr = `$ob.readSubMsgArrDecoded(__src, ${num}, (sub) => decode${f.subMsgSymbol}(sub, undefined, this._depth + 2))[0]`;
+        readExpr = `$ob.readSubMsgArrDecoded(__src, ${num}, (sub) => decode${f.subMsgSymbol}(sub, undefined, this._depth + 2), this._depth)[0]`;
         break;
       default:
         readExpr = `[]`;
         break;
     }
-    return `if (this.${f.storageProp} === undefined) { const __src = this._sliceField(${num}); this.${f.storageProp} = __src ? ${readExpr} : []; } return this.${f.storageProp}!;`;
+    return `if (this._depth + 1 > $ob.MaxNestingDepth) { throw new globalThis.Error(\`omnibuf: nesting depth \${this._depth + 1} exceeds MaxNestingDepth (\${$ob.MaxNestingDepth})\`); } if (this.${f.storageProp} === undefined) { const __src = this._sliceField(${num}); this.${f.storageProp} = __src ? ${readExpr} : []; } return this.${f.storageProp}!;`;
   }
   if (f.explicitPresence || f.oneofLocalName) {
     const srcExpr = oneof ? 'slice' : '__src';
     const oneofPreamble = oneof
-      ? `const slice = $ob.activeOneofSlice(this._raw, ${num}, [${oneof.fields.map((of) => `[${of.number}, ${wireMaskForField(of)}]`).join(', ')}]); if (!slice) return undefined; `
+      ? `const slice = $ob.activeOneofSlice(this._raw, ${num}, [${oneof.fields.map((of) => `[${of.number}, ${wireMaskForField(of)}]`).join(', ')}], this._depth); if (!slice) return undefined; `
       : `const __src = this._sliceField(${num}); if (!__src) return undefined; `;
     switch (f.type) {
       case ProtoScalarType.UINT32:
-        return `${oneofPreamble}const [v, ok] = $ob.readUint32(${srcExpr}, ${num}); return (ok ? v : undefined) as any;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readUint32(${srcExpr}, ${num}, this._depth); return (ok ? v : undefined) as any;`;
       case ProtoScalarType.ENUM:
-        return `${oneofPreamble}const [v, ok] = $ob.readEnum(${srcExpr}, ${num}); return (ok ? v : undefined) as any;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readEnum(${srcExpr}, ${num}, this._depth); return (ok ? v : undefined) as any;`;
       case ProtoScalarType.UINT64:
-        return `${oneofPreamble}const [v, ok] = $ob.readUintAuto(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readUintAuto(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.INT32:
       case ProtoScalarType.SINT32:
-        return `${oneofPreamble}const [v, ok] = $ob.readInt32(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readInt32(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.INT64:
       case ProtoScalarType.SINT64:
-        return `${oneofPreamble}const [v, ok] = $ob.readIntAuto(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readIntAuto(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.BOOL:
-        return `${oneofPreamble}const [v, ok] = $ob.readBool(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readBool(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.STRING:
-        return `${oneofPreamble}const [v, ok] = $ob.readString(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readString(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.BYTES:
-        return `${oneofPreamble}const [v, ok] = $ob.readBytes(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readBytes(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.FIXED32:
-        return `${oneofPreamble}const [v, ok] = $ob.readFixed32(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readFixed32(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.SFIXED32:
-        return `${oneofPreamble}const [v, ok] = $ob.readSfixed32(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readSfixed32(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.FLOAT:
-        return `${oneofPreamble}const [v, ok] = $ob.readFloat32(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readFloat32(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.FIXED64:
-        return `${oneofPreamble}const [v, ok] = $ob.readFixed64Auto(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readFixed64Auto(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.SFIXED64:
-        return `${oneofPreamble}const [v, ok] = $ob.readSfixed64Auto(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readSfixed64Auto(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.DOUBLE:
-        return `${oneofPreamble}const [v, ok] = $ob.readFloat64(${srcExpr}, ${num}); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readFloat64(${srcExpr}, ${num}, this._depth); return ok ? v : undefined;`;
       case ProtoScalarType.MESSAGE:
-        return `${oneofPreamble}const [v, ok] = $ob.readSubMsgMerged<${f.subMsgSymbol}>(${srcExpr}, ${num}, (sub, target, merge, s, e) => decode${f.subMsgSymbol}(sub, target, this._depth + 1, merge ? { merge: true } : undefined, s, e)); return ok ? v : undefined;`;
+        return `${oneofPreamble}const [v, ok] = $ob.readSubMsgMerged<${f.subMsgSymbol}>(${srcExpr}, ${num}, (sub, target, merge, s, e) => decode${f.subMsgSymbol}(sub, target, this._depth + 1, merge ? { merge: true } : undefined, s, e), this._depth); return ok ? v : undefined;`;
       default:
         return `return undefined as any;`;
     }
   }
   switch (f.type) {
     case ProtoScalarType.UINT32:
-      return `const __src = this._sliceField(${num}); return (__src ? $ob.readUint32(__src, ${num})[0] : 0) as any;`;
+      return `const __src = this._sliceField(${num}); return (__src ? $ob.readUint32(__src, ${num}, this._depth)[0] : 0) as any;`;
     case ProtoScalarType.ENUM:
-      return `const __src = this._sliceField(${num}); return (__src ? $ob.readEnum(__src, ${num})[0] : 0) as any;`;
+      return `const __src = this._sliceField(${num}); return (__src ? $ob.readEnum(__src, ${num}, this._depth)[0] : 0) as any;`;
     case ProtoScalarType.UINT64:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readUintAuto(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readUintAuto(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.INT32:
     case ProtoScalarType.SINT32:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readInt32(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readInt32(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.INT64:
     case ProtoScalarType.SINT64:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readIntAuto(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readIntAuto(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.BOOL:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readBool(__src, ${num})[0] : false;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readBool(__src, ${num}, this._depth)[0] : false;`;
     case ProtoScalarType.STRING:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readString(__src, ${num})[0] : '';`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readString(__src, ${num}, this._depth)[0] : '';`;
     case ProtoScalarType.BYTES:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readBytes(__src, ${num})[0] : new globalThis.Uint8Array(0);`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readBytes(__src, ${num}, this._depth)[0] : new globalThis.Uint8Array(0);`;
     case ProtoScalarType.FIXED32:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readFixed32(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readFixed32(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.SFIXED32:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readSfixed32(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readSfixed32(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.FLOAT:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readFloat32(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readFloat32(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.FIXED64:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readFixed64Auto(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readFixed64Auto(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.SFIXED64:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readSfixed64Auto(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readSfixed64Auto(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.DOUBLE:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readFloat64(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readFloat64(__src, ${num}, this._depth)[0] : 0;`;
     case ProtoScalarType.MESSAGE:
-      return `if (this.${f.storageProp} === undefined) { const __src = this._sliceField(${num}); this.${f.storageProp} = __src ? $ob.readSubMsgMerged<${f.subMsgSymbol}>(__src, ${num}, (sub, target, merge, s, e) => decode${f.subMsgSymbol}(sub, target, this._depth + 1, merge ? { merge: true } : undefined, s, e))[0] : null; } return this.${f.storageProp};`;
+      return `if (this.${f.storageProp} === undefined) { const __src = this._sliceField(${num}); this.${f.storageProp} = __src ? $ob.readSubMsgMerged<${f.subMsgSymbol}>(__src, ${num}, (sub, target, merge, s, e) => decode${f.subMsgSymbol}(sub, target, this._depth + 1, merge ? { merge: true } : undefined, s, e), this._depth)[0] : null; } return this.${f.storageProp};`;
     default:
-      return `const __src = this._sliceField(${num}); return __src ? $ob.readUint(__src, ${num})[0] : 0;`;
+      return `const __src = this._sliceField(${num}); return __src ? $ob.readUint(__src, ${num}, this._depth)[0] : 0;`;
   }
 }
 
@@ -2265,8 +2280,15 @@ export function generateFileCode(
             }
             lines.push(`      return this.${f.storageProp} ?? [];`);
             lines.push('    }');
+            lines.push(`    if (this._depth + 1 > $ob.MaxNestingDepth) {`);
+            lines.push(
+              '      throw new globalThis.Error(`omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`);',
+            );
+            lines.push('    }');
             lines.push(`    const __src = this._sliceField(${f.number});`);
-            lines.push(`    return __src ? $ob.readBytesArrView(__src, ${f.number})[0] : [];`);
+            lines.push(
+              `    return __src ? $ob.readBytesArrView(__src, ${f.number}, this._depth)[0] : [];`,
+            );
             lines.push('  }');
             lines.push('');
           } else if (f.explicitPresence || f.oneofLocalName) {
@@ -2280,17 +2302,17 @@ export function generateFileCode(
             lines.push('    }');
             if (oneofGroup) {
               lines.push(
-                `    const slice = $ob.activeOneofSlice(this._raw, ${f.number}, [${oneofGroup.fields.map((of) => `[${of.number}, ${wireMaskForField(of)}]`).join(', ')}]); if (!slice) return undefined;`,
+                `    const slice = $ob.activeOneofSlice(this._raw, ${f.number}, [${oneofGroup.fields.map((of) => `[${of.number}, ${wireMaskForField(of)}]`).join(', ')}], this._depth); if (!slice) return undefined;`,
               );
               lines.push(
-                `    const [v, ok] = $ob.readBytesView(slice, ${f.number}); return ok ? v : undefined;`,
+                `    const [v, ok] = $ob.readBytesView(slice, ${f.number}, this._depth); return ok ? v : undefined;`,
               );
             } else {
               lines.push(
                 `    const __src = this._sliceField(${f.number}); if (!__src) return undefined;`,
               );
               lines.push(
-                `    const [v, ok] = $ob.readBytesView(__src, ${f.number}); return ok ? v : undefined;`,
+                `    const [v, ok] = $ob.readBytesView(__src, ${f.number}, this._depth); return ok ? v : undefined;`,
               );
             }
             lines.push('  }');
@@ -2306,7 +2328,7 @@ export function generateFileCode(
             lines.push('    }');
             lines.push(`    const __src = this._sliceField(${f.number});`);
             lines.push(
-              `    return __src ? $ob.readBytesView(__src, ${f.number})[0] : new globalThis.Uint8Array(0);`,
+              `    return __src ? $ob.readBytesView(__src, ${f.number}, this._depth)[0] : new globalThis.Uint8Array(0);`,
             );
             lines.push('  }');
             lines.push('');
@@ -2328,9 +2350,27 @@ export function generateFileCode(
           lines.push(`    if (this._opaque_${f.localName} !== undefined) {`);
           lines.push(`      return this._opaque_${f.localName} ?? undefined;`);
           lines.push('    }');
+          if (use32Mask) {
+            lines.push(`    if ((this._dirtyMask & (1 << ${f.number})) !== 0) {`);
+          } else {
+            lines.push(`    if (this._dirtySet !== null && this._dirtySet.has(${f.number})) {`);
+          }
+          lines.push(`      const dirtyVal = this.${f.storageProp};`);
+          lines.push('      if (dirtyVal == null) {');
+          lines.push(`        this._opaque_${f.localName} = null;`);
+          lines.push('        return undefined;');
+          lines.push('      }');
+          lines.push('      const enc = new $ob.Encoder(64);');
+          lines.push(`      encode${f.subMsgSymbol}(enc, dirtyVal);`);
+          lines.push(
+            `      const nested = new Opaque${f.subMsgSymbol}(enc.finish(), this._depth + 1);`,
+          );
+          lines.push(`      this._opaque_${f.localName} = nested;`);
+          lines.push('      return nested;');
+          lines.push('    }');
           if (oneofGroup) {
             lines.push(
-              `    const __src = $ob.activeOneofSlice(this._raw, ${f.number}, [${oneofGroup.fields.map((of) => `[${of.number}, ${wireMaskForField(of)}]`).join(', ')}]);`,
+              `    const __src = $ob.activeOneofSlice(this._raw, ${f.number}, [${oneofGroup.fields.map((of) => `[${of.number}, ${wireMaskForField(of)}]`).join(', ')}], this._depth);`,
             );
           } else {
             lines.push(`    const __src = this._sliceField(${f.number});`);
@@ -2339,7 +2379,7 @@ export function generateFileCode(
           lines.push(`      this._opaque_${f.localName} = null;`);
           lines.push('      return undefined;');
           lines.push('    }');
-          lines.push(`    const [sub, ok] = $ob.readSubMsg(__src, ${f.number});`);
+          lines.push(`    const [sub, ok] = $ob.readSubMsg(__src, ${f.number}, this._depth);`);
           lines.push('    if (!ok) {');
           lines.push(`      this._opaque_${f.localName} = null;`);
           lines.push('      return undefined;');

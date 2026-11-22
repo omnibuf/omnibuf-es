@@ -5,7 +5,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   Encoder,
   MaxNestingDepth,
+  WireArray,
   WireString,
+  WireSubMsg,
+  WireUint,
   decodeBlind,
   marshal,
   readFloat32,
@@ -458,6 +461,179 @@ describe('Audit Regressions - @omnibuf/protoc-gen-omnibuf-es', () => {
         cur = cur.child;
       }
       assert.equal(cur.leaf, 77);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('ES-Audit-7..10: Opaque bytes copy, depth propagation, merge sparse-hole rollback, and dirty getSubOpaque()', async () => {
+    const fds: FileDescriptorSetJSON = {
+      file: [
+        {
+          name: 'audit_extra.proto',
+          package: 'omnibuf.audit2',
+          syntax: 'proto3',
+          messageType: [
+            {
+              name: 'Item',
+              field: [{ name: 'code', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' }],
+            },
+            {
+              name: 'Holder',
+              oneofDecl: [{ name: 'choice' }],
+              field: [
+                { name: 'payload', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_BYTES' },
+                { name: 'tags', number: 2, label: 'LABEL_REPEATED', type: 'TYPE_STRING' },
+                { name: 'ids', number: 3, label: 'LABEL_REPEATED', type: 'TYPE_UINT32' },
+                {
+                  name: 'items',
+                  number: 4,
+                  label: 'LABEL_REPEATED',
+                  type: 'TYPE_MESSAGE',
+                  typeName: '.omnibuf.audit2.Item',
+                },
+                {
+                  name: 'sub',
+                  number: 5,
+                  label: 'LABEL_OPTIONAL',
+                  type: 'TYPE_MESSAGE',
+                  typeName: '.omnibuf.audit2.Item',
+                },
+                {
+                  name: 'oneof_sub',
+                  number: 6,
+                  label: 'LABEL_OPTIONAL',
+                  type: 'TYPE_MESSAGE',
+                  typeName: '.omnibuf.audit2.Item',
+                  oneofIndex: 0,
+                },
+                {
+                  name: 'oneof_name',
+                  number: 7,
+                  label: 'LABEL_OPTIONAL',
+                  type: 'TYPE_STRING',
+                  oneofIndex: 0,
+                },
+                {
+                  name: 'scores',
+                  number: 8,
+                  label: 'LABEL_REPEATED',
+                  type: 'TYPE_MESSAGE',
+                  typeName: '.omnibuf.audit2.Holder.ScoresEntry',
+                },
+              ],
+              nestedType: [
+                {
+                  name: 'ScoresEntry',
+                  options: { mapEntry: true },
+                  field: [
+                    { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+                    { name: 'value', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_FLOAT' },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { mod, cleanup } = await compileAndImportGenerated(fds);
+    try {
+      // 1. Opaque.getPayload() returns a copy detached from _raw; getPayloadView() stays zero-copy
+      const payloadWire: Uint8Array = mod.marshalHolderOmniBuf({
+        payload: Uint8Array.from([1, 2, 3, 4]),
+      });
+      const opPayload = new mod.OpaqueHolder(payloadWire);
+      const got = opPayload.getPayload();
+      assert.notEqual(got.buffer, opPayload.raw().buffer);
+      got[0] = 0xff;
+      assert.equal(opPayload.getPayload()[0], 1);
+      const view = opPayload.getPayloadView();
+      assert.equal(view.buffer, opPayload.raw().buffer);
+
+      // 2. Opaque array/map getters enforce this._depth + 1 <= MaxNestingDepth
+      const deepOp = new mod.OpaqueHolder(
+        mod.marshalHolderOmniBuf({ tags: ['x'], scores: { a: Math.fround(0.1) } }),
+        MaxNestingDepth,
+      );
+      assert.throws(() => deepOp.getTags(), /MaxNestingDepth|nesting depth/i);
+      assert.throws(() => deepOp.getScores(), /MaxNestingDepth|nesting depth/i);
+
+      // 3. Opaque float32 map preserves exact Math.fround(0.1)
+      const mapWire: Uint8Array = mod.marshalHolderOmniBuf({
+        scores: { pi: Math.fround(0.1) },
+      });
+      const opMap = new mod.OpaqueHolder(mapWire);
+      assert.equal(opMap.getScores()['pi'], Math.fround(0.1));
+
+      // 4. Merge-mode fast array decoders roll back dst.length on error (no sparse holes)
+      const target = mod.createHolder({
+        tags: ['orig'],
+        ids: [10],
+        items: [mod.createItem({ code: 1 })],
+      });
+
+      // Corrupt STRING[] (field 2, WireArray): count=2, elem0='ok', elem1=invalid UTF-8 [0xff, 0xfe]
+      const badStrEnc = new Encoder();
+      badStrEnc.writeTag(2, WireArray);
+      badStrEnc.beginContainer();
+      badStrEnc.writeByte(WireString);
+      badStrEnc.writeRawVarint(2);
+      badStrEnc.writeRawStringPayload('ok');
+      badStrEnc.writeRawVarint(2);
+      badStrEnc.writeRaw(Uint8Array.from([0xff, 0xfe]));
+      badStrEnc.endContainer();
+      assert.throws(() => mod.decodeHolder(badStrEnc.finish(), target, 0, { merge: true }));
+      assert.deepEqual(target.tags, ['orig']);
+
+      // Corrupt UINT32[] (field 3, WireArray): count=2, elem0=20, elem1=truncated 2-byte varint (0x02)
+      const badU32Enc = new Encoder();
+      badU32Enc.writeTag(3, WireArray);
+      badU32Enc.beginContainer();
+      badU32Enc.writeByte(WireUint);
+      badU32Enc.writeRawVarint(2);
+      badU32Enc.writeRawVarint(20);
+      badU32Enc.writeByte(0x02);
+      badU32Enc.endContainer();
+      assert.throws(() => mod.decodeHolder(badU32Enc.finish(), target, 0, { merge: true }));
+      assert.deepEqual(target.ids, [10]);
+
+      // Corrupt MESSAGE[] (field 4, WireArray): count=2, elem0=valid Item, elem1=truncated submsg
+      const badMsgEnc = new Encoder();
+      badMsgEnc.writeTag(4, WireArray);
+      badMsgEnc.beginContainer();
+      badMsgEnc.writeByte(WireSubMsg);
+      badMsgEnc.writeRawVarint(2);
+      const validItem = mod.marshalItemOmniBuf({ code: 2 });
+      badMsgEnc.writeRawVarint(validItem.length);
+      badMsgEnc.writeRaw(validItem);
+      badMsgEnc.writeRawVarint(1);
+      badMsgEnc.writeByte(0x21); // field 1 WireUint tag with missing value
+      badMsgEnc.endContainer();
+      assert.throws(() => mod.decodeHolder(badMsgEnc.finish(), target, 0, { merge: true }));
+      assert.equal(target.items.length, 1);
+      assert.equal(target.items[0].code, 1);
+
+      // 5. Opaque.get<SubMsg>Opaque() reflects dirty set<SubMsg>() and oneof switches
+      const subWire: Uint8Array = mod.marshalHolderOmniBuf({
+        sub: { code: 10 },
+        oneofSub: { code: 20 },
+      });
+      const opSub = new mod.OpaqueHolder(subWire);
+      assert.equal(opSub.getSubOpaque()?.getCode(), 10);
+      assert.equal(opSub.getOneofSubOpaque()?.getCode(), 20);
+
+      opSub.setSub(mod.createItem({ code: 99 }));
+      const dirtyOpaque = opSub.getSubOpaque();
+      assert.equal(dirtyOpaque?.getCode(), 99);
+      assert.strictEqual(opSub.getSubOpaque(), dirtyOpaque);
+
+      opSub.setSub(null);
+      assert.equal(opSub.getSubOpaque(), undefined);
+
+      opSub.setOneofName('switched');
+      assert.equal(opSub.getOneofSubOpaque(), undefined);
     } finally {
       await cleanup();
     }

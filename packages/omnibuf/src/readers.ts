@@ -6,6 +6,7 @@ import { decodeSchemaMeta } from './blind.js';
 import { Encoder } from './encoder.js';
 import { validateMessage, validateValue } from './validation.js';
 import {
+  MaxNestingDepth,
   WireArray,
   WireBoolFalse,
   WireBoolTrue,
@@ -36,7 +37,6 @@ import {
   parseArrayHeader,
   parseMapHeader,
   readLenSlice,
-  roundFloat32Shortest,
   skipValidatedValue,
   validateField0At,
 } from './wire.js';
@@ -45,15 +45,23 @@ import {
 // Scalar Readers
 // ============================================================================
 
-export function readUint(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint);
+export function readUint(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint, depth);
   if (!ok) return [0, false];
   const [v, n] = decodeVarint(valSlice, 0);
   return [v, n > 0];
 }
 
-export function readUint32(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint);
+export function readUint32(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint, depth);
   if (!ok || valSlice.length === 0) return [0, false];
   const b0 = valSlice[0]!;
   if ((b0 & 7) !== 0) {
@@ -66,8 +74,12 @@ export function readUint32(packet: Uint8Array, fieldNum: number): [value: number
   return [lo, true];
 }
 
-export function readInt32(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint);
+export function readInt32(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint, depth);
   if (!ok) return [0, false];
   const [u, n] = decodeVarintBigInt(valSlice, 0);
   if (n === 0) return [0, false];
@@ -76,8 +88,12 @@ export function readInt32(packet: Uint8Array, fieldNum: number): [value: number,
 
 export const readEnum = readInt32;
 
-export function readUintBigInt(packet: Uint8Array, fieldNum: number): [value: bigint, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint);
+export function readUintBigInt(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: bigint, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint, depth);
   if (!ok) return [0n, false];
   const [v, n] = decodeVarintBigInt(valSlice, 0);
   return [v, n > 0];
@@ -86,23 +102,32 @@ export function readUintBigInt(packet: Uint8Array, fieldNum: number): [value: bi
 export function readUintAuto(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number | bigint, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint);
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireUint, depth);
   if (!ok) return [0, false];
   const [v, n] = decodeVarintAuto(valSlice, 0);
   return [v, n > 0];
 }
 
-export function readInt(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint);
+export function readInt(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint, depth);
   if (!ok) return [0, false];
   const [u, n] = decodeVarintBigInt(valSlice, 0);
   if (n === 0) return [0, false];
   return [decodeZigZag(u), true];
 }
 
-export function readIntBigInt(packet: Uint8Array, fieldNum: number): [value: bigint, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint);
+export function readIntBigInt(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: bigint, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint, depth);
   if (!ok) return [0n, false];
   const [u, n] = decodeVarintBigInt(valSlice, 0);
   if (n === 0) return [0n, false];
@@ -112,19 +137,25 @@ export function readIntBigInt(packet: Uint8Array, fieldNum: number): [value: big
 export function readIntAuto(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number | bigint, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint);
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSint, depth);
   if (!ok) return [0, false];
   const [u, n] = decodeVarintBigInt(valSlice, 0);
   if (n === 0) return [0, false];
   return [decodeZigZagAuto(u), true];
 }
 
-export function readBool(packet: Uint8Array, fieldNum: number): [value: boolean, ok: boolean] {
+export function readBool(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: boolean, ok: boolean] {
   const { wireType, ok } = locateField(
     packet,
     fieldNum,
     (1 << WireBoolFalse) | (1 << WireBoolTrue),
+    depth,
   );
   if (!ok) {
     return [false, false];
@@ -132,8 +163,12 @@ export function readBool(packet: Uint8Array, fieldNum: number): [value: boolean,
   return [wireType === WireBoolTrue, true];
 }
 
-export function readFixed32(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFixed32);
+export function readFixed32(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFixed32, depth);
   if (!ok || valSlice.length < 4) {
     return [0, false];
   }
@@ -142,8 +177,12 @@ export function readFixed32(packet: Uint8Array, fieldNum: number): [value: numbe
   return [bits, true];
 }
 
-export function readSfixed32(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSfixed32);
+export function readSfixed32(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSfixed32, depth);
   if (!ok || valSlice.length < 4) {
     return [0, false];
   }
@@ -151,8 +190,12 @@ export function readSfixed32(packet: Uint8Array, fieldNum: number): [value: numb
   return [bits, true];
 }
 
-export function readFloat32(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFloat32);
+export function readFloat32(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFloat32, depth);
   if (!ok || valSlice.length < 4) {
     return [0, false];
   }
@@ -161,8 +204,12 @@ export function readFloat32(packet: Uint8Array, fieldNum: number): [value: numbe
   return [float32FromBits(bits), true];
 }
 
-export function readFixed64(packet: Uint8Array, fieldNum: number): [value: bigint, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFixed64);
+export function readFixed64(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: bigint, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFixed64, depth);
   if (!ok || valSlice.length < 8) {
     return [0n, false];
   }
@@ -176,14 +223,19 @@ export function readFixed64(packet: Uint8Array, fieldNum: number): [value: bigin
 export function readFixed64Auto(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number | bigint, ok: boolean] {
-  const [u64, ok] = readFixed64(packet, fieldNum);
+  const [u64, ok] = readFixed64(packet, fieldNum, depth);
   if (!ok) return [0, false];
   return [u64 <= 9007199254740991n ? Number(u64) : u64, true];
 }
 
-export function readSfixed64(packet: Uint8Array, fieldNum: number): [value: bigint, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSfixed64);
+export function readSfixed64(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: bigint, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSfixed64, depth);
   if (!ok || valSlice.length < 8) {
     return [0n, false];
   }
@@ -197,14 +249,19 @@ export function readSfixed64(packet: Uint8Array, fieldNum: number): [value: bigi
 export function readSfixed64Auto(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number | bigint, ok: boolean] {
-  const [s64, ok] = readSfixed64(packet, fieldNum);
+  const [s64, ok] = readSfixed64(packet, fieldNum, depth);
   if (!ok) return [0, false];
   return [s64 >= -9007199254740991n && s64 <= 9007199254740991n ? Number(s64) : s64, true];
 }
 
-export function readFloat64(packet: Uint8Array, fieldNum: number): [value: number, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFloat64);
+export function readFloat64(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFloat64, depth);
   if (!ok || valSlice.length < 8) {
     return [0, false];
   }
@@ -215,8 +272,12 @@ export function readFloat64(packet: Uint8Array, fieldNum: number): [value: numbe
   return [float64FromBits(u64), true];
 }
 
-function locateStringSlice(packet: Uint8Array, fieldNum: number): [bytes: Uint8Array, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireString);
+function locateStringSlice(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [bytes: Uint8Array, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireString, depth);
   if (!ok || valSlice.length === 0) {
     return [new Uint8Array(0), false];
   }
@@ -238,8 +299,9 @@ function locateStringSlice(packet: Uint8Array, fieldNum: number): [bytes: Uint8A
 export function readStringBytes(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [bytes: Uint8Array, ok: boolean] {
-  const [slice, ok] = locateStringSlice(packet, fieldNum);
+  const [slice, ok] = locateStringSlice(packet, fieldNum, depth);
   if (!ok) return [new Uint8Array(0), false];
   try {
     decodeUTF8(slice);
@@ -249,8 +311,12 @@ export function readStringBytes(
   }
 }
 
-export function readString(packet: Uint8Array, fieldNum: number): [value: string, ok: boolean] {
-  const [b, ok] = locateStringSlice(packet, fieldNum);
+export function readString(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: string, ok: boolean] {
+  const [b, ok] = locateStringSlice(packet, fieldNum, depth);
   if (!ok) return ['', false];
   try {
     return [decodeUTF8(b), true];
@@ -259,8 +325,30 @@ export function readString(packet: Uint8Array, fieldNum: number): [value: string
   }
 }
 
-export function readBytes(packet: Uint8Array, fieldNum: number): [value: Uint8Array, ok: boolean] {
-  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireBytes);
+/**
+ * Reads a `WireBytes` field returning a standalone copy (`slice`) detached from `packet`.
+ */
+export function readBytes(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: Uint8Array, ok: boolean] {
+  const [view, ok] = readBytesView(packet, fieldNum, depth);
+  if (!ok) {
+    return [view, false];
+  }
+  return [view.slice(), true];
+}
+
+/**
+ * Zero-copy variant of `readBytes`, returning a `subarray` view into `packet`.
+ */
+export function readBytesView(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: Uint8Array, ok: boolean] {
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireBytes, depth);
   if (!ok) {
     return [new Uint8Array(0), false];
   }
@@ -271,16 +359,6 @@ export function readBytes(packet: Uint8Array, fieldNum: number): [value: Uint8Ar
   return [valSlice.subarray(bn, bn + Number(bLen)), true];
 }
 
-/**
- * Zero-copy alias for `readBytes`, returning a `subarray` view into `packet`.
- */
-export function readBytesView(
-  packet: Uint8Array,
-  fieldNum: number,
-): [value: Uint8Array, ok: boolean] {
-  return readBytes(packet, fieldNum);
-}
-
 // ============================================================================
 // Sub-Message & Sub-Message Array Readers
 // ============================================================================
@@ -288,6 +366,7 @@ export function readBytesView(
 export function readSubMsg(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [subPacket: Uint8Array, ok: boolean] {
   let pos = 0;
   let first: Uint8Array | null = null;
@@ -300,6 +379,7 @@ export function readSubMsg(
       fieldNum,
       WireSubMsg,
       0,
+      depth,
     );
     if (!valid) return [new Uint8Array(0), false];
     if (!matched) break;
@@ -326,7 +406,7 @@ export function readSubMsg(
   for (let i = 0; i < chunks.length; i++) {
     const c = chunks[i]!;
     try {
-      validateMessage(c, 1);
+      validateMessage(c, depth + 1);
     } catch {
       return [new Uint8Array(0), false];
     }
@@ -897,6 +977,7 @@ export function appendFloat64ArrBody(
 export function readStringArr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: string[], ok: boolean] {
   const out: string[] = [];
   let found = false;
@@ -908,6 +989,7 @@ export function readStringArr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -921,6 +1003,7 @@ export function readStringArr(
 export function readUint32Arr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number[], ok: boolean] {
   const out: number[] = [];
   let found = false;
@@ -932,6 +1015,7 @@ export function readUint32Arr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -942,7 +1026,11 @@ export function readUint32Arr(
   }
 }
 
-export function readEnumArr(packet: Uint8Array, fieldNum: number): [value: number[], ok: boolean] {
+export function readEnumArr(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: number[], ok: boolean] {
   const out: number[] = [];
   let found = false;
   let pos = 0;
@@ -953,6 +1041,7 @@ export function readEnumArr(packet: Uint8Array, fieldNum: number): [value: numbe
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -968,6 +1057,7 @@ export const readSint32Arr = readEnumArr;
 export function readSintArr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: (number | bigint)[], ok: boolean] {
   const out: (number | bigint)[] = [];
   let found = false;
@@ -979,6 +1069,7 @@ export function readSintArr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -992,6 +1083,7 @@ export function readSintArr(
 export function readFloat32Arr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number[], ok: boolean] {
   const out: number[] = [];
   let found = false;
@@ -1003,6 +1095,7 @@ export function readFloat32Arr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1016,6 +1109,7 @@ export function readFloat32Arr(
 export function readFloat64Arr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number[], ok: boolean] {
   const out: number[] = [];
   let found = false;
@@ -1027,6 +1121,7 @@ export function readFloat64Arr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1040,6 +1135,7 @@ export function readFloat64Arr(
 export function readBytesArr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: Uint8Array[], ok: boolean] {
   const out: Uint8Array[] = [];
   let found = false;
@@ -1051,6 +1147,7 @@ export function readBytesArr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1067,6 +1164,7 @@ export function readBytesArr(
 export function readBytesArrView(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: Uint8Array[], ok: boolean] {
   const out: Uint8Array[] = [];
   let found = false;
@@ -1078,6 +1176,7 @@ export function readBytesArrView(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1088,7 +1187,11 @@ export function readBytesArrView(
   }
 }
 
-export function readBoolArr(packet: Uint8Array, fieldNum: number): [value: boolean[], ok: boolean] {
+export function readBoolArr(
+  packet: Uint8Array,
+  fieldNum: number,
+  depth = 0,
+): [value: boolean[], ok: boolean] {
   const out: boolean[] = [];
   let found = false;
   let pos = 0;
@@ -1099,6 +1202,7 @@ export function readBoolArr(packet: Uint8Array, fieldNum: number): [value: boole
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1112,6 +1216,7 @@ export function readBoolArr(packet: Uint8Array, fieldNum: number): [value: boole
 export function readUintArr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: (number | bigint)[], ok: boolean] {
   const out: (number | bigint)[] = [];
   let found = false;
@@ -1123,6 +1228,7 @@ export function readUintArr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1136,6 +1242,7 @@ export function readUintArr(
 export function readFixed32Arr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number[], ok: boolean] {
   const out: number[] = [];
   let found = false;
@@ -1147,6 +1254,7 @@ export function readFixed32Arr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1169,6 +1277,7 @@ export function readFixed32Arr(
 export function readSfixed32Arr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: number[], ok: boolean] {
   const out: number[] = [];
   let found = false;
@@ -1180,6 +1289,7 @@ export function readSfixed32Arr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1201,6 +1311,7 @@ export function readSfixed32Arr(
 export function readFixed64Arr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: (number | bigint)[], ok: boolean] {
   const out: (number | bigint)[] = [];
   let found = false;
@@ -1212,6 +1323,7 @@ export function readFixed64Arr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1235,6 +1347,7 @@ export function readFixed64Arr(
 export function readSfixed64Arr(
   packet: Uint8Array,
   fieldNum: number,
+  depth = 0,
 ): [value: (number | bigint)[], ok: boolean] {
   const out: (number | bigint)[] = [];
   let found = false;
@@ -1246,6 +1359,7 @@ export function readSfixed64Arr(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1271,7 +1385,9 @@ export function readSubMsgMerged<T>(
   packet: Uint8Array,
   fieldNum: number,
   decodeFn: (sub: Uint8Array, target?: T, merge?: boolean, startPos?: number, endPos?: number) => T,
+  depth = 0,
 ): [value: T | null, ok: boolean] {
+  if (depth > MaxNestingDepth) return [null, false];
   let out: T | undefined;
   let found = false;
   let pos = 0;
@@ -1300,7 +1416,7 @@ export function readSubMsgMerged<T>(
     }
 
     if (fnum === 0) {
-      const f0End = validateField0At(packet, pos, wt, 0);
+      const f0End = validateField0At(packet, pos, wt, depth);
       if (f0End < 0) return [null, false];
       pos = f0End;
       continue;
@@ -1352,6 +1468,7 @@ export function readSubMsgArrDecoded<T>(
   packet: Uint8Array,
   fieldNum: number,
   decodeFn: (sub: Uint8Array) => T,
+  depth = 0,
 ): [value: T[], ok: boolean] {
   const out: T[] = [];
   let found = false;
@@ -1363,6 +1480,7 @@ export function readSubMsgArrDecoded<T>(
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return [[], false];
     if (!matched) return [out, found];
@@ -1451,7 +1569,7 @@ function readMapEntryPayload(
       if (body.length - p < 4) throw new Error('omnibuf: truncated map float32');
       const bits =
         (body[p]! | (body[p + 1]! << 8) | (body[p + 2]! << 16) | (body[p + 3]! << 24)) >>> 0;
-      return [roundFloat32Shortest(float32FromBits(bits)), p + 4];
+      return [float32FromBits(bits), p + 4];
     }
     case WireFixed64: {
       if (body.length - p < 8) throw new Error('omnibuf: truncated map fixed64');
@@ -1533,7 +1651,13 @@ export function readTypedMap<V = any>(
   keyType: string,
   valType: string,
   decodeSubMsg?: (sub: Uint8Array) => V,
+  depth = 0,
 ): [value: Record<string, V>, ok: boolean] {
+  if (depth + 1 > MaxNestingDepth) {
+    throw new Error(
+      `omnibuf: nesting depth ${depth + 1} exceeds MaxNestingDepth (${MaxNestingDepth})`,
+    );
+  }
   const expKeyWT = expectedMapEntryWireType(keyType);
   const expValWT = expectedMapEntryWireType(valType);
   if (expKeyWT < 0 || expValWT < 0) {
@@ -1543,7 +1667,14 @@ export function readTypedMap<V = any>(
   let found = false;
   let pos = 0;
   while (true) {
-    const { body, nextPos, matched, valid } = nextContainerField(packet, pos, fieldNum, WireMap, 3);
+    const { body, nextPos, matched, valid } = nextContainerField(
+      packet,
+      pos,
+      fieldNum,
+      WireMap,
+      3,
+      depth,
+    );
     if (!valid) return [{}, false];
     if (!matched) return [out, found];
     pos = nextPos;
@@ -1646,7 +1777,11 @@ export function activeOneofSlice(
   packet: Uint8Array,
   targetField: number,
   oneofSpecs: readonly (readonly [fieldNum: number, wireMask: number])[],
+  depth = 0,
 ): Uint8Array | null {
+  if (depth > MaxNestingDepth) {
+    return null;
+  }
   let pos = 0;
   const n = packet.length;
   let activeField = -1;
@@ -1678,7 +1813,7 @@ export function activeOneofSlice(
     }
 
     if (fnum === 0) {
-      const f0End = validateField0At(packet, pos, wt, 0);
+      const f0End = validateField0At(packet, pos, wt, depth);
       if (f0End < 0) {
         return null;
       }
@@ -1776,14 +1911,14 @@ export function spliceFields(
     if (useShared) sharedSpliceInUse = true;
     const activeEnc = enc ?? (useShared ? sharedSpliceEncoder : new Encoder(raw.length + 64));
     let startPos = 0;
-    if (useShared) {
-      startPos = activeEnc.beginMessage(raw.length + 128);
-    } else if (enc !== undefined) {
-      activeEnc.detachIfOverlaps(raw, 64);
-    } else {
-      activeEnc.reset();
-    }
     try {
+      if (useShared) {
+        startPos = activeEnc.beginMessage(raw.length + 128);
+      } else if (enc !== undefined) {
+        activeEnc.detachIfOverlaps(raw, 64);
+      } else {
+        activeEnc.reset();
+      }
       const n = raw.length;
       let pos = 0;
       let cleanStart = 0;
@@ -1852,6 +1987,9 @@ export function spliceFields(
       }
 
       return useShared ? activeEnc.endMessage(startPos) : activeEnc.finish();
+    } catch (err) {
+      if (useShared) activeEnc.abortMessage(startPos);
+      throw err;
     } finally {
       if (useShared) sharedSpliceInUse = false;
     }

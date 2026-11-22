@@ -1373,10 +1373,14 @@ export class MessageSchema<
   encode(msg: T, options?: BinaryWriteOptions): Uint8Array {
     if (!sharedEncoderInUse) {
       sharedEncoderInUse = true;
+      let startPos = 0;
       try {
-        const startPos = sharedEncoder.beginMessage();
+        startPos = sharedEncoder.beginMessage();
         this.encodeInto(sharedEncoder, msg, options);
         return sharedEncoder.endMessage(startPos);
+      } catch (err) {
+        sharedEncoder.abortMessage(startPos);
+        throw err;
       } finally {
         sharedEncoderInUse = false;
       }

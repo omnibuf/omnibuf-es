@@ -489,7 +489,7 @@ export class OpaqueConformanceRequest {
       return this._testName!;
     }
     const __src = this._sliceField(1);
-    return __src ? $ob.readString(__src, 1)[0] : '';
+    return __src ? $ob.readString(__src, 1, this._depth)[0] : '';
   }
 
   testName(): string {
@@ -510,7 +510,7 @@ export class OpaqueConformanceRequest {
       return this._messageType!;
     }
     const __src = this._sliceField(2);
-    return __src ? $ob.readString(__src, 2)[0] : '';
+    return __src ? $ob.readString(__src, 2, this._depth)[0] : '';
   }
 
   messageType(): string {
@@ -531,7 +531,7 @@ export class OpaqueConformanceRequest {
       return this._tier!;
     }
     const __src = this._sliceField(3);
-    return (__src ? $ob.readEnum(__src, 3)[0] : 0) as any;
+    return (__src ? $ob.readEnum(__src, 3, this._depth)[0] : 0) as any;
   }
 
   tier(): TestTier {
@@ -548,7 +548,7 @@ export class OpaqueConformanceRequest {
       return this._requestedOutputFormat!;
     }
     const __src = this._sliceField(4);
-    return (__src ? $ob.readEnum(__src, 4)[0] : 0) as any;
+    return (__src ? $ob.readEnum(__src, 4, this._depth)[0] : 0) as any;
   }
 
   requestedOutputFormat(): WireFormat {
@@ -569,7 +569,7 @@ export class OpaqueConformanceRequest {
       return this._omnibufPayload!;
     }
     const __src = this._sliceField(5);
-    return __src ? $ob.readBytes(__src, 5)[0] : new globalThis.Uint8Array(0);
+    return __src ? $ob.readBytes(__src, 5, this._depth)[0] : new globalThis.Uint8Array(0);
   }
 
   getOmnibufPayloadView(): globalThis.Uint8Array {
@@ -577,7 +577,7 @@ export class OpaqueConformanceRequest {
       return this._omnibufPayload!;
     }
     const __src = this._sliceField(5);
-    return __src ? $ob.readBytesView(__src, 5)[0] : new globalThis.Uint8Array(0);
+    return __src ? $ob.readBytesView(__src, 5, this._depth)[0] : new globalThis.Uint8Array(0);
   }
 
   omnibufPayload(): globalThis.Uint8Array {
@@ -598,7 +598,7 @@ export class OpaqueConformanceRequest {
       return this._jsonPayload!;
     }
     const __src = this._sliceField(6);
-    return __src ? $ob.readString(__src, 6)[0] : '';
+    return __src ? $ob.readString(__src, 6, this._depth)[0] : '';
   }
 
   jsonPayload(): string {
@@ -619,7 +619,7 @@ export class OpaqueConformanceRequest {
       return this._selfDescribing!;
     }
     const __src = this._sliceField(7);
-    return __src ? $ob.readBool(__src, 7)[0] : false;
+    return __src ? $ob.readBool(__src, 7, this._depth)[0] : false;
   }
 
   selfDescribing(): boolean {
@@ -640,7 +640,7 @@ export class OpaqueConformanceRequest {
       return this._testOpaqueSplice!;
     }
     const __src = this._sliceField(8);
-    return __src ? $ob.readBool(__src, 8)[0] : false;
+    return __src ? $ob.readBool(__src, 8, this._depth)[0] : false;
   }
 
   testOpaqueSplice(): boolean {
@@ -661,7 +661,7 @@ export class OpaqueConformanceRequest {
       return this._testOpaqueSpliceShrink!;
     }
     const __src = this._sliceField(9);
-    return __src ? $ob.readBool(__src, 9)[0] : false;
+    return __src ? $ob.readBool(__src, 9, this._depth)[0] : false;
   }
 
   testOpaqueSpliceShrink(): boolean {
@@ -1173,7 +1173,7 @@ export class OpaqueConformanceResponse {
       return this._parseError!;
     }
     const __src = this._sliceField(1);
-    return __src ? $ob.readString(__src, 1)[0] : '';
+    return __src ? $ob.readString(__src, 1, this._depth)[0] : '';
   }
 
   parseError(): string {
@@ -1194,7 +1194,7 @@ export class OpaqueConformanceResponse {
       return this._serializeError!;
     }
     const __src = this._sliceField(2);
-    return __src ? $ob.readString(__src, 2)[0] : '';
+    return __src ? $ob.readString(__src, 2, this._depth)[0] : '';
   }
 
   serializeError(): string {
@@ -1215,7 +1215,7 @@ export class OpaqueConformanceResponse {
       return this._runtimeError!;
     }
     const __src = this._sliceField(3);
-    return __src ? $ob.readString(__src, 3)[0] : '';
+    return __src ? $ob.readString(__src, 3, this._depth)[0] : '';
   }
 
   runtimeError(): string {
@@ -1236,7 +1236,7 @@ export class OpaqueConformanceResponse {
       return this._skipped!;
     }
     const __src = this._sliceField(4);
-    return __src ? $ob.readString(__src, 4)[0] : '';
+    return __src ? $ob.readString(__src, 4, this._depth)[0] : '';
   }
 
   skipped(): string {
@@ -1253,7 +1253,7 @@ export class OpaqueConformanceResponse {
       return this._omnibufPayload!;
     }
     const __src = this._sliceField(5);
-    return __src ? $ob.readBytes(__src, 5)[0] : new globalThis.Uint8Array(0);
+    return __src ? $ob.readBytes(__src, 5, this._depth)[0] : new globalThis.Uint8Array(0);
   }
 
   getOmnibufPayloadView(): globalThis.Uint8Array {
@@ -1261,7 +1261,7 @@ export class OpaqueConformanceResponse {
       return this._omnibufPayload!;
     }
     const __src = this._sliceField(5);
-    return __src ? $ob.readBytesView(__src, 5)[0] : new globalThis.Uint8Array(0);
+    return __src ? $ob.readBytesView(__src, 5, this._depth)[0] : new globalThis.Uint8Array(0);
   }
 
   omnibufPayload(): globalThis.Uint8Array {
@@ -1282,7 +1282,7 @@ export class OpaqueConformanceResponse {
       return this._jsonPayload!;
     }
     const __src = this._sliceField(6);
-    return __src ? $ob.readString(__src, 6)[0] : '';
+    return __src ? $ob.readString(__src, 6, this._depth)[0] : '';
   }
 
   jsonPayload(): string {
@@ -1671,7 +1671,7 @@ export class OpaqueAllTypesSubMsg {
       return this._id!;
     }
     const __src = this._sliceField(1);
-    return (__src ? $ob.readUint32(__src, 1)[0] : 0) as any;
+    return (__src ? $ob.readUint32(__src, 1, this._depth)[0] : 0) as any;
   }
 
   id(): number {
@@ -1688,7 +1688,7 @@ export class OpaqueAllTypesSubMsg {
       return this._label!;
     }
     const __src = this._sliceField(2);
-    return __src ? $ob.readString(__src, 2)[0] : '';
+    return __src ? $ob.readString(__src, 2, this._depth)[0] : '';
   }
 
   label(): string {
@@ -1705,7 +1705,7 @@ export class OpaqueAllTypesSubMsg {
       return this._flag!;
     }
     const __src = this._sliceField(3);
-    return __src ? $ob.readBool(__src, 3)[0] : false;
+    return __src ? $ob.readBool(__src, 3, this._depth)[0] : false;
   }
 
   flag(): boolean {
@@ -1722,7 +1722,7 @@ export class OpaqueAllTypesSubMsg {
       return this._score!;
     }
     const __src = this._sliceField(4);
-    return __src ? $ob.readIntAuto(__src, 4)[0] : 0;
+    return __src ? $ob.readIntAuto(__src, 4, this._depth)[0] : 0;
   }
 
   score(): number | bigint {
@@ -2424,26 +2424,31 @@ export function decodeTestAllTypes(
               dst.length = baseIdx + count;
             }
           }
-          for (let i = 0; i < count; i++) {
-            if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
-            const sb = buf[p]!;
-            if ((sb & 1) !== 0) {
-              const sLen = sb >>> 1;
-              p += 1;
-              if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
-              dst[baseIdx + i] = $ob.decodeUTF8Len(buf, p, sLen);
-              p += sLen;
-            } else {
-              const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);
-              if (sn === 0 || sLen > globalThis.BigInt(bodyEnd - (p + sn)))
-                throw new globalThis.Error('omnibuf: invalid string array');
-              p += sn;
-              const sLenNum = globalThis.Number(sLen);
-              dst[baseIdx + i] = $ob.decodeUTF8(buf, p, p + sLenNum);
-              p += sLenNum;
+          try {
+            for (let i = 0; i < count; i++) {
+              if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
+              const sb = buf[p]!;
+              if ((sb & 1) !== 0) {
+                const sLen = sb >>> 1;
+                p += 1;
+                if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
+                dst[baseIdx + i] = $ob.decodeUTF8Len(buf, p, sLen);
+                p += sLen;
+              } else {
+                const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);
+                if (sn === 0 || sLen > globalThis.BigInt(bodyEnd - (p + sn)))
+                  throw new globalThis.Error('omnibuf: invalid string array');
+                p += sn;
+                const sLenNum = globalThis.Number(sLen);
+                dst[baseIdx + i] = $ob.decodeUTF8(buf, p, p + sLenNum);
+                p += sLenNum;
+              }
             }
+            if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
+          } catch (err) {
+            if (alreadySeen) dst.length = baseIdx;
+            throw err;
           }
-          if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
           pos = bodyEnd;
           break;
         }
@@ -2503,31 +2508,37 @@ export function decodeTestAllTypes(
               dst.length = baseIdx + count;
             }
           }
-          for (let i = 0; i < count; i++) {
-            if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
-            const vb = buf[p]!;
-            if ((vb & 1) !== 0) {
-              dst[baseIdx + i] = vb >>> 1;
-              p += 1;
-            } else if ((vb & 2) !== 0) {
-              if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst[baseIdx + i] = (vb | (buf[p + 1]! << 8)) >>> 2;
-              p += 2;
-            } else if ((vb & 4) !== 0) {
-              if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst[baseIdx + i] =
-                ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0;
-              p += 4;
-            } else {
-              if (vb !== 0 || p + 9 > bodyEnd)
-                throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst[baseIdx + i] =
-                (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>>
-                0;
-              p += 9;
+          try {
+            for (let i = 0; i < count; i++) {
+              if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
+              const vb = buf[p]!;
+              if ((vb & 1) !== 0) {
+                dst[baseIdx + i] = vb >>> 1;
+                p += 1;
+              } else if ((vb & 2) !== 0) {
+                if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
+                dst[baseIdx + i] = (vb | (buf[p + 1]! << 8)) >>> 2;
+                p += 2;
+              } else if ((vb & 4) !== 0) {
+                if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
+                dst[baseIdx + i] =
+                  ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>>
+                  0;
+                p += 4;
+              } else {
+                if (vb !== 0 || p + 9 > bodyEnd)
+                  throw new globalThis.Error('omnibuf: invalid uint32 array');
+                dst[baseIdx + i] =
+                  (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>>
+                  0;
+                p += 9;
+              }
             }
+            if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
+          } catch (err) {
+            if (alreadySeen) dst.length = baseIdx;
+            throw err;
           }
-          if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
           pos = bodyEnd;
           break;
         }
@@ -2597,36 +2608,41 @@ export function decodeTestAllTypes(
               elems.length = baseIdx + elemCount;
             }
           }
-          for (let i = 0; i < elemCount; i++) {
-            if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
-            let elNum = 0;
-            const eb0 = buf[p]!;
-            if ((eb0 & 1) !== 0) {
-              elNum = eb0 >>> 1;
-              p += 1;
-            } else if ((eb0 & 2) !== 0) {
-              if (p + 2 > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
-              elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;
-              p += 2;
-            } else {
-              const [el, en] = $ob.decodeVarintBigInt(buf, p, arrEnd);
-              if (en === 0 || el > globalThis.BigInt(arrEnd - (p + en)))
-                throw new globalThis.Error('omnibuf: corrupt submsg array');
-              p += en;
-              elNum = globalThis.Number(el);
+          try {
+            for (let i = 0; i < elemCount; i++) {
+              if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
+              let elNum = 0;
+              const eb0 = buf[p]!;
+              if ((eb0 & 1) !== 0) {
+                elNum = eb0 >>> 1;
+                p += 1;
+              } else if ((eb0 & 2) !== 0) {
+                if (p + 2 > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
+                elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;
+                p += 2;
+              } else {
+                const [el, en] = $ob.decodeVarintBigInt(buf, p, arrEnd);
+                if (en === 0 || el > globalThis.BigInt(arrEnd - (p + en)))
+                  throw new globalThis.Error('omnibuf: corrupt submsg array');
+                p += en;
+                elNum = globalThis.Number(el);
+              }
+              if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
+              elems[baseIdx + i] = decodeAllTypesSubMsg(
+                buf,
+                undefined,
+                depth + 2,
+                options,
+                p,
+                p + elNum,
+              );
+              p += elNum;
             }
-            if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
-            elems[baseIdx + i] = decodeAllTypesSubMsg(
-              buf,
-              undefined,
-              depth + 2,
-              options,
-              p,
-              p + elNum,
-            );
-            p += elNum;
+            if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
+          } catch (err) {
+            if (alreadySeen) elems.length = baseIdx;
+            throw err;
           }
-          if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
           pos = arrEnd;
           break;
         }
@@ -2859,7 +2875,7 @@ export class OpaqueTestAllTypes {
       return this._f1Uint32!;
     }
     const __src = this._sliceField(1);
-    return (__src ? $ob.readUint32(__src, 1)[0] : 0) as any;
+    return (__src ? $ob.readUint32(__src, 1, this._depth)[0] : 0) as any;
   }
 
   f1Uint32(): number {
@@ -2880,7 +2896,7 @@ export class OpaqueTestAllTypes {
       return this._f2Uint64!;
     }
     const __src = this._sliceField(2);
-    return __src ? $ob.readUintAuto(__src, 2)[0] : 0;
+    return __src ? $ob.readUintAuto(__src, 2, this._depth)[0] : 0;
   }
 
   f2Uint64(): number | bigint {
@@ -2901,7 +2917,7 @@ export class OpaqueTestAllTypes {
       return this._f3Sint32!;
     }
     const __src = this._sliceField(3);
-    return __src ? $ob.readInt32(__src, 3)[0] : 0;
+    return __src ? $ob.readInt32(__src, 3, this._depth)[0] : 0;
   }
 
   f3Sint32(): number {
@@ -2922,7 +2938,7 @@ export class OpaqueTestAllTypes {
       return this._f4Sint64!;
     }
     const __src = this._sliceField(4);
-    return __src ? $ob.readIntAuto(__src, 4)[0] : 0;
+    return __src ? $ob.readIntAuto(__src, 4, this._depth)[0] : 0;
   }
 
   f4Sint64(): number | bigint {
@@ -2943,7 +2959,7 @@ export class OpaqueTestAllTypes {
       return this._f5Bool!;
     }
     const __src = this._sliceField(5);
-    return __src ? $ob.readBool(__src, 5)[0] : false;
+    return __src ? $ob.readBool(__src, 5, this._depth)[0] : false;
   }
 
   f5Bool(): boolean {
@@ -2964,7 +2980,7 @@ export class OpaqueTestAllTypes {
       return this._f6String!;
     }
     const __src = this._sliceField(6);
-    return __src ? $ob.readString(__src, 6)[0] : '';
+    return __src ? $ob.readString(__src, 6, this._depth)[0] : '';
   }
 
   f6String(): string {
@@ -2985,7 +3001,7 @@ export class OpaqueTestAllTypes {
       return this._f7Bytes!;
     }
     const __src = this._sliceField(7);
-    return __src ? $ob.readBytes(__src, 7)[0] : new globalThis.Uint8Array(0);
+    return __src ? $ob.readBytes(__src, 7, this._depth)[0] : new globalThis.Uint8Array(0);
   }
 
   getF7BytesView(): globalThis.Uint8Array {
@@ -2993,7 +3009,7 @@ export class OpaqueTestAllTypes {
       return this._f7Bytes!;
     }
     const __src = this._sliceField(7);
-    return __src ? $ob.readBytesView(__src, 7)[0] : new globalThis.Uint8Array(0);
+    return __src ? $ob.readBytesView(__src, 7, this._depth)[0] : new globalThis.Uint8Array(0);
   }
 
   f7Bytes(): globalThis.Uint8Array {
@@ -3016,15 +3032,19 @@ export class OpaqueTestAllTypes {
     if (this._f8SubMsg === undefined) {
       const __src = this._sliceField(8);
       this._f8SubMsg = __src
-        ? $ob.readSubMsgMerged<AllTypesSubMsg>(__src, 8, (sub, target, merge, s, e) =>
-            decodeAllTypesSubMsg(
-              sub,
-              target,
-              this._depth + 1,
-              merge ? { merge: true } : undefined,
-              s,
-              e,
-            ),
+        ? $ob.readSubMsgMerged<AllTypesSubMsg>(
+            __src,
+            8,
+            (sub, target, merge, s, e) =>
+              decodeAllTypesSubMsg(
+                sub,
+                target,
+                this._depth + 1,
+                merge ? { merge: true } : undefined,
+                s,
+                e,
+              ),
+            this._depth,
           )[0]
         : null;
     }
@@ -3040,12 +3060,24 @@ export class OpaqueTestAllTypes {
     if (this._opaque_f8SubMsg !== undefined) {
       return this._opaque_f8SubMsg ?? undefined;
     }
+    if ((this._dirtyMask & (1 << 8)) !== 0) {
+      const dirtyVal = this._f8SubMsg;
+      if (dirtyVal == null) {
+        this._opaque_f8SubMsg = null;
+        return undefined;
+      }
+      const enc = new $ob.Encoder(64);
+      encodeAllTypesSubMsg(enc, dirtyVal);
+      const nested = new OpaqueAllTypesSubMsg(enc.finish(), this._depth + 1);
+      this._opaque_f8SubMsg = nested;
+      return nested;
+    }
     const __src = this._sliceField(8);
     if (!__src) {
       this._opaque_f8SubMsg = null;
       return undefined;
     }
-    const [sub, ok] = $ob.readSubMsg(__src, 8);
+    const [sub, ok] = $ob.readSubMsg(__src, 8, this._depth);
     if (!ok) {
       this._opaque_f8SubMsg = null;
       return undefined;
@@ -3073,9 +3105,14 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 9)) !== 0) {
       return this._f9StringArr!;
     }
+    if (this._depth + 1 > $ob.MaxNestingDepth) {
+      throw new globalThis.Error(
+        `omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`,
+      );
+    }
     if (this._f9StringArr === undefined) {
       const __src = this._sliceField(9);
-      this._f9StringArr = __src ? $ob.readStringArr(__src, 9)[0] : [];
+      this._f9StringArr = __src ? $ob.readStringArr(__src, 9, this._depth)[0] : [];
     }
     return this._f9StringArr!;
   }
@@ -3097,9 +3134,14 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 10)) !== 0) {
       return this._f10Uint32Arr!;
     }
+    if (this._depth + 1 > $ob.MaxNestingDepth) {
+      throw new globalThis.Error(
+        `omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`,
+      );
+    }
     if (this._f10Uint32Arr === undefined) {
       const __src = this._sliceField(10);
-      this._f10Uint32Arr = __src ? ($ob.readUint32Arr(__src, 10)[0] as any) : [];
+      this._f10Uint32Arr = __src ? ($ob.readUint32Arr(__src, 10, this._depth)[0] as any) : [];
     }
     return this._f10Uint32Arr!;
   }
@@ -3121,11 +3163,19 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 11)) !== 0) {
       return this._f11SubMsgArr!;
     }
+    if (this._depth + 1 > $ob.MaxNestingDepth) {
+      throw new globalThis.Error(
+        `omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`,
+      );
+    }
     if (this._f11SubMsgArr === undefined) {
       const __src = this._sliceField(11);
       this._f11SubMsgArr = __src
-        ? $ob.readSubMsgArrDecoded(__src, 11, (sub) =>
-            decodeAllTypesSubMsg(sub, undefined, this._depth + 2),
+        ? $ob.readSubMsgArrDecoded(
+            __src,
+            11,
+            (sub) => decodeAllTypesSubMsg(sub, undefined, this._depth + 2),
+            this._depth,
           )[0]
         : [];
     }
@@ -3149,8 +3199,20 @@ export class OpaqueTestAllTypes {
     if ((this._dirtyMask & (1 << 12)) !== 0) {
       return this._f12MapStrUint!;
     }
+    if (this._depth + 1 > $ob.MaxNestingDepth) {
+      throw new globalThis.Error(
+        `omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`,
+      );
+    }
     if (this._f12MapStrUint === undefined) {
-      this._f12MapStrUint = $ob.readTypedMap(this._raw, 12, 'string', 'uint64')[0];
+      this._f12MapStrUint = $ob.readTypedMap(
+        this._raw,
+        12,
+        'string',
+        'uint64',
+        undefined,
+        this._depth,
+      )[0];
     }
     return this._f12MapStrUint!;
   }
@@ -3173,7 +3235,7 @@ export class OpaqueTestAllTypes {
       return this._f13Float32!;
     }
     const __src = this._sliceField(13);
-    return __src ? $ob.readFloat32(__src, 13)[0] : 0;
+    return __src ? $ob.readFloat32(__src, 13, this._depth)[0] : 0;
   }
 
   f13Float32(): number {
@@ -3194,7 +3256,7 @@ export class OpaqueTestAllTypes {
       return this._f14Float64!;
     }
     const __src = this._sliceField(14);
-    return __src ? $ob.readFloat64(__src, 14)[0] : 0;
+    return __src ? $ob.readFloat64(__src, 14, this._depth)[0] : 0;
   }
 
   f14Float64(): number {
@@ -3215,7 +3277,7 @@ export class OpaqueTestAllTypes {
       return this._f15Fixed32!;
     }
     const __src = this._sliceField(15);
-    return __src ? $ob.readFixed32(__src, 15)[0] : 0;
+    return __src ? $ob.readFixed32(__src, 15, this._depth)[0] : 0;
   }
 
   f15Fixed32(): number {
@@ -3236,7 +3298,7 @@ export class OpaqueTestAllTypes {
       return this._f16Fixed64!;
     }
     const __src = this._sliceField(16);
-    return __src ? $ob.readFixed64Auto(__src, 16)[0] : 0;
+    return __src ? $ob.readFixed64Auto(__src, 16, this._depth)[0] : 0;
   }
 
   f16Fixed64(): number | bigint {
@@ -3257,7 +3319,7 @@ export class OpaqueTestAllTypes {
       return this._f20OverflowStr!;
     }
     const __src = this._sliceField(20);
-    return __src ? $ob.readString(__src, 20)[0] : '';
+    return __src ? $ob.readString(__src, 20, this._depth)[0] : '';
   }
 
   f20OverflowStr(): string {

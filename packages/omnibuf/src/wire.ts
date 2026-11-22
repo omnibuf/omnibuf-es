@@ -4922,7 +4922,11 @@ export function locateField(
   packet: Uint8Array,
   targetField: number,
   expMask = 0xffff,
+  depth = 0,
 ): LocateFieldResult {
+  if (depth > MaxNestingDepth) {
+    return NOT_FOUND;
+  }
   let pos = 0;
   const n = packet.length;
   let lastPos = -1;
@@ -4953,7 +4957,7 @@ export function locateField(
     }
 
     if (fnum === 0) {
-      const f0End = validateField0At(packet, pos, wt, 0);
+      const f0End = validateField0At(packet, pos, wt, depth);
       if (f0End < 0) {
         return NOT_FOUND;
       }
@@ -5090,7 +5094,11 @@ export function nextContainerField(
   targetField: number,
   expWT: number,
   minLen: number,
+  depth = 0,
 ): NextContainerResult {
+  if (depth > MaxNestingDepth) {
+    return { body: new Uint8Array(0), nextPos: 0, matched: false, valid: false };
+  }
   const n = packet.length;
   while (pos < n) {
     let fnum = 0;
@@ -5119,7 +5127,7 @@ export function nextContainerField(
     }
 
     if (fnum === 0 && targetField !== 0) {
-      const f0End = validateField0At(packet, pos, wt, 0);
+      const f0End = validateField0At(packet, pos, wt, depth);
       if (f0End < 0) {
         return { body: new Uint8Array(0), nextPos: 0, matched: false, valid: false };
       }

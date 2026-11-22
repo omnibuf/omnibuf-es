@@ -330,7 +330,7 @@ export class OpaqueLocation {
       return this._region!;
     }
     const __src = this._sliceField(1);
-    return __src ? $ob.readString(__src, 1)[0] : '';
+    return __src ? $ob.readString(__src, 1, this._depth)[0] : '';
   }
 
   region(): string {
@@ -347,7 +347,7 @@ export class OpaqueLocation {
       return this._datacenter!;
     }
     const __src = this._sliceField(2);
-    return __src ? $ob.readString(__src, 2)[0] : '';
+    return __src ? $ob.readString(__src, 2, this._depth)[0] : '';
   }
 
   datacenter(): string {
@@ -364,7 +364,7 @@ export class OpaqueLocation {
       return this._city!;
     }
     const __src = this._sliceField(3);
-    return __src ? $ob.readString(__src, 3)[0] : '';
+    return __src ? $ob.readString(__src, 3, this._depth)[0] : '';
   }
 
   city(): string {
@@ -381,7 +381,7 @@ export class OpaqueLocation {
       return this._rack!;
     }
     const __src = this._sliceField(4);
-    return (__src ? $ob.readUint32(__src, 4)[0] : 0) as any;
+    return (__src ? $ob.readUint32(__src, 4, this._depth)[0] : 0) as any;
   }
 
   rack(): number {
@@ -398,7 +398,7 @@ export class OpaqueLocation {
       return this._latitude!;
     }
     const __src = this._sliceField(5);
-    return __src ? $ob.readFloat32(__src, 5)[0] : 0;
+    return __src ? $ob.readFloat32(__src, 5, this._depth)[0] : 0;
   }
 
   latitude(): number {
@@ -415,7 +415,7 @@ export class OpaqueLocation {
       return this._longitude!;
     }
     const __src = this._sliceField(6);
-    return __src ? $ob.readFloat32(__src, 6)[0] : 0;
+    return __src ? $ob.readFloat32(__src, 6, this._depth)[0] : 0;
   }
 
   longitude(): number {
@@ -826,7 +826,7 @@ export class OpaqueNeighbor {
       return this._peerAsn!;
     }
     const __src = this._sliceField(1);
-    return (__src ? $ob.readUint32(__src, 1)[0] : 0) as any;
+    return (__src ? $ob.readUint32(__src, 1, this._depth)[0] : 0) as any;
   }
 
   peerAsn(): number {
@@ -847,7 +847,7 @@ export class OpaqueNeighbor {
       return this._router!;
     }
     const __src = this._sliceField(2);
-    return __src ? $ob.readString(__src, 2)[0] : '';
+    return __src ? $ob.readString(__src, 2, this._depth)[0] : '';
   }
 
   router(): string {
@@ -864,7 +864,7 @@ export class OpaqueNeighbor {
       return this._latencyUs!;
     }
     const __src = this._sliceField(3);
-    return (__src ? $ob.readUint32(__src, 3)[0] : 0) as any;
+    return (__src ? $ob.readUint32(__src, 3, this._depth)[0] : 0) as any;
   }
 
   latencyUs(): number {
@@ -885,7 +885,7 @@ export class OpaqueNeighbor {
       return this._established!;
     }
     const __src = this._sliceField(4);
-    return __src ? $ob.readBool(__src, 4)[0] : false;
+    return __src ? $ob.readBool(__src, 4, this._depth)[0] : false;
   }
 
   established(): boolean {
@@ -1365,26 +1365,31 @@ export function decodePeerUpdate(
               dst.length = baseIdx + count;
             }
           }
-          for (let i = 0; i < count; i++) {
-            if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
-            const sb = buf[p]!;
-            if ((sb & 1) !== 0) {
-              const sLen = sb >>> 1;
-              p += 1;
-              if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
-              dst[baseIdx + i] = $ob.decodeUTF8Len(buf, p, sLen);
-              p += sLen;
-            } else {
-              const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);
-              if (sn === 0 || sLen > globalThis.BigInt(bodyEnd - (p + sn)))
-                throw new globalThis.Error('omnibuf: invalid string array');
-              p += sn;
-              const sLenNum = globalThis.Number(sLen);
-              dst[baseIdx + i] = $ob.decodeUTF8(buf, p, p + sLenNum);
-              p += sLenNum;
+          try {
+            for (let i = 0; i < count; i++) {
+              if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
+              const sb = buf[p]!;
+              if ((sb & 1) !== 0) {
+                const sLen = sb >>> 1;
+                p += 1;
+                if (p + sLen > bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
+                dst[baseIdx + i] = $ob.decodeUTF8Len(buf, p, sLen);
+                p += sLen;
+              } else {
+                const [sLen, sn] = $ob.decodeVarintBigInt(buf, p, bodyEnd);
+                if (sn === 0 || sLen > globalThis.BigInt(bodyEnd - (p + sn)))
+                  throw new globalThis.Error('omnibuf: invalid string array');
+                p += sn;
+                const sLenNum = globalThis.Number(sLen);
+                dst[baseIdx + i] = $ob.decodeUTF8(buf, p, p + sLenNum);
+                p += sLenNum;
+              }
             }
+            if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
+          } catch (err) {
+            if (alreadySeen) dst.length = baseIdx;
+            throw err;
           }
-          if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid string array');
           pos = bodyEnd;
           break;
         }
@@ -1442,31 +1447,37 @@ export function decodePeerUpdate(
               dst.length = baseIdx + count;
             }
           }
-          for (let i = 0; i < count; i++) {
-            if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
-            const vb = buf[p]!;
-            if ((vb & 1) !== 0) {
-              dst[baseIdx + i] = vb >>> 1;
-              p += 1;
-            } else if ((vb & 2) !== 0) {
-              if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst[baseIdx + i] = (vb | (buf[p + 1]! << 8)) >>> 2;
-              p += 2;
-            } else if ((vb & 4) !== 0) {
-              if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst[baseIdx + i] =
-                ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>> 0;
-              p += 4;
-            } else {
-              if (vb !== 0 || p + 9 > bodyEnd)
-                throw new globalThis.Error('omnibuf: invalid uint32 array');
-              dst[baseIdx + i] =
-                (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>>
-                0;
-              p += 9;
+          try {
+            for (let i = 0; i < count; i++) {
+              if (p >= bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
+              const vb = buf[p]!;
+              if ((vb & 1) !== 0) {
+                dst[baseIdx + i] = vb >>> 1;
+                p += 1;
+              } else if ((vb & 2) !== 0) {
+                if (p + 2 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
+                dst[baseIdx + i] = (vb | (buf[p + 1]! << 8)) >>> 2;
+                p += 2;
+              } else if ((vb & 4) !== 0) {
+                if (p + 4 > bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
+                dst[baseIdx + i] =
+                  ((vb | (buf[p + 1]! << 8) | (buf[p + 2]! << 16) | (buf[p + 3]! << 24)) >>> 3) >>>
+                  0;
+                p += 4;
+              } else {
+                if (vb !== 0 || p + 9 > bodyEnd)
+                  throw new globalThis.Error('omnibuf: invalid uint32 array');
+                dst[baseIdx + i] =
+                  (buf[p + 1]! | (buf[p + 2]! << 8) | (buf[p + 3]! << 16) | (buf[p + 4]! << 24)) >>>
+                  0;
+                p += 9;
+              }
             }
+            if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
+          } catch (err) {
+            if (alreadySeen) dst.length = baseIdx;
+            throw err;
           }
-          if (p !== bodyEnd) throw new globalThis.Error('omnibuf: invalid uint32 array');
           pos = bodyEnd;
           break;
         }
@@ -1574,29 +1585,34 @@ export function decodePeerUpdate(
               elems.length = baseIdx + elemCount;
             }
           }
-          for (let i = 0; i < elemCount; i++) {
-            if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
-            let elNum = 0;
-            const eb0 = buf[p]!;
-            if ((eb0 & 1) !== 0) {
-              elNum = eb0 >>> 1;
-              p += 1;
-            } else if ((eb0 & 2) !== 0) {
-              if (p + 2 > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
-              elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;
-              p += 2;
-            } else {
-              const [el, en] = $ob.decodeVarintBigInt(buf, p, arrEnd);
-              if (en === 0 || el > globalThis.BigInt(arrEnd - (p + en)))
-                throw new globalThis.Error('omnibuf: corrupt submsg array');
-              p += en;
-              elNum = globalThis.Number(el);
+          try {
+            for (let i = 0; i < elemCount; i++) {
+              if (p >= arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
+              let elNum = 0;
+              const eb0 = buf[p]!;
+              if ((eb0 & 1) !== 0) {
+                elNum = eb0 >>> 1;
+                p += 1;
+              } else if ((eb0 & 2) !== 0) {
+                if (p + 2 > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
+                elNum = (eb0 | (buf[p + 1]! << 8)) >>> 2;
+                p += 2;
+              } else {
+                const [el, en] = $ob.decodeVarintBigInt(buf, p, arrEnd);
+                if (en === 0 || el > globalThis.BigInt(arrEnd - (p + en)))
+                  throw new globalThis.Error('omnibuf: corrupt submsg array');
+                p += en;
+                elNum = globalThis.Number(el);
+              }
+              if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
+              elems[baseIdx + i] = decodeNeighbor(buf, undefined, depth + 2, options, p, p + elNum);
+              p += elNum;
             }
-            if (p + elNum > arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
-            elems[baseIdx + i] = decodeNeighbor(buf, undefined, depth + 2, options, p, p + elNum);
-            p += elNum;
+            if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
+          } catch (err) {
+            if (alreadySeen) elems.length = baseIdx;
+            throw err;
           }
-          if (p !== arrEnd) throw new globalThis.Error('omnibuf: corrupt submsg array');
           pos = arrEnd;
           break;
         }
@@ -1749,7 +1765,7 @@ export class OpaquePeerUpdate {
       return this._asn!;
     }
     const __src = this._sliceField(1);
-    return (__src ? $ob.readUint32(__src, 1)[0] : 0) as any;
+    return (__src ? $ob.readUint32(__src, 1, this._depth)[0] : 0) as any;
   }
 
   asn(): number {
@@ -1766,7 +1782,7 @@ export class OpaquePeerUpdate {
       return this._routerId!;
     }
     const __src = this._sliceField(2);
-    return __src ? $ob.readString(__src, 2)[0] : '';
+    return __src ? $ob.readString(__src, 2, this._depth)[0] : '';
   }
 
   routerId(): string {
@@ -1787,7 +1803,7 @@ export class OpaquePeerUpdate {
       return this._active!;
     }
     const __src = this._sliceField(3);
-    return __src ? $ob.readBool(__src, 3)[0] : false;
+    return __src ? $ob.readBool(__src, 3, this._depth)[0] : false;
   }
 
   active(): boolean {
@@ -1804,7 +1820,7 @@ export class OpaquePeerUpdate {
       return this._uptimeSec!;
     }
     const __src = this._sliceField(4);
-    return __src ? $ob.readUintAuto(__src, 4)[0] : 0;
+    return __src ? $ob.readUintAuto(__src, 4, this._depth)[0] : 0;
   }
 
   uptimeSec(): number | bigint {
@@ -1825,7 +1841,7 @@ export class OpaquePeerUpdate {
       return this._rssiDbm!;
     }
     const __src = this._sliceField(5);
-    return __src ? $ob.readInt32(__src, 5)[0] : 0;
+    return __src ? $ob.readInt32(__src, 5, this._depth)[0] : 0;
   }
 
   rssiDbm(): number {
@@ -1846,7 +1862,7 @@ export class OpaquePeerUpdate {
       return this._cpuLoad!;
     }
     const __src = this._sliceField(6);
-    return __src ? $ob.readFloat64(__src, 6)[0] : 0;
+    return __src ? $ob.readFloat64(__src, 6, this._depth)[0] : 0;
   }
 
   cpuLoad(): number {
@@ -1866,9 +1882,14 @@ export class OpaquePeerUpdate {
     if ((this._dirtyMask & (1 << 7)) !== 0) {
       return this._tags!;
     }
+    if (this._depth + 1 > $ob.MaxNestingDepth) {
+      throw new globalThis.Error(
+        `omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`,
+      );
+    }
     if (this._tags === undefined) {
       const __src = this._sliceField(7);
-      this._tags = __src ? $ob.readStringArr(__src, 7)[0] : [];
+      this._tags = __src ? $ob.readStringArr(__src, 7, this._depth)[0] : [];
     }
     return this._tags!;
   }
@@ -1886,9 +1907,14 @@ export class OpaquePeerUpdate {
     if ((this._dirtyMask & (1 << 8)) !== 0) {
       return this._prefixes!;
     }
+    if (this._depth + 1 > $ob.MaxNestingDepth) {
+      throw new globalThis.Error(
+        `omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`,
+      );
+    }
     if (this._prefixes === undefined) {
       const __src = this._sliceField(8);
-      this._prefixes = __src ? ($ob.readUint32Arr(__src, 8)[0] as any) : [];
+      this._prefixes = __src ? ($ob.readUint32Arr(__src, 8, this._depth)[0] as any) : [];
     }
     return this._prefixes!;
   }
@@ -1909,8 +1935,19 @@ export class OpaquePeerUpdate {
     if (this._location === undefined) {
       const __src = this._sliceField(9);
       this._location = __src
-        ? $ob.readSubMsgMerged<Location>(__src, 9, (sub, target, merge, s, e) =>
-            decodeLocation(sub, target, this._depth + 1, merge ? { merge: true } : undefined, s, e),
+        ? $ob.readSubMsgMerged<Location>(
+            __src,
+            9,
+            (sub, target, merge, s, e) =>
+              decodeLocation(
+                sub,
+                target,
+                this._depth + 1,
+                merge ? { merge: true } : undefined,
+                s,
+                e,
+              ),
+            this._depth,
           )[0]
         : null;
     }
@@ -1926,12 +1963,24 @@ export class OpaquePeerUpdate {
     if (this._opaque_location !== undefined) {
       return this._opaque_location ?? undefined;
     }
+    if ((this._dirtyMask & (1 << 9)) !== 0) {
+      const dirtyVal = this._location;
+      if (dirtyVal == null) {
+        this._opaque_location = null;
+        return undefined;
+      }
+      const enc = new $ob.Encoder(64);
+      encodeLocation(enc, dirtyVal);
+      const nested = new OpaqueLocation(enc.finish(), this._depth + 1);
+      this._opaque_location = nested;
+      return nested;
+    }
     const __src = this._sliceField(9);
     if (!__src) {
       this._opaque_location = null;
       return undefined;
     }
-    const [sub, ok] = $ob.readSubMsg(__src, 9);
+    const [sub, ok] = $ob.readSubMsg(__src, 9, this._depth);
     if (!ok) {
       this._opaque_location = null;
       return undefined;
@@ -1955,11 +2004,19 @@ export class OpaquePeerUpdate {
     if ((this._dirtyMask & (1 << 10)) !== 0) {
       return this._neighbors!;
     }
+    if (this._depth + 1 > $ob.MaxNestingDepth) {
+      throw new globalThis.Error(
+        `omnibuf: nesting depth ${this._depth + 1} exceeds MaxNestingDepth (${$ob.MaxNestingDepth})`,
+      );
+    }
     if (this._neighbors === undefined) {
       const __src = this._sliceField(10);
       this._neighbors = __src
-        ? $ob.readSubMsgArrDecoded(__src, 10, (sub) =>
-            decodeNeighbor(sub, undefined, this._depth + 2),
+        ? $ob.readSubMsgArrDecoded(
+            __src,
+            10,
+            (sub) => decodeNeighbor(sub, undefined, this._depth + 2),
+            this._depth,
           )[0]
         : [];
     }
@@ -1980,7 +2037,7 @@ export class OpaquePeerUpdate {
       return this._sequence!;
     }
     const __src = this._sliceField(11);
-    return __src ? $ob.readUintAuto(__src, 11)[0] : 0;
+    return __src ? $ob.readUintAuto(__src, 11, this._depth)[0] : 0;
   }
 
   sequence(): number | bigint {

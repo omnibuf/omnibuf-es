@@ -128,6 +128,19 @@ export class Encoder {
   }
 
   /**
+   * Aborts an in-progress message on an error path, rewinding the cursor and
+   * releasing oversized slabs (> 256 KiB) back to 8 KiB.
+   */
+  abortMessage(startPos: number): void {
+    this.pos = startPos;
+    this.depth = 0;
+    if (this.buf.length > MAX_RETAINED_SLAB && startPos === 0) {
+      this.buf = new Uint8Array(8192);
+      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+    }
+  }
+
+  /**
    * Returns a zero-copy subarray view `[startPos, this.pos)` of the encoded message in the slab.
    * Only valid until the slab region is overwritten or reset.
    */
