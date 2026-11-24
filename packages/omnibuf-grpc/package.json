@@ -1,0 +1,41 @@
+{
+  "name": "@omnibuf/grpc",
+  "version": "0.1.0",
+  "description": "Detached @grpc/grpc-js marshallers and method definitions for OmniBuf",
+  "type": "module",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omnibuf/omnibuf-es.git",
+    "directory": "packages/omnibuf-grpc"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@omnibuf/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@grpc/grpc-js": ">=1.10.0"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "^1.13.4"
+  }
+}

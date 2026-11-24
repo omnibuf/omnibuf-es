@@ -5,6 +5,8 @@
     { "path": "./packages/omnibuf" },
     { "path": "./packages/omnibuf-web" },
     { "path": "./packages/omnibuf-node" },
+    { "path": "./packages/omnibuf-grpc" },
+    { "path": "./packages/omnibuf-connect" },
     { "path": "./packages/protoc-gen-omnibuf-es" }
   ]
 }

@@ -47,6 +47,8 @@ jobs:
                 "packages/omnibuf/package.json",
                 "packages/omnibuf-node/package.json",
                 "packages/omnibuf-web/package.json",
+                "packages/omnibuf-grpc/package.json",
+                "packages/omnibuf-connect/package.json",
                 "packages/protoc-gen-omnibuf-es/package.json",
               ];
               for (const file of files) {
@@ -69,7 +71,7 @@ jobs:
             TAG_ARGS=(--tag next)
           fi
           STATUS=0
-          for pkg in packages/omnibuf packages/omnibuf-node packages/omnibuf-web packages/protoc-gen-omnibuf-es; do
+          for pkg in packages/omnibuf packages/omnibuf-node packages/omnibuf-web packages/omnibuf-grpc packages/omnibuf-connect packages/protoc-gen-omnibuf-es; do
             echo "Packing and publishing $pkg..."
             rm -f "$pkg"/*.tgz
             (cd "$pkg" && pnpm pack)

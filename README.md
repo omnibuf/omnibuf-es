@@ -34,6 +34,26 @@ const packet = toBinary(PeerSchema, peer, { selfDescribing: true });
 const decoded = fromBinary(PeerSchema, packet);
 ```
 
+## gRPC & Connect RPC
+
+Two separate detached packages integrate OmniBuf with gRPC and Connect while keeping `@omnibuf/core` free of RPC dependencies:
+
+- **`@omnibuf/grpc`:** `@grpc/grpc-js` marshallers (`createGrpcMarshallers`) and full method definitions (`createGrpcMethodDefinition`).
+- **`@omnibuf/connect`:** `@connectrpc/connect/protocol` binary codec (`createConnectCodec`).
+
+```ts
+// @grpc/grpc-js
+import { createGrpcMethodDefinition } from '@omnibuf/grpc';
+const pingMethod = createGrpcMethodDefinition('/pkg.PingService/Ping', {
+  request: PingReqSchema,
+  response: PingResSchema,
+});
+
+// @connectrpc/connect
+import { createConnectCodec } from '@omnibuf/connect';
+const codec = createConnectCodec({ schema: PeerSchema });
+```
+
 ## Implementation Details
 
 - **Packages**: `@omnibuf/core` holds the wire codec and schema runtime; `@omnibuf/node` adds Node stream framing, `Buffer` string codecs, and descriptor loaders; `@omnibuf/web` adds Web Streams framing and `TextEncoder` helpers.
