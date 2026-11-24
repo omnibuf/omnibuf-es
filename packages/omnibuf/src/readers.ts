@@ -2,7 +2,6 @@
 // Header-Scanning Field Readers (O(1) Per-Field Skip) & Wire Splicing (Opaque API)
 // ============================================================================
 
-import { decodeSchemaMeta } from './blind.js';
 import { Encoder } from './encoder.js';
 import { validateMessage, validateValue } from './validation.js';
 import {
@@ -604,7 +603,9 @@ function validateCountedArrBody(
   elemType: number,
   count: number,
   startP: number,
+  depth = 0,
 ): boolean {
+  if (depth + 1 > MaxNestingDepth) return false;
   const n = body.length;
   let p = startP;
   switch (elemType) {
@@ -667,7 +668,7 @@ function validateCountedArrBody(
         p += sn;
         const end = p + Number(sLen);
         try {
-          validateMessage(body.subarray(p, end), 2);
+          validateMessage(body.subarray(p, end), depth + 2);
         } catch {
           return false;
         }
@@ -678,7 +679,7 @@ function validateCountedArrBody(
     default: {
       for (let i = 0; i < count; i++) {
         try {
-          p = validateValue(body, p, elemType, 1);
+          p = validateValue(body, p, elemType, depth + 1);
         } catch {
           return false;
         }
@@ -688,7 +689,12 @@ function validateCountedArrBody(
   }
 }
 
-export function countedArrLen(packet: Uint8Array, fieldNum: number, expElemWT?: number): number {
+export function countedArrLen(
+  packet: Uint8Array,
+  fieldNum: number,
+  expElemWT?: number,
+  depth = 0,
+): number {
   let total = 0;
   let pos = 0;
   while (true) {
@@ -698,6 +704,7 @@ export function countedArrLen(packet: Uint8Array, fieldNum: number, expElemWT?: 
       fieldNum,
       WireArray,
       2,
+      depth,
     );
     if (!valid) return 0;
     if (!matched) return total;
@@ -707,7 +714,7 @@ export function countedArrLen(packet: Uint8Array, fieldNum: number, expElemWT?: 
     if (expElemWT !== undefined && elemType !== expElemWT) {
       return 0;
     }
-    if (!validateCountedArrBody(body, elemType, c, startP)) {
+    if (!validateCountedArrBody(body, elemType, c, startP, depth)) {
       return 0;
     }
     total += c;
@@ -2046,8 +2053,10 @@ export function spliceFields(
       if (wt !== WireSubMsg) {
         throw new Error('omnibuf: invalid Field #0 wire type');
       }
-      const [f0Body, f0End] = readLenSlice(raw, pos, 0);
-      decodeSchemaMeta(f0Body, depth + 1);
+      const f0End = validateField0At(raw, pos, wt, depth);
+      if (f0End < 0) {
+        throw new Error('omnibuf: invalid Field #0');
+      }
       pos = f0End;
     } else {
       pos = validateValue(raw, pos, wt, depth);

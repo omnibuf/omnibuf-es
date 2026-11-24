@@ -1234,7 +1234,29 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     for (let i = 0; i < 33; i++) {
       deepMeta = { typeName: `M${i}`, children: { 1: deepMeta } };
     }
-    const deepField0 = encodeField0SchemaMeta(deepMeta);
+    assert.throws(() => encodeField0SchemaMeta(deepMeta), /nesting depth/);
+
+    // Manually craft a raw >MaxNestingDepth Field #0 packet to verify decodeBlind & readField0SchemaMeta reject it
+    const rawDeepEnc = new Encoder();
+    rawDeepEnc.writeByte(0x19); // Field #0, WireSubMsg
+    rawDeepEnc.beginContainer();
+    for (let i = 0; i < 17; i++) {
+      rawDeepEnc.writeByte(0x7d); // Field #3 (children), WireMap
+      rawDeepEnc.beginContainer();
+      rawDeepEnc.writeByte(WireUint);
+      rawDeepEnc.writeByte(WireSubMsg);
+      rawDeepEnc.writeRawVarint(1);
+      rawDeepEnc.writeRawVarint(1);
+      rawDeepEnc.beginContainer();
+    }
+    rawDeepEnc.writeByte(0x35); // Field #1 (type_name), WireString
+    rawDeepEnc.writeRawStringPayload('Leaf');
+    for (let i = 0; i < 17; i++) {
+      rawDeepEnc.endContainer(); // child SchemaMeta
+      rawDeepEnc.endContainer(); // children WireMap
+    }
+    rawDeepEnc.endContainer(); // Field #0
+    const deepField0 = rawDeepEnc.finish();
     assert.throws(() => decodeBlind(deepField0), /nesting depth/);
     expect(readField0SchemaMeta(deepField0)[1]).toBe(false);
 

@@ -177,13 +177,17 @@ export function fromArrayBuffer(source: ArrayBuffer | ArrayBufferView): Uint8Arr
   return new Uint8Array(source);
 }
 
+const HEX_TABLE: readonly string[] = Array.from({ length: 256 }, (_, i) =>
+  i.toString(16).padStart(2, '0'),
+);
+
 /**
  * Encode an OmniBuf packet to lowercase hexadecimal string.
  */
 export function toHex(packet: Uint8Array): string {
   let out = '';
   for (let i = 0; i < packet.length; i++) {
-    out += packet[i]!.toString(16).padStart(2, '0');
+    out += HEX_TABLE[packet[i]!]!;
   }
   return out;
 }

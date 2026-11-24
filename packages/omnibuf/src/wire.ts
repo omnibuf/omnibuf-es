@@ -4024,9 +4024,10 @@ export function varintByteLength(v: number | bigint): number {
     if (!Number.isFinite(v)) {
       throw new Error(`omnibuf: non-finite integer value ${v}`);
     }
-    if (v >= 0 && v <= MAX_1B_VARINT) return 1;
-    if (v >= 0 && v <= MAX_2B_VARINT) return 2;
-    if (v >= 0 && v <= MAX_4B_VARINT) return 4;
+    const t = Math.trunc(v);
+    if (t >= 0 && t <= MAX_1B_VARINT) return 1;
+    if (t >= 0 && t <= MAX_2B_VARINT) return 2;
+    if (t >= 0 && t <= MAX_4B_VARINT) return 4;
     return 9;
   }
   const u = BigInt.asUintN(64, toBigInt64Input(v));

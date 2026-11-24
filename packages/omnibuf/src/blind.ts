@@ -58,6 +58,10 @@ export interface SchemaMeta {
  * Base64 encoder for `Uint8Array` (works in both Browser and Node.js without Buffer dependency).
  */
 const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const BASE64_DECODE = new Int8Array(128).fill(-1);
+for (let i = 0; i < BASE64_CHARS.length; i++) {
+  BASE64_DECODE[BASE64_CHARS.charCodeAt(i)] = i;
+}
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
   if (bytes.length === 0) return '';
@@ -98,12 +102,16 @@ export function base64ToUint8Array(b64: string): Uint8Array {
   const out = new Uint8Array(byteLen);
   let outIdx = 0;
   for (let i = 0; i < clean.length; i += 4) {
-    const c0 = BASE64_CHARS.indexOf(clean[i]!);
-    const c1 = BASE64_CHARS.indexOf(clean[i + 1]!);
-    const isPad2 = clean[i + 2] === '=' && i + 4 === clean.length;
-    const isPad3 = clean[i + 3] === '=' && i + 4 === clean.length;
-    const c2 = isPad2 ? 0 : BASE64_CHARS.indexOf(clean[i + 2]!);
-    const c3 = isPad3 ? 0 : BASE64_CHARS.indexOf(clean[i + 3]!);
+    const code0 = clean.charCodeAt(i);
+    const code1 = clean.charCodeAt(i + 1);
+    const code2 = clean.charCodeAt(i + 2);
+    const code3 = clean.charCodeAt(i + 3);
+    const c0 = code0 < 128 ? BASE64_DECODE[code0]! : -1;
+    const c1 = code1 < 128 ? BASE64_DECODE[code1]! : -1;
+    const isPad2 = code2 === 61 && i + 4 === clean.length;
+    const isPad3 = code3 === 61 && i + 4 === clean.length;
+    const c2 = isPad2 ? 0 : code2 < 128 ? BASE64_DECODE[code2]! : -1;
+    const c3 = isPad3 ? 0 : code3 < 128 ? BASE64_DECODE[code3]! : -1;
     if (c0 < 0 || c1 < 0 || c2 < 0 || c3 < 0 || (isPad2 && !isPad3)) {
       throw new Error(`omnibuf: invalid base64 character at index ${i}`);
     }
@@ -119,8 +127,14 @@ function writeSchemaMetaBody(
   enc: Encoder,
   meta: SchemaMeta | null | undefined,
   deterministic: boolean,
+  depth = 1,
 ): void {
   if (!meta) return;
+  if (depth > MaxNestingDepth) {
+    throw new Error(
+      `omnibuf: SchemaMeta nesting depth ${depth} exceeds MaxNestingDepth (${MaxNestingDepth})`,
+    );
+  }
   // Field #1: type_name (WireString = 10 -> Tag (1 << 4) | 10 = 26 -> 0x35)
   if (meta.typeName && meta.typeName.length > 0) {
     enc.writeByte(0x35);
@@ -130,6 +144,11 @@ function writeSchemaMetaBody(
   if (meta.fields) {
     const keys = Object.keys(meta.fields).map(Number);
     if (keys.length > 0) {
+      if (depth + 1 > MaxNestingDepth) {
+        throw new Error(
+          `omnibuf: SchemaMeta fields map nesting depth ${depth + 1} exceeds MaxNestingDepth (${MaxNestingDepth})`,
+        );
+      }
       for (const k of keys) {
         if (!Number.isInteger(k) || k < 1 || k > 536870911) {
           throw new Error(`omnibuf: invalid SchemaMeta field number ${k}`);
@@ -155,6 +174,11 @@ function writeSchemaMetaBody(
   if (meta.children) {
     const keys = Object.keys(meta.children).map(Number);
     if (keys.length > 0) {
+      if (depth + 1 > MaxNestingDepth) {
+        throw new Error(
+          `omnibuf: SchemaMeta children map nesting depth ${depth + 1} exceeds MaxNestingDepth (${MaxNestingDepth})`,
+        );
+      }
       for (const k of keys) {
         if (!Number.isInteger(k) || k < 1 || k > 536870911) {
           throw new Error(`omnibuf: invalid SchemaMeta child field number ${k}`);
@@ -172,7 +196,7 @@ function writeSchemaMetaBody(
         const child = meta.children[k];
         enc.writeRawVarint(k >>> 0);
         enc.beginContainer();
-        writeSchemaMetaBody(enc, child, deterministic);
+        writeSchemaMetaBody(enc, child, deterministic, depth + 2);
         enc.endContainer();
       }
       enc.endContainer();
@@ -216,7 +240,12 @@ function hasAnyOwnKey(obj: Record<number, unknown> | undefined): boolean {
   return false;
 }
 
-function mergeSchemaMetaInPlace(target: SchemaMeta, next: SchemaMeta): SchemaMeta {
+function mergeSchemaMetaInPlace(target: SchemaMeta, next: SchemaMeta, depth = 0): SchemaMeta {
+  if (depth > MaxNestingDepth) {
+    throw new Error(
+      `omnibuf: SchemaMeta merge nesting depth ${depth} exceeds MaxNestingDepth (${MaxNestingDepth})`,
+    );
+  }
   if (next.typeName) {
     target.typeName = next.typeName;
   }
@@ -234,7 +263,7 @@ function mergeSchemaMetaInPlace(target: SchemaMeta, next: SchemaMeta): SchemaMet
       for (const [k, c] of Object.entries(next.children)) {
         const numK = Number(k);
         const existing = target.children[numK];
-        target.children[numK] = existing ? mergeSchemaMetaInPlace(existing, c) : c;
+        target.children[numK] = existing ? mergeSchemaMetaInPlace(existing, c, depth + 1) : c;
       }
     }
   }
@@ -247,7 +276,13 @@ function mergeSchemaMetaInPlace(target: SchemaMeta, next: SchemaMeta): SchemaMet
 export function mergeSchemaMeta(
   base: SchemaMeta | null | undefined,
   next: SchemaMeta | null | undefined,
+  depth = 0,
 ): SchemaMeta | null {
+  if (depth > MaxNestingDepth) {
+    throw new Error(
+      `omnibuf: SchemaMeta merge nesting depth ${depth} exceeds MaxNestingDepth (${MaxNestingDepth})`,
+    );
+  }
   if (!next) return base ?? null;
   const nextHasFields = hasAnyOwnKey(next.fields);
   const nextHasChildren = hasAnyOwnKey(next.children);
@@ -260,7 +295,7 @@ export function mergeSchemaMeta(
     if (nextHasChildren) {
       cp.children = {};
       for (const [k, c] of Object.entries(next.children!)) {
-        const mergedChild = mergeSchemaMeta(null, c);
+        const mergedChild = mergeSchemaMeta(null, c, depth + 1);
         if (mergedChild) cp.children[Number(k)] = mergedChild;
       }
     }
@@ -280,7 +315,7 @@ export function mergeSchemaMeta(
     if (nextHasChildren) {
       for (const [k, c] of Object.entries(next.children!)) {
         const numK = Number(k);
-        const mergedChild = mergeSchemaMeta(out.children[numK], c);
+        const mergedChild = mergeSchemaMeta(out.children[numK], c, depth + 1);
         if (mergedChild) out.children[numK] = mergedChild;
       }
     }

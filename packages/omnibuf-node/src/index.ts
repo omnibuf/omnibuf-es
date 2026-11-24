@@ -338,14 +338,24 @@ export function createFrameDecoderStream(options?: { maxFrameBytes?: number }): 
   });
 }
 
+function decodeStrictHex(text: string): Uint8Array {
+  const clean = text.replace(/\s+/g, '');
+  if (clean.length % 2 !== 0) {
+    throw new Error('omnibuf/node: invalid hex string length');
+  }
+  if (clean.length > 0 && !/^[0-9a-fA-F]+$/.test(clean)) {
+    throw new Error('omnibuf/node: invalid hex character in packet file');
+  }
+  return new Uint8Array(Buffer.from(clean, 'hex'));
+}
+
 /**
  * Read an OmniBuf packet from disk (supporting `.obuf` raw binary and `.hex` hex-encoded files).
  */
 export async function readPacketFile(filePath: string): Promise<Uint8Array> {
   if (filePath.endsWith('.hex')) {
     const text = await readFile(filePath, 'utf8');
-    const clean = text.replace(/\s+/g, '');
-    return new Uint8Array(Buffer.from(clean, 'hex'));
+    return decodeStrictHex(text);
   }
   const buf = await readFile(filePath);
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -357,8 +367,7 @@ export async function readPacketFile(filePath: string): Promise<Uint8Array> {
 export function readPacketFileSync(filePath: string): Uint8Array {
   if (filePath.endsWith('.hex')) {
     const text = readFileSync(filePath, 'utf8');
-    const clean = text.replace(/\s+/g, '');
-    return new Uint8Array(Buffer.from(clean, 'hex'));
+    return decodeStrictHex(text);
   }
   const buf = readFileSync(filePath);
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
