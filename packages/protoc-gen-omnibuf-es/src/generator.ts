@@ -225,7 +225,7 @@ function tsTypeForField(f: ResolvedField): string {
     }).replace(' | null', '');
     return `{ [key: string]: ${valTs} }`;
   }
-  let base = 'number';
+  let base: string;
   switch (f.type) {
     case ProtoScalarType.UINT64:
     case ProtoScalarType.INT64:

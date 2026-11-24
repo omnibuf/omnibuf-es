@@ -3,14 +3,14 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: ['**/dist/**', '**/node_modules/**', 'bin/**', 'testdata/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/gen/**', 'bin/**', 'testdata/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
     rules: {
-      'no-useless-assignment': 'off',
-      '@typescript-eslint/no-explicit-any': 'off',
+      'no-useless-assignment': 'error',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

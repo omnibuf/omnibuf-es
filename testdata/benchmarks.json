@@ -1,5 +1,5 @@
 {
-  "runtime": "Node.js v26.13.1",
+  "runtime": "Node.js v26.5.0",
   "platform": "darwin",
   "arch": "arm64",
   "cpu": "Apple M1 Pro",
@@ -11,38 +11,38 @@
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 825,
-          "opsPerSec": 1212788,
+          "nsPerOp": 823,
+          "opsPerSec": 1215210,
           "wireBytes": 366
         },
         {
           "name": "protobufjs",
           "nsPerOp": 1220,
-          "opsPerSec": 819936,
+          "opsPerSec": 819618,
           "wireBytes": 341
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 2114,
-          "opsPerSec": 473099,
+          "nsPerOp": 2156,
+          "opsPerSec": 463854,
           "wireBytes": 341
         },
         {
           "name": "google-protobuf",
-          "nsPerOp": 4339,
-          "opsPerSec": 230472,
+          "nsPerOp": 4610,
+          "opsPerSec": 216897,
           "wireBytes": 341
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 3323,
-          "opsPerSec": 300977,
+          "nsPerOp": 3396,
+          "opsPerSec": 294499,
           "wireBytes": 622
         },
         {
           "name": "JSON",
-          "nsPerOp": 1504,
-          "opsPerSec": 664803,
+          "nsPerOp": 1710,
+          "opsPerSec": 584955,
           "wireBytes": 791
         }
       ]
@@ -53,33 +53,33 @@
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 588,
-          "opsPerSec": 1701362
+          "nsPerOp": 738,
+          "opsPerSec": 1355145
         },
         {
           "name": "protobufjs",
-          "nsPerOp": 1706,
-          "opsPerSec": 586183
+          "nsPerOp": 1714,
+          "opsPerSec": 583281
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 2987,
-          "opsPerSec": 334793
+          "nsPerOp": 3031,
+          "opsPerSec": 329962
         },
         {
           "name": "google-protobuf",
-          "nsPerOp": 2679,
-          "opsPerSec": 373295
+          "nsPerOp": 2761,
+          "opsPerSec": 362176
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 2672,
-          "opsPerSec": 374265
+          "nsPerOp": 2679,
+          "opsPerSec": 373205
         },
         {
           "name": "JSON",
-          "nsPerOp": 1856,
-          "opsPerSec": 538907
+          "nsPerOp": 2248,
+          "opsPerSec": 444804
         }
       ]
     },
@@ -89,33 +89,33 @@
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 240,
-          "opsPerSec": 4159256
+          "nsPerOp": 301,
+          "opsPerSec": 3324451
         },
         {
           "name": "protobufjs",
-          "nsPerOp": 1105,
-          "opsPerSec": 905157
+          "nsPerOp": 1121,
+          "opsPerSec": 891749
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 2828,
-          "opsPerSec": 353559
+          "nsPerOp": 2876,
+          "opsPerSec": 347671
         },
         {
           "name": "google-protobuf",
-          "nsPerOp": 2553,
-          "opsPerSec": 391724
+          "nsPerOp": 2603,
+          "opsPerSec": 384158
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 2562,
-          "opsPerSec": 390393
+          "nsPerOp": 2580,
+          "opsPerSec": 387551
         },
         {
           "name": "JSON",
-          "nsPerOp": 1690,
-          "opsPerSec": 591770
+          "nsPerOp": 2107,
+          "opsPerSec": 474689
         }
       ]
     },
@@ -125,33 +125,33 @@
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 1138,
-          "opsPerSec": 878900
+          "nsPerOp": 1218,
+          "opsPerSec": 820973
         },
         {
           "name": "protobufjs",
-          "nsPerOp": 3057,
-          "opsPerSec": 327100
+          "nsPerOp": 3084,
+          "opsPerSec": 324212
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 5256,
-          "opsPerSec": 190268
+          "nsPerOp": 5356,
+          "opsPerSec": 186716
         },
         {
           "name": "google-protobuf",
-          "nsPerOp": 7214,
-          "opsPerSec": 138617
+          "nsPerOp": 7363,
+          "opsPerSec": 135820
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 5895,
-          "opsPerSec": 169639
+          "nsPerOp": 6057,
+          "opsPerSec": 165090
         },
         {
           "name": "JSON",
-          "nsPerOp": 2633,
-          "opsPerSec": 379728
+          "nsPerOp": 3085,
+          "opsPerSec": 324198
         }
       ]
     },
@@ -161,38 +161,38 @@
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 4003,
-          "opsPerSec": 249840,
+          "nsPerOp": 4026,
+          "opsPerSec": 248361,
           "wireBytes": 39256
         },
         {
           "name": "protobufjs",
-          "nsPerOp": 10498,
-          "opsPerSec": 95260,
+          "nsPerOp": 10957,
+          "opsPerSec": 91267,
           "wireBytes": 39227
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 18364,
-          "opsPerSec": 54455,
+          "nsPerOp": 17923,
+          "opsPerSec": 55794,
           "wireBytes": 39227
         },
         {
           "name": "google-protobuf",
-          "nsPerOp": 12197,
-          "opsPerSec": 81991,
+          "nsPerOp": 11758,
+          "opsPerSec": 85050,
           "wireBytes": 39227
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 91321,
-          "opsPerSec": 10950,
+          "nsPerOp": 88524,
+          "opsPerSec": 11296,
           "wireBytes": 39504
         },
         {
           "name": "JSON",
-          "nsPerOp": 19403,
-          "opsPerSec": 51537,
+          "nsPerOp": 32011,
+          "opsPerSec": 31239,
           "wireBytes": 39669
         }
       ]
@@ -203,33 +203,33 @@
       "results": [
         {
           "name": "OmniBuf",
-          "nsPerOp": 4877,
-          "opsPerSec": 205055
+          "nsPerOp": 4785,
+          "opsPerSec": 208969
         },
         {
           "name": "protobufjs",
-          "nsPerOp": 18574,
-          "opsPerSec": 53838
+          "nsPerOp": 20073,
+          "opsPerSec": 49818
         },
         {
           "name": "@bufbuild/protobuf (protobuf-es)",
-          "nsPerOp": 27760,
-          "opsPerSec": 36023
+          "nsPerOp": 28879,
+          "opsPerSec": 34627
         },
         {
           "name": "google-protobuf",
-          "nsPerOp": 27796,
-          "opsPerSec": 35977
+          "nsPerOp": 29381,
+          "opsPerSec": 34036
         },
         {
           "name": "@msgpack/msgpack",
-          "nsPerOp": 80234,
-          "opsPerSec": 12463
+          "nsPerOp": 80783,
+          "opsPerSec": 12379
         },
         {
           "name": "JSON",
-          "nsPerOp": 22104,
-          "opsPerSec": 45241
+          "nsPerOp": 31103,
+          "opsPerSec": 32151
         }
       ]
     }

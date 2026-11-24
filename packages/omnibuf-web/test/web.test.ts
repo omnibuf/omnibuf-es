@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-function expect(actual: any) {
+function expect(actual: unknown) {
   return {
-    toBe(expected: any) {
+    toBe(expected: unknown) {
       assert.strictEqual(actual, expected);
     },
-    toEqual(expected: any) {
+    toEqual(expected: unknown) {
       assert.deepStrictEqual(actual, expected);
     },
   };

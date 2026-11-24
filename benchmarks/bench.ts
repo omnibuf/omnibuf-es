@@ -479,7 +479,33 @@ function u64Low(v: unknown): number {
   return Number(v) | 0;
 }
 
-function consumeDecodedPeer(m: any): void {
+interface DecodedPeerLike {
+  asn: number;
+  routerId: string;
+  active: boolean;
+  uptimeSec: number | bigint;
+  rssiDbm: number;
+  cpuLoad: number;
+  tags: string[];
+  prefixes: number[];
+  location?: {
+    region: string;
+    datacenter: string;
+    city: string;
+    rack: number;
+    latitude: number;
+    longitude: number;
+  } | null;
+  neighbors: Array<{
+    peerAsn: number;
+    router: string;
+    latencyUs: number;
+    established: boolean;
+  }>;
+  sequence: number | bigint;
+}
+
+function consumeDecodedPeer(m: DecodedPeerLike): void {
   let acc = ((m.asn | 0) + m.routerId.length + (m.active ? 1 : 0)) | 0;
   acc = (acc + u64Low(m.uptimeSec) + (m.rssiDbm | 0) + ((m.cpuLoad * 1000) | 0)) | 0;
   const tags = m.tags;
@@ -657,14 +683,14 @@ const lookupCityResults: BenchResult[] = [
     benchSink = (benchSink + city.length) | 0;
   }),
   runBench('protobufjs', () => {
-    const m = PbjsPeerUpdate.decode(pbjsBytes) as any;
-    const city = m.location?.city as string | undefined;
+    const m = PbjsPeerUpdate.decode(pbjsBytes) as unknown as DecodedPeerLike;
+    const city = m.location?.city;
     if (!city || city.length !== 9) throw new Error('lookup failed');
     benchSink = (benchSink + city.length) | 0;
   }),
   runBench('@bufbuild/protobuf (protobuf-es)', () => {
-    const m = bufFromBinary(BufPeerUpdateDesc, protobufEsBytes) as any;
-    const city = m.location?.city as string | undefined;
+    const m = bufFromBinary(BufPeerUpdateDesc, protobufEsBytes) as unknown as DecodedPeerLike;
+    const city = m.location?.city;
     if (!city || city.length !== 9) throw new Error('lookup failed');
     benchSink = (benchSink + city.length) | 0;
   }),
@@ -675,8 +701,8 @@ const lookupCityResults: BenchResult[] = [
     benchSink = (benchSink + city.length) | 0;
   }),
   runBench('@msgpack/msgpack', () => {
-    const m = msgpackDecode(msgpackBytes) as any;
-    const city = m.location?.city as string | undefined;
+    const m = msgpackDecode(msgpackBytes) as DecodedPeerLike;
+    const city = m.location?.city;
     if (!city || city.length !== 9) throw new Error('lookup failed');
     benchSink = (benchSink + city.length) | 0;
   }),
@@ -699,16 +725,17 @@ const mutateResults: BenchResult[] = [
     consumeBytes(view.marshal());
   }),
   runBench('protobufjs', () => {
-    const m = PbjsPeerUpdate.decode(pbjsBytes) as any;
+    const m = PbjsPeerUpdate.decode(pbjsBytes) as unknown as DecodedPeerLike;
     if (m.location?.city === 'Frankfurt') {
       m.sequence = Number(m.sequence) + 1;
     }
     consumeBytes(PbjsPeerUpdate.encode(m).finish());
   }),
   runBench('@bufbuild/protobuf (protobuf-es)', () => {
-    const m = bufFromBinary(BufPeerUpdateDesc, protobufEsBytes) as any;
-    if (m.location?.city === 'Frankfurt') {
-      m.sequence = BigInt(m.sequence) + 1n;
+    const m = bufFromBinary(BufPeerUpdateDesc, protobufEsBytes);
+    const rec = m as unknown as DecodedPeerLike;
+    if (rec.location?.city === 'Frankfurt') {
+      rec.sequence = BigInt(rec.sequence) + 1n;
     }
     consumeBytes(bufToBinary(BufPeerUpdateDesc, m));
   }),
@@ -720,7 +747,7 @@ const mutateResults: BenchResult[] = [
     consumeBytes(encodeGoogleProtobuf(m, gpbWriter));
   }),
   runBench('@msgpack/msgpack', () => {
-    const m = msgpackDecode(msgpackBytes) as any;
+    const m = msgpackDecode(msgpackBytes) as DecodedPeerLike;
     if (m.location?.city === 'Frankfurt') {
       m.sequence = Number(m.sequence) + 1;
     }
@@ -780,16 +807,17 @@ const embeddedGrowResults: BenchResult[] = [
     consumeBytes(view.marshal());
   }),
   runBench('protobufjs', () => {
-    const m = PbjsPeerUpdate.decode(manyPbjsBytes) as any;
+    const m = PbjsPeerUpdate.decode(manyPbjsBytes) as unknown as DecodedPeerLike;
     if (m.location?.city === 'Frankfurt') {
       m.location.datacenter = grownDC;
     }
     consumeBytes(PbjsPeerUpdate.encode(m).finish());
   }),
   runBench('@bufbuild/protobuf (protobuf-es)', () => {
-    const m = bufFromBinary(BufPeerUpdateDesc, manyProtobufEsBytes) as any;
-    if (m.location?.city === 'Frankfurt') {
-      m.location.datacenter = grownDC;
+    const m = bufFromBinary(BufPeerUpdateDesc, manyProtobufEsBytes);
+    const rec = m as unknown as DecodedPeerLike;
+    if (rec.location?.city === 'Frankfurt') {
+      rec.location.datacenter = grownDC;
     }
     consumeBytes(bufToBinary(BufPeerUpdateDesc, m));
   }),
@@ -801,7 +829,7 @@ const embeddedGrowResults: BenchResult[] = [
     consumeBytes(encodeGoogleProtobuf(m, gpbWriter));
   }),
   runBench('@msgpack/msgpack', () => {
-    const m = msgpackDecode(manyMsgpackBytes) as any;
+    const m = msgpackDecode(manyMsgpackBytes) as DecodedPeerLike;
     if (m.location?.city === 'Frankfurt') {
       m.location.datacenter = grownDC;
     }

@@ -231,14 +231,17 @@ function is64BitProtoScalar(protoType: number | undefined): boolean {
   );
 }
 
-const compiledProtobufDescCache = new WeakMap<ProtobufDescMessage, MessageSchema<any>>();
+const compiledProtobufDescCache = new WeakMap<
+  ProtobufDescMessage,
+  MessageSchema<Record<string, unknown>>
+>();
 
 /**
  * Compile a `@bufbuild/protobuf` `DescMessage` (v1 or v2) into an OmniBuf `MessageSchema`.
  * Automatically maps `localName` (`camelCase`) and `.proto` `name` (`snake_case`) so both
  * property conventions work on message instances while emitting `.proto` `snake_case` in `Field #0`.
  */
-export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
+export function schemaFromProtobufDesc<T extends object = Record<string, unknown>>(
   desc: ProtobufDescMessage,
   options?: {
     useBigInt?: boolean;
@@ -247,13 +250,13 @@ export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
 ): MessageSchema<T> {
   if (!options) {
     const cached = compiledProtobufDescCache.get(desc);
-    if (cached) return cached;
+    if (cached) return cached as unknown as MessageSchema<T>;
   }
-  const cache = new Map<string, MessageSchema<any>>();
+  const cache = new Map<string, MessageSchema<Record<string, unknown>>>();
   const building = new Set<string>();
   const optionalSubMessages = options?.optionalSubMessages ?? true;
 
-  function build(d: ProtobufDescMessage): MessageSchema<any> {
+  function build(d: ProtobufDescMessage): MessageSchema<Record<string, unknown>> {
     const existing = cache.get(d.typeName);
     if (existing) return existing;
 
@@ -394,7 +397,7 @@ export function schemaFromProtobufDesc<T extends object = Record<string, any>>(
     return compiledSchema;
   }
 
-  return build(desc);
+  return build(desc) as unknown as MessageSchema<T>;
 }
 
 /**
@@ -437,7 +440,7 @@ export function unmarshalProto<T extends object>(
  * matching Go's `protoreflect` codec (`MarshalProtoReflect` / `UnmarshalProtoReflect`) byte-for-byte.
  */
 export class DescriptorRegistry {
-  private readonly schemas = new Map<string, MessageSchema<any>>();
+  private readonly schemas = new Map<string, MessageSchema<Record<string, unknown>>>();
 
   constructor(fds: FileDescriptorSetJSON, options?: { useBigInt?: boolean }) {
     const rawMap = new Map<string, DescriptorProtoJSON>();
@@ -512,7 +515,10 @@ export class DescriptorRegistry {
     };
 
     const building = new Set<string>();
-    const compile = (fullName: string, desc: DescriptorProtoJSON): MessageSchema<any> => {
+    const compile = (
+      fullName: string,
+      desc: DescriptorProtoJSON,
+    ): MessageSchema<Record<string, unknown>> => {
       const existing = this.schemas.get(fullName);
       if (existing) return existing;
 
@@ -617,12 +623,12 @@ export class DescriptorRegistry {
     }
   }
 
-  getSchema(typeName: string): MessageSchema<any> | undefined {
+  getSchema(typeName: string): MessageSchema<Record<string, unknown>> | undefined {
     const clean = typeName.replace(/^\./, '');
     return this.schemas.get(clean);
   }
 
-  getSchemaOrThrow(typeName: string): MessageSchema<any> {
+  getSchemaOrThrow(typeName: string): MessageSchema<Record<string, unknown>> {
     const s = this.getSchema(typeName);
     if (!s) {
       throw new Error(`omnibuf: message descriptor not found for "${typeName}"`);
@@ -630,12 +636,12 @@ export class DescriptorRegistry {
     return s;
   }
 
-  encode(typeName: string, value: Record<string, any>, options?: MarshalOptions): Uint8Array {
+  encode(typeName: string, value: Record<string, unknown>, options?: MarshalOptions): Uint8Array {
     const schema = this.getSchemaOrThrow(typeName);
     return schema.encode(value, options);
   }
 
-  decode(typeName: string, buf: Uint8Array): Record<string, any> {
+  decode(typeName: string, buf: Uint8Array): Record<string, unknown> {
     const schema = this.getSchemaOrThrow(typeName);
     return schema.decode(buf);
   }

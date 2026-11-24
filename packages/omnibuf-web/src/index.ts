@@ -457,8 +457,8 @@ export function inspectPacket(packet: Uint8Array): PacketInspection {
     const wireType = Number(rawTag & 0x0fn);
     const tagEnd = pos + tn;
 
-    let valEnd = tagEnd;
-    let previewValue: unknown = null;
+    let valEnd: number;
+    let previewValue: unknown;
     const fieldName =
       fieldNumber === 0
         ? '_schema'

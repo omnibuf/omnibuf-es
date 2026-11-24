@@ -4,7 +4,6 @@ import {
   type BinaryReadOptions,
   type BinaryWriteOptions,
   type MarshalOptions,
-  type MessageInitShape,
   type MessageShape,
 } from './schema.js';
 import {
@@ -20,8 +19,8 @@ export type EncodeOptions = BinaryWriteOptions;
  * Schema input accepted by `create`, `toBinary`, `fromBinary`, `mergeFromBinary`, `clone`, `equals`, `clearField`.
  * Works with OmniBuf `MessageSchema<T>`, `@bufbuild/protobuf` `DescMessage` / `GenMessage<T>`, or `@omnibufMessage` classes.
  */
-export type SchemaInput<T extends object = Record<string, any>> =
-  MessageSchema<T> | ProtobufDescMessage | (new (...args: any[]) => T);
+export type SchemaInput<T extends object = Record<string, unknown>> =
+  MessageSchema<T> | ProtobufDescMessage | (new (...args: never[]) => T);
 
 function resolveSchema<T extends object>(schema: SchemaInput<T>): MessageSchema<T> {
   if (schema instanceof MessageSchema) {
@@ -54,12 +53,25 @@ function resolveSchema<T extends object>(schema: SchemaInput<T>): MessageSchema<
  * - If `init` is already a message of `schema` (`isMessage(init, schema)`), returns `init` directly without cloning.
  * - Recursively converts nested message initializers.
  */
-export function create<S extends SchemaInput<any>>(
+export function create<T extends object, N extends string = string>(
+  schema: MessageSchema<T, N>,
+  init?: Partial<T> & Record<string, unknown>,
+): T;
+export function create<S extends ProtobufDescMessage>(
   schema: S,
-  init?: MessageInitShape<S>,
-): MessageShape<S> {
+  init?: Record<string, unknown>,
+): MessageShape<S>;
+export function create<T extends object>(
+  schema: new (...args: never[]) => T,
+  init?: Partial<T> & Record<string, unknown>,
+): T;
+export function create<T extends object>(
+  schema: SchemaInput<T>,
+  init?: Partial<T> & Record<string, unknown>,
+): T;
+export function create(schema: SchemaInput<object>, init?: Record<string, unknown>): unknown {
   const resolved = resolveSchema(schema);
-  return resolved.create(init) as MessageShape<S>;
+  return resolved.create(init);
 }
 
 const DEFAULT_WRITE_OPTIONS: BinaryWriteOptions = {
@@ -121,15 +133,15 @@ export function mergeFromBinary<T extends object>(
   options?: BinaryReadOptions,
 ): T {
   const resolved = resolveSchema<T>(schema);
-  const targetAny = target as any;
+  const targetRecord = target as { $typeName?: unknown };
   if (
-    targetAny &&
-    typeof targetAny.$typeName === 'string' &&
-    targetAny.$typeName !== resolved.typeName &&
-    targetAny.$typeName !== resolved.shortName
+    targetRecord &&
+    typeof targetRecord.$typeName === 'string' &&
+    targetRecord.$typeName !== resolved.typeName &&
+    targetRecord.$typeName !== resolved.shortName
   ) {
     throw new Error(
-      `omnibuf: cannot merge ${resolved.typeName} into foreign message ${targetAny.$typeName}`,
+      `omnibuf: cannot merge ${resolved.typeName} into foreign message ${targetRecord.$typeName}`,
     );
   }
   return resolved.decode(bytes, target, 0, {
@@ -207,7 +219,7 @@ function isProtobufDesc(val: unknown): val is ProtobufDescMessage {
     'typeName' in val &&
     'fields' in val &&
     Array.isArray((val as ProtobufDescMessage).fields) &&
-    typeof (val as any).encode !== 'function'
+    typeof (val as { encode?: unknown }).encode !== 'function'
   );
 }
 
@@ -237,13 +249,15 @@ export function marshal<T extends object>(
   if (isProtobufDesc(msgOrSchema)) {
     return marshalProto(msgOrSchema, msgOrOptions as T, maybeOptions);
   }
-  const instance = msgOrSchema as any;
+  const instance = msgOrSchema as T & {
+    marshalOmniBuf?: (options?: MarshalOptions) => Uint8Array;
+  };
   const options = msgOrOptions as MarshalOptions | undefined;
   if (typeof instance.marshalOmniBuf === 'function') {
     return instance.marshalOmniBuf(options);
   }
   if (instance.constructor) {
-    const schema = getClassSchema<T>(instance.constructor);
+    const schema = getClassSchema<T>(instance.constructor as new (...args: never[]) => T);
     if (schema) {
       return schema.encode(instance, options);
     }
@@ -284,7 +298,7 @@ export function marshalDeterministic<T extends object>(
  */
 export function unmarshal<T extends object>(
   buf: Uint8Array,
-  target: MessageSchema<T> | ProtobufDescMessage | OmniBufCodec<T> | (new (...args: any[]) => T),
+  target: MessageSchema<T> | ProtobufDescMessage | OmniBufCodec<T> | (new (...args: never[]) => T),
 ): T {
   if (isMessageSchema<T>(target)) {
     return target.decode(buf);

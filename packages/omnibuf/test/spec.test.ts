@@ -2,12 +2,41 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import {
   Encoder,
-  defineMessage,
-  decodeBlind,
+  MaxNestingDepth,
+  WireArray,
+  WireBoolFalse,
+  WireMap,
+  WireString,
+  WireSubMsg,
+  WireUint,
+  activeOneofSlice,
   concatMessages,
-  getStringCodec,
+  countedArrLen,
+  decodeBlind,
   decodeVarintBigInt,
+  defineMessage,
+  encodeField0SchemaMeta,
+  getStringCodec,
+  indexTopLevelFields,
+  locateField,
+  nextContainerField,
+  readSubMsg,
+  readSubMsgMerged,
+  readTypedMap,
+  spliceFields,
+  stringifyBlindJSON,
+  validateMessage,
 } from '../src/index.js';
+
+function findSubsequence(haystack: Uint8Array, needle: Uint8Array): number {
+  outer: for (let i = 0; i <= haystack.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (haystack[i + j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
 
 it('matches the section 9 annotated packet', () => {
   const enc = new Encoder();
@@ -191,23 +220,28 @@ it('preserves declared field names in Field #0 up to depth 32 for recursive sche
         : { label: `depth_${d}`, left: null, right: current };
   }
 
+  interface BlindTreeNode {
+    node_label?: string;
+    left_branch?: BlindTreeNode;
+    right_branch?: BlindTreeNode;
+  }
   const packet = TreeSchema.encode(current, { selfDescribing: true, deterministic: true });
-  const blind = decodeBlind(packet) as any;
+  const blind = decodeBlind(packet) as BlindTreeNode;
 
-  let cursor = blind;
+  let cursor: BlindTreeNode | undefined = blind;
   for (let d = 0; d < 16; d++) {
-    assert.equal(cursor.node_label, `depth_${d}`);
-    cursor = d % 2 === 0 ? cursor.left_branch : cursor.right_branch;
+    assert.equal(cursor?.node_label, `depth_${d}`);
+    cursor = d % 2 === 0 ? cursor?.left_branch : cursor?.right_branch;
     assert.ok(cursor, `missing branch at depth ${d}`);
   }
-  assert.equal(cursor.node_label, 'leaf_16');
+  assert.equal(cursor?.node_label, 'leaf_16');
 });
 
 it('emits exact 64-bit bigints and -0 in stringifyBlindJSON even when JSON.rawJSON is unavailable', async () => {
-  const { stringifyBlindJSON } = await import('../src/index.js');
-  const origRawJSON = (JSON as any).rawJSON;
+  const jsonObj = JSON as JSON & { rawJSON?: unknown };
+  const origRawJSON = jsonObj.rawJSON;
   try {
-    (JSON as any).rawJSON = undefined;
+    jsonObj.rawJSON = undefined;
     const json = stringifyBlindJSON({
       max_int64: 9223372036854775807n,
       min_int64: -9223372036854775808n,
@@ -219,7 +253,7 @@ it('emits exact 64-bit bigints and -0 in stringifyBlindJSON even when JSON.rawJS
       '{"max_int64":9223372036854775807,"min_int64":-9223372036854775808,"neg_zero":-0,"nested":[18446744073709551615]}',
     );
   } finally {
-    (JSON as any).rawJSON = origRawJSON;
+    jsonObj.rawJSON = origRawJSON;
   }
 });
 
@@ -291,8 +325,16 @@ it('supports real @bufbuild/protobuf v2 descriptors with oneofs, proto3_optional
   const TreeNodeDesc = registry.getMessage('omnibuf.test.TreeNode')!;
   assert.ok(TreeNodeDesc);
 
+  interface TreeNodeMsg {
+    $typeName?: string;
+    id?: number;
+    optWeight?: number;
+    payload?: { case: string | undefined; value?: unknown };
+    parent?: TreeNodeMsg | null;
+  }
+
   // 1. Recursive create() does not infinite-loop; oneof defaults to { case: undefined }; optWeight is undefined
-  const emptyNode = create(TreeNodeDesc) as any;
+  const emptyNode = create(TreeNodeDesc) as TreeNodeMsg;
   assert.equal(emptyNode.$typeName, 'omnibuf.test.TreeNode');
   assert.deepEqual(emptyNode.payload, { case: undefined });
   assert.equal(emptyNode.optWeight, undefined);
@@ -307,20 +349,20 @@ it('supports real @bufbuild/protobuf v2 descriptors with oneofs, proto3_optional
       id: 2,
       payload: { case: 'textVal', value: 'root-payload' },
     },
-  } as any) as any;
+  }) as TreeNodeMsg;
 
   const bytes = toBinary(TreeNodeDesc, zeroWeightNode, {
     deterministic: true,
     selfDescribing: true,
   });
-  const decoded = fromBinary<any>(TreeNodeDesc, bytes);
+  const decoded = fromBinary<TreeNodeMsg>(TreeNodeDesc, bytes);
 
   assert.equal(decoded.id, 1);
   assert.equal(decoded.optWeight, 0);
   assert.deepEqual(decoded.payload, { case: 'intVal', value: 9007199254740993n });
-  assert.equal(decoded.parent.id, 2);
-  assert.deepEqual(decoded.parent.payload, { case: 'textVal', value: 'root-payload' });
-  assert.equal(decoded.parent.optWeight, undefined);
+  assert.equal(decoded.parent?.id, 2);
+  assert.deepEqual(decoded.parent?.payload, { case: 'textVal', value: 'root-payload' });
+  assert.equal(decoded.parent?.optWeight, undefined);
   assert.equal(equals(TreeNodeDesc, zeroWeightNode, decoded), true);
 
   // 3. Cloning & clearing oneof and explicit presence fields
@@ -335,7 +377,7 @@ it('supports real @bufbuild/protobuf v2 descriptors with oneofs, proto3_optional
   // 4. Switching oneof case via mergeFromBinary replaces previous case
   const patch = toBinary(TreeNodeDesc, {
     payload: { case: 'textVal', value: 'overridden' },
-  } as any);
+  });
   mergeFromBinary(TreeNodeDesc, cloned, patch);
   assert.deepEqual(cloned.payload, { case: 'textVal', value: 'overridden' });
 });
@@ -498,20 +540,20 @@ it('differential equivalence across MessageSchema, DescriptorRegistry, Opaque re
       kinds: [-5],
       pick: { case: 'pickSub', value: { a: 10, tags: ['x'] } },
       kindMap: { k1: -5 },
-    } as any,
+    },
     { selfDescribing: true },
   );
   const p2 = RecordSchema.encode({
     kind: -5,
     pick: { case: 'pickStr', value: 'middle' },
-  } as any);
+  });
   const p3 = RecordSchema.encode(
     {
       kind: -5,
       kinds: [7],
       pick: { case: 'pickSub', value: { a: 99, tags: ['y'] } },
       kindMap: { k2: 7 },
-    } as any,
+    },
     { selfDescribing: true },
   );
 
@@ -520,10 +562,17 @@ it('differential equivalence across MessageSchema, DescriptorRegistry, Opaque re
   combined.set(p2, p1.length);
   combined.set(p3, p1.length + p2.length);
 
+  interface DiffRecordShape {
+    kind: number;
+    kinds: number[];
+    kindMap: Record<string, number>;
+    pick: { case: string; value: { a: number; tags: string[] } };
+  }
+
   // Path 1: MessageSchema.decode
-  const decodedSchema = RecordSchema.decode(combined) as any;
+  const decodedSchema = RecordSchema.decode(combined) as unknown as DiffRecordShape;
   // Path 2: DescriptorRegistry.decode
-  const decodedReg = reg.decode('diff.Record', combined) as any;
+  const decodedReg = reg.decode('diff.Record', combined) as unknown as DiffRecordShape;
 
   assert.equal(decodedSchema.kind, -5);
   assert.deepEqual(decodedSchema.kinds, [-5, 7]);
@@ -550,12 +599,12 @@ it('differential equivalence across MessageSchema, DescriptorRegistry, Opaque re
     SubSchema.decode(sub, target, 0, { merge }),
   );
   assert.equal(okSub, true);
-  assert.equal((opaqueSub as any).a, 99);
-  assert.deepEqual((opaqueSub as any).tags, ['y']);
+  assert.equal((opaqueSub as { a?: number }).a, 99);
+  assert.deepEqual((opaqueSub as { tags?: string[] }).tags, ['y']);
   assert.equal(readString(combined, 3)[0], 'middle'); // raw locateField sees superseded field 3, which is why activeOneofSlice is required
 
   // Path 4: Blind decoder (sees signed ZigZag varint on wire and merges repeated/maps)
-  const blind = decodeBlind(combined) as any;
+  const blind = decodeBlind(combined) as { kind?: number; kinds?: number[] };
   assert.equal(blind.kind, -5);
   assert.deepEqual(blind.kinds, [-5, 7]);
 });
@@ -655,7 +704,7 @@ it('decodes 1-byte Prefix-Varint odd lengths on submsg and array containers with
   );
 
   // 2. Blind decoder
-  const blind = decodeBlind(packet) as any;
+  const blind = decodeBlind(packet);
   assert.deepEqual(blind, {
     field_1: { field_1: 300 },
     field_2: ['hi'],
@@ -671,7 +720,7 @@ it('decodes 1-byte Prefix-Varint odd lengths on submsg and array containers with
   assert.deepEqual(decoded.subs, [{ id: 300 }, { id: 7 }]);
 });
 
-it('enforces cold-review edge cases for SchemaMeta, decodeBlindJSON, nested arrays, and spliceFields', async () => {
+it('enforces wire edge cases for SchemaMeta, decodeBlindJSON, nested arrays, and spliceFields', async () => {
   const {
     decodeBlindJSON,
     countedArrLen,
@@ -818,4 +867,269 @@ it('enforces cold-review edge cases for SchemaMeta, decodeBlindJSON, nested arra
     0x61,
   ]);
   assert.throws(() => decodeBlind(nestedArrConflict), /changes wire shape/);
+});
+
+it('sorts deterministic string map keys and stringifyBlindJSON object keys by UTF-8 bytes', () => {
+  const kPua = '\uE000_pua'; // UTF-8: EE 80 80 ...
+  const kFullwidth = '！_fullwidth'; // U+FF01, UTF-8: EF BC 81 ...
+  const kAstral = '🚀_astral'; // U+1F680, UTF-8: F0 9F 9A 80 ... (UTF-16: D83D DE80 < E000!)
+
+  const mapInput: Record<string, bigint> = {
+    [kAstral]: 3n,
+    [kFullwidth]: 2n,
+    [kPua]: 1n,
+  };
+
+  const utf8 = new TextEncoder();
+  const bPua = utf8.encode(kPua);
+  const bFullwidth = utf8.encode(kFullwidth);
+  const bAstral = utf8.encode(kAstral);
+
+  // 1. Encoder.writeMapStringUintDeterministic
+  const enc = new Encoder();
+  enc.writeMapStringUintDeterministic(1, mapInput);
+  const encBytes = enc.finish();
+  const encPosPua = findSubsequence(encBytes, bPua);
+  const encPosFullwidth = findSubsequence(encBytes, bFullwidth);
+  const encPosAstral = findSubsequence(encBytes, bAstral);
+  assert.ok(
+    encPosPua >= 0 && encPosFullwidth > encPosPua && encPosAstral > encPosFullwidth,
+    `Encoder deterministic order wrong: pua@${encPosPua}, fullwidth@${encPosFullwidth}, astral@${encPosAstral}`,
+  );
+
+  // 2. MessageSchema deterministic map encoding
+  const MapSchema = defineMessage<{ m: Record<string, bigint> }>('test.Utf8OrderMapMsg', {
+    m: { fieldNum: 1, type: 'map', mapKey: 'string', mapVal: 'uint64', useBigInt: true },
+  });
+  const schemaBytes = MapSchema.encode({ m: mapInput }, { deterministic: true });
+  const schemaPosPua = findSubsequence(schemaBytes, bPua);
+  const schemaPosFullwidth = findSubsequence(schemaBytes, bFullwidth);
+  const schemaPosAstral = findSubsequence(schemaBytes, bAstral);
+  assert.ok(
+    schemaPosPua >= 0 && schemaPosFullwidth > schemaPosPua && schemaPosAstral > schemaPosFullwidth,
+    `MessageSchema deterministic order wrong: pua@${schemaPosPua}, fullwidth@${schemaPosFullwidth}, astral@${schemaPosAstral}`,
+  );
+
+  // 3. stringifyBlindJSON deterministic object key order
+  const json = stringifyBlindJSON(mapInput);
+  const jsonPosPua = json.indexOf(kPua);
+  const jsonPosFullwidth = json.indexOf(kFullwidth);
+  const jsonPosAstral = json.indexOf(kAstral);
+  assert.ok(
+    jsonPosPua >= 0 && jsonPosFullwidth > jsonPosPua && jsonPosAstral > jsonPosFullwidth,
+    `stringifyBlindJSON key order wrong: ${json}`,
+  );
+});
+
+it('decodes WireMap<bool, WireArray(WireUint)> in decodeBlind', () => {
+  const arrFalseEnc = new Encoder();
+  arrFalseEnc.writeUint32Arr(1, [10, 20]);
+  const arrFalsePayload = arrFalseEnc.finish().subarray(1); // strip 1-byte field tag
+
+  const arrTrueEnc = new Encoder();
+  arrTrueEnc.writeUint32Arr(1, [30]);
+  const arrTruePayload = arrTrueEnc.finish().subarray(1);
+
+  const pktEnc = new Encoder();
+  pktEnc.writeTag(1, WireMap);
+  pktEnc.beginContainer();
+  pktEnc.writeByte(WireBoolFalse);
+  pktEnc.writeByte(WireArray);
+  pktEnc.writeRawVarint(2);
+  pktEnc.writeByte(0); // false
+  pktEnc.writeRaw(arrFalsePayload);
+  pktEnc.writeByte(1); // true
+  pktEnc.writeRaw(arrTruePayload);
+  pktEnc.endContainer();
+  const pkt = pktEnc.finish();
+
+  validateMessage(pkt);
+
+  const blind = decodeBlind(pkt);
+  assert.deepEqual(blind, {
+    field_1: {
+      false: [10, 20],
+      true: [30],
+    },
+  });
+});
+
+it('rejects unknown WireString fields containing invalid UTF-8 in validateMessage', () => {
+  const enc = new Encoder();
+  enc.writeTag(99, WireString);
+  enc.writeRawVarint(2);
+  enc.writeRaw(Uint8Array.from([0xff, 0xfe]));
+  const pkt = enc.finish();
+
+  assert.throws(
+    () => validateMessage(pkt),
+    /UTF-8|utf-8|utf8/i,
+    'Expected validateMessage to reject invalid UTF-8 in unknown WireString field #99',
+  );
+});
+
+it('validates Field #0 and invalidates indexTopLevelFields on corrupt or truncated packets', () => {
+  // 1. Invalid Field #0 wire type (field 0, WireUint) followed by valid field #1
+  const badF0 = Uint8Array.from([0x01, 0x03, 0x21, 0x05]);
+  assert.equal(indexTopLevelFields(badF0).size, 0);
+
+  // 2. Corrupt Field #0 SchemaMeta payload followed by valid field #1
+  const corruptF0 = new Encoder();
+  corruptF0.writeTag(0, WireSubMsg);
+  corruptF0.writeRawVarint(2);
+  corruptF0.writeRaw(Uint8Array.from([0x21, 0x00])); // truncated varint inside Field #0
+  corruptF0.writeUint(1, 42);
+  assert.equal(indexTopLevelFields(corruptF0.finish()).size, 0);
+
+  // 3. Valid field #1 followed by truncated trailing field #2
+  const validEnc = new Encoder();
+  validEnc.writeUint(1, 7);
+  const valid = validEnc.finish();
+  const truncated = new Uint8Array(valid.length + 1);
+  truncated.set(valid, 0);
+  truncated[valid.length] = 0x41; // field #2 WireUint tag with missing value
+  assert.equal(indexTopLevelFields(truncated).size, 0);
+});
+
+it('enforces MaxNestingDepth in countedArrLen, readTypedMap, and spliceFields', () => {
+  // Build a chain of nested submessages of depth 31: inside a WireArray (depth 1 -> elem depth 2),
+  // total depth reaches 33 > MaxNestingDepth (32).
+  let inner: Uint8Array = new Uint8Array(0);
+  for (let i = 0; i < MaxNestingDepth - 1; i++) {
+    const e = new Encoder();
+    e.beginSubMsg(1);
+    e.writeRaw(inner);
+    e.endSubMsg();
+    inner = e.finish();
+  }
+  const arrEnc = new Encoder();
+  arrEnc.writeTag(1, WireArray);
+  arrEnc.beginContainer();
+  arrEnc.writeByte(WireSubMsg);
+  arrEnc.writeRawVarint(1);
+  arrEnc.writeRawVarint(inner.length);
+  arrEnc.writeRaw(inner);
+  arrEnc.endContainer();
+  const arrPkt = arrEnc.finish();
+  assert.equal(countedArrLen(arrPkt, 1, WireSubMsg), 0);
+
+  // readTypedMap must rethrow depth errors instead of swallowing them
+  const mapEnc = new Encoder();
+  mapEnc.writeTag(1, WireMap);
+  mapEnc.beginContainer();
+  mapEnc.writeByte(WireString);
+  mapEnc.writeByte(WireSubMsg);
+  mapEnc.writeRawVarint(1);
+  mapEnc.writeRawStringPayload('k');
+  mapEnc.writeRawVarint(0);
+  mapEnc.endContainer();
+  const mapPkt = mapEnc.finish();
+  assert.throws(
+    () =>
+      readTypedMap(mapPkt, 1, 'string', 'submsg', () => {
+        throw new Error('omnibuf: nesting depth 33 exceeds MaxNestingDepth (32)');
+      }),
+    /MaxNestingDepth|nesting depth/i,
+  );
+
+  // spliceFields respects depth parameter
+  const oneLevelEnc = new Encoder();
+  oneLevelEnc.beginSubMsg(1);
+  oneLevelEnc.writeUint(1, 5);
+  oneLevelEnc.endSubMsg();
+  const oneLevelPkt = oneLevelEnc.finish();
+  assert.throws(
+    () =>
+      spliceFields(
+        oneLevelPkt,
+        1 << 2,
+        2,
+        (enc) => enc.writeUint(2, 9),
+        undefined,
+        MaxNestingDepth,
+      ),
+    /nesting depth/i,
+  );
+});
+
+it('validates split submessage boundaries in decodeBlind without rejecting deep valid trees', () => {
+  // Deeply nested message (depth 30) decodes cleanly
+  let cur = new Uint8Array(0);
+  for (let i = 0; i < 30; i++) {
+    const e = new Encoder();
+    if (i === 0) e.writeUint(2, 99);
+    else {
+      e.beginSubMsg(1);
+      e.writeRaw(cur);
+      e.endSubMsg();
+    }
+    cur = e.finish();
+  }
+  const decoded = decodeBlind(cur);
+  assert.ok(decoded && typeof decoded === 'object');
+
+  // Split mid-varint submessage across two occurrences must still be rejected
+  const full = new Encoder();
+  full.writeUint(1, 300); // 2-byte varint value
+  const rawSub = full.finish();
+  const splitEnc = new Encoder();
+  splitEnc.writeTag(1, WireSubMsg);
+  splitEnc.writeRawVarint(rawSub.length - 1);
+  splitEnc.writeRaw(rawSub.subarray(0, rawSub.length - 1));
+  splitEnc.writeTag(1, WireSubMsg);
+  splitEnc.writeRawVarint(1);
+  splitEnc.writeRaw(rawSub.subarray(rawSub.length - 1));
+  assert.throws(() => decodeBlind(splitEnc.finish()));
+});
+
+it('propagates nesting depth across locateField, nextContainerField, readSubMsg, readSubMsgMerged, activeOneofSlice, and readTypedMap', () => {
+  const f0 = encodeField0SchemaMeta({ fields: { 1: 'x' } }, true);
+  const bodyEnc = new Encoder();
+  bodyEnc.writeUint(1, 7);
+  const withF0 = new Uint8Array(f0.length + bodyEnc.bytesView().length);
+  withF0.set(f0, 0);
+  withF0.set(bodyEnc.bytesView(), f0.length);
+
+  // At depth = 0, Field #0 is at depth 1 <= MaxNestingDepth -> valid
+  assert.equal(locateField(withF0, 1, 1 << WireUint, 0).ok, true);
+  assert.ok(activeOneofSlice(withF0, 1, [[1, 1 << WireUint]], 0) !== null);
+
+  // At depth = MaxNestingDepth, Field #0 is at depth 33 > MaxNestingDepth -> rejected
+  assert.equal(locateField(withF0, 1, 1 << WireUint, MaxNestingDepth).ok, false);
+  assert.equal(activeOneofSlice(withF0, 1, [[1, 1 << WireUint]], MaxNestingDepth), null);
+  assert.equal(nextContainerField(withF0, 0, 1, WireSubMsg, 0, MaxNestingDepth).valid, false);
+  assert.equal(readSubMsg(withF0, 1, MaxNestingDepth)[1], false);
+  assert.equal(readSubMsgMerged(withF0, 1, (s) => s, MaxNestingDepth)[1], false);
+
+  // Multi-chunk readSubMsg validates merged chunks at depth + 1
+  const nestedEnc = new Encoder();
+  nestedEnc.beginSubMsg(1);
+  nestedEnc.writeUint(1, 5);
+  nestedEnc.endSubMsg();
+  const nestedChild = nestedEnc.finish();
+  const twoChunks = new Encoder();
+  twoChunks.beginSubMsg(1);
+  twoChunks.writeRaw(nestedChild);
+  twoChunks.endSubMsg();
+  twoChunks.beginSubMsg(1);
+  twoChunks.writeRaw(nestedChild);
+  twoChunks.endSubMsg();
+  const twoChunkPkt = twoChunks.finish();
+  assert.equal(readSubMsg(twoChunkPkt, 1, 0)[1], true);
+  assert.equal(readSubMsg(twoChunkPkt, 1, MaxNestingDepth - 1)[1], false);
+
+  // readTypedMap rejects depth + 1 > MaxNestingDepth
+  const mapEnc = new Encoder();
+  mapEnc.writeTag(1, WireMap);
+  mapEnc.beginContainer();
+  mapEnc.writeByte(WireString);
+  mapEnc.writeByte(WireUint);
+  mapEnc.writeRawVarint(1);
+  mapEnc.writeRawStringPayload('a');
+  mapEnc.writeRawVarint(1);
+  mapEnc.endContainer();
+  assert.throws(
+    () => readTypedMap(mapEnc.finish(), 1, 'string', 'uint32', undefined, MaxNestingDepth),
+    /MaxNestingDepth|nesting depth/i,
+  );
 });

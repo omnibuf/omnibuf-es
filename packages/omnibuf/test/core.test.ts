@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-function expect(actual: any) {
+function expect(actual: unknown) {
   return {
-    toBe(expected: any) {
+    toBe(expected: unknown) {
       assert.strictEqual(actual, expected);
     },
-    toEqual(expected: any) {
+    toEqual(expected: unknown) {
       assert.deepStrictEqual(actual, expected);
     },
     toBeCloseTo(expected: number, precision = 5) {
-      assert.ok(Math.abs(actual - expected) < Math.pow(10, -precision));
+      assert.ok(Math.abs((actual as number) - expected) < Math.pow(10, -precision));
     },
-    toBeInstanceOf(cls: any) {
+    toBeInstanceOf(cls: new (...args: never[]) => unknown) {
       assert.ok(actual instanceof cls);
     },
     not: {
@@ -76,17 +76,28 @@ import {
   readUint32Arr,
   readUintBigInt,
   activeOneofSlice,
+  appendBoolArrBody,
+  appendBytesArrBody,
+  appendEnumArrBody,
+  appendSintArrAutoBody,
+  appendUint32ArrBody,
+  appendUintArrAutoBody,
   countedArrLen,
+  getClassSchema,
   lookupMapStringUint,
   nextContainerField,
   parseArrayHeader,
   parseMapHeader,
+  readBytesView,
   readElem,
   readSubMsgArrDecoded,
   readTypedMap,
   spliceFields,
   subMsgArrLen,
   WireArray,
+  WireBoolFalse,
+  WireBytes,
+  WireFloat32,
   WireMap,
   WireSint,
   WireString,
@@ -97,10 +108,21 @@ import {
   unmarshalProto,
   writeField0SchemaMeta,
   writeVarintAt,
+  type FileDescriptorSetJSON,
   type Message,
   type ProtobufDescMessage,
   type SchemaMeta,
 } from '../src/index.js';
+
+function findSubsequence(haystack: Uint8Array, needle: Uint8Array): number {
+  outer: for (let i = 0; i <= haystack.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (haystack[i + j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
 
 describe('@omnibuf/core - Prefix-Varint & ZigZag primitives', () => {
   it('encodes and decodes Prefix-Varint across 1B, 2B, 4B, and 9B boundaries', () => {
@@ -287,6 +309,149 @@ describe('@omnibuf/core - All 16 wire types & single-pass Encoder / O(1) Readers
     expect(readUint(spliced, 1)).toEqual([99, true]);
     expect(readString(spliced, 2)).toEqual(['spliced-name', true]);
     expect(readString(spliced, 3)).toEqual(['merged', true]);
+  });
+
+  it('retains grown Encoder slabs up to 64 KiB across beginMessage() calls', () => {
+    const enc = new Encoder(8192);
+    const start1 = enc.beginMessage();
+    enc.writeBytes(1, new Uint8Array(40 * 1024));
+    const out1 = enc.endMessage(start1);
+    assert.ok(out1.byteLength > 40 * 1024);
+
+    const grownCap = (enc as unknown as { buf: Uint8Array }).buf.length;
+    assert.ok(grownCap >= 65536, `Expected slab to grow to >=65536, got ${grownCap}`);
+
+    enc.beginMessage();
+    const afterBeginCap = (enc as unknown as { buf: Uint8Array }).buf.length;
+    assert.ok(
+      afterBeginCap >= 65536,
+      `Expected beginMessage() to retain >=65536 slab, got ${afterBeginCap}`,
+    );
+  });
+
+  it('restores destination array length when append*ArrBody encounters a mid-array error', () => {
+    // Bytes array: count=2, elem 0 valid (1B), elem 1 truncated
+    const dstBytes: Uint8Array[] = [Uint8Array.from([9])];
+    const badBytesBody = Uint8Array.from([WireBytes, 0x05, 0x03, 0xaa, 0x05, 0xbb]);
+    assert.equal(appendBytesArrBody(dstBytes, badBytesBody)[1], false);
+    assert.equal(dstBytes.length, 1);
+
+    // Bool array: count=2, elem 0 valid (1), elem 1 invalid (2)
+    const dstBool: boolean[] = [true];
+    const badBoolBody = Uint8Array.from([WireBoolFalse, 0x05, 1, 2]);
+    assert.equal(appendBoolArrBody(dstBool, badBoolBody)[1], false);
+    assert.equal(dstBool.length, 1);
+
+    // Uint32 array: count=2, elem 0 valid, elem 1 truncated 2-byte varint
+    const dstU32: number[] = [7];
+    const badU32Body = Uint8Array.from([WireUint, 0x05, 0x03, 0x02]);
+    assert.equal(appendUint32ArrBody(dstU32, badU32Body)[1], false);
+    assert.equal(dstU32.length, 1);
+
+    // Enum/sint32 array: count=2, elem 0 valid, elem 1 truncated
+    const dstEnum: number[] = [3];
+    const badSintBody = Uint8Array.from([WireSint, 0x05, 0x03, 0x02]);
+    assert.equal(appendEnumArrBody(dstEnum, badSintBody)[1], false);
+    assert.equal(dstEnum.length, 1);
+
+    // UintAuto array
+    const dstUAuto: (number | bigint)[] = [1];
+    assert.equal(appendUintArrAutoBody(dstUAuto, badU32Body)[1], false);
+    assert.equal(dstUAuto.length, 1);
+
+    // SintAuto array
+    const dstSAuto: (number | bigint)[] = [-1];
+    assert.equal(appendSintArrAutoBody(dstSAuto, badSintBody)[1], false);
+    assert.equal(dstSAuto.length, 1);
+  });
+
+  it('rejects fractional field numbers in Encoder fast-path write methods', () => {
+    const enc = new Encoder();
+    assert.throws(() => enc.writeUint(1.5, 42), /invalid field number/);
+    assert.throws(() => enc.writeInt(1.5, -5), /invalid field number/);
+    assert.throws(() => enc.writeBool(1.5, true), /invalid field number/);
+    assert.throws(() => enc.writeFloat32(1.5, 1.0), /invalid field number/);
+    assert.throws(() => enc.writeFloat64(1.5, 1.0), /invalid field number/);
+  });
+
+  it('returns an independent copy from readBytes() while keeping readBytesView() zero-copy', () => {
+    const enc = new Encoder();
+    enc.writeBytes(1, Uint8Array.from([10, 20, 30, 40]));
+    const pkt = enc.finish();
+
+    const [copied, okCopy] = readBytes(pkt, 1);
+    assert.equal(okCopy, true);
+    assert.notEqual(copied.buffer, pkt.buffer);
+    copied[0] = 0xff;
+    assert.equal(readBytes(pkt, 1)[0][0], 10);
+
+    const [view, okView] = readBytesView(pkt, 1);
+    assert.equal(okView, true);
+    assert.equal(view.buffer, pkt.buffer);
+    assert.deepEqual(Array.from(view), [10, 20, 30, 40]);
+  });
+
+  it('shrinks oversized Encoder slabs via abortMessage() on errors in MessageSchema.encode and spliceFields', () => {
+    const enc = new Encoder(8192);
+    const start = enc.beginMessage();
+    enc.writeBytes(1, new Uint8Array(300 * 1024));
+    assert.ok((enc as unknown as { buf: Uint8Array }).buf.length > 256 * 1024);
+    enc.abortMessage(start);
+    assert.equal(enc.bytesView().length, 0);
+    assert.equal((enc as unknown as { buf: Uint8Array }).buf.length, 8192);
+
+    const LargeSchema = defineMessage<{ big: Uint8Array; fail: string }>('test.LargeFail', {
+      big: { fieldNum: 1, type: 'bytes' },
+      fail: { fieldNum: 2, type: 'string' },
+    });
+    const throwingMsg = {
+      big: new Uint8Array(300 * 1024),
+      get fail(): string {
+        throw new Error('boom');
+      },
+    };
+    assert.throws(() => LargeSchema.encode(throwingMsg), /boom/);
+    const okEncoded = LargeSchema.encode({ big: Uint8Array.from([1, 2]), fail: 'ok' });
+    const decoded = LargeSchema.decode(okEncoded);
+    assert.equal(decoded.fail, 'ok');
+    assert.deepEqual(Array.from(decoded.big), [1, 2]);
+
+    const bigEnc = new Encoder();
+    bigEnc.writeBytes(1, new Uint8Array(300 * 1024));
+    const bigRaw = bigEnc.finish();
+    assert.throws(
+      () =>
+        spliceFields(bigRaw, 1 << 1, 2, () => {
+          throw new Error('splice boom');
+        }),
+      /splice boom/,
+    );
+    const smallEnc = new Encoder();
+    smallEnc.writeUint(1, 42);
+    const spliced = spliceFields(smallEnc.finish(), 1 << 1, 2, (e, fn) => {
+      if (fn === 1) e.writeUint(1, 99);
+    });
+    assert.equal(decodeBlind(spliced).field_1, 99);
+  });
+
+  it('preserves exact IEEE-754 binary32 float values in readTypedMap', () => {
+    const expected = Math.fround(0.1);
+    const enc = new Encoder();
+    enc.writeTag(1, WireMap);
+    enc.beginContainer();
+    enc.writeByte(WireString);
+    enc.writeByte(WireFloat32);
+    enc.writeRawVarint(1);
+    enc.writeRawStringPayload('f');
+    const fbuf = new Uint8Array(4);
+    new DataView(fbuf.buffer).setFloat32(0, expected, true);
+    enc.writeRaw(fbuf);
+    enc.endContainer();
+
+    const [m, ok] = readTypedMap<number>(enc.finish(), 1, 'string', 'float32');
+    assert.equal(ok, true);
+    assert.equal(m['f'], expected);
+    assert.notEqual(m['f'], 0.1);
   });
 });
 
@@ -1031,7 +1196,7 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     // JSON-parsed field spec map where '__proto__' is an own enumerable key
     const jsonSpecs = JSON.parse('{"__proto__": {"fieldNum": 1, "type": "submsg"}}');
     Object.getOwnPropertyDescriptor(jsonSpecs, '__proto__')!.value.subSchema = () => ChildSchema;
-    const DangerousSubSchema = defineMessage<Record<string, any>>(
+    const DangerousSubSchema = defineMessage<Record<string, unknown>>(
       'omnibuf.test.DangerousSub',
       jsonSpecs,
     );
@@ -1044,7 +1209,7 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
 
     try {
       const decoded = DangerousSubSchema.decode(subPkt);
-      expect(({} as any).polluted).toBe(undefined);
+      expect(({} as Record<string, unknown>).polluted).toBe(undefined);
       expect(Object.getPrototypeOf(decoded)).toBe(Object.prototype);
       expect(Object.hasOwn(decoded, '__proto__')).toBe(true);
       expect(Object.getOwnPropertyDescriptor(decoded, '__proto__')?.value.polluted).toBe('pwned');
@@ -1059,14 +1224,14 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
         'pwned',
       );
     } finally {
-      delete (Object.prototype as any).polluted;
+      delete (Object.prototype as Record<string, unknown>).polluted;
     }
 
     // Also test WireMap field named '__proto__' with merge: true (cannot pollute Object.prototype)
     const jsonMapSpecs = JSON.parse(
       '{"__proto__": {"fieldNum": 1, "type": "map", "mapKey": "string", "mapVal": "string"}}',
     );
-    const DangerousMapSchema = defineMessage<Record<string, any>>(
+    const DangerousMapSchema = defineMessage<Record<string, unknown>>(
       'omnibuf.test.DangerousMap',
       jsonMapSpecs,
     );
@@ -1082,14 +1247,14 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     const mapPkt = mapEnc.finish();
     try {
       const mergedMap = DangerousMapSchema.decode(mapPkt, undefined, 0, { merge: true });
-      expect(({} as any).pollutedMapKey).toBe(undefined);
+      expect(({} as Record<string, unknown>).pollutedMapKey).toBe(undefined);
       expect(Object.getPrototypeOf(mergedMap)).toBe(Object.prototype);
       expect(Object.hasOwn(mergedMap, '__proto__')).toBe(true);
       expect(Object.getOwnPropertyDescriptor(mergedMap, '__proto__')?.value.pollutedMapKey).toBe(
         'bad',
       );
     } finally {
-      delete (Object.prototype as any).pollutedMapKey;
+      delete (Object.prototype as Record<string, unknown>).pollutedMapKey;
     }
 
     // DescriptorRegistry with a .proto field named '__proto__' must preserve it instead of dropping it
@@ -1195,15 +1360,23 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
         labels: { fieldNum: 2, type: 'map', mapKey: 'string', mapVal: 'uint32' },
       },
     );
-    const NodeSchema: ReturnType<typeof defineMessage<any>> = defineMessage('test.Node', {
-      id: { fieldNum: 1, type: 'uint32' },
-      next: { fieldNum: 2, type: 'submsg', optional: true, subSchema: () => NodeSchema },
-      leaf: { fieldNum: 3, type: 'submsg', optional: true, subSchema: () => LeafSchema },
-      children: { fieldNum: 4, type: 'submsg[]', subSchema: () => NodeSchema },
-    });
+    const NodeSchema: ReturnType<typeof defineMessage<Record<string, unknown>>> = defineMessage(
+      'test.Node',
+      {
+        id: { fieldNum: 1, type: 'uint32' },
+        next: { fieldNum: 2, type: 'submsg', optional: true, subSchema: () => NodeSchema },
+        leaf: { fieldNum: 3, type: 'submsg', optional: true, subSchema: () => LeafSchema },
+        children: { fieldNum: 4, type: 'submsg[]', subSchema: () => NodeSchema },
+      },
+    );
 
     // Build chain of depth 32 with a scalar array at leaf (container depth 33 > 32)
-    let deepArrNode: any = { id: 99, next: null, leaf: { vals: [1], labels: {} }, children: [] };
+    let deepArrNode: Record<string, unknown> = {
+      id: 99,
+      next: null,
+      leaf: { vals: [1], labels: {} },
+      children: [],
+    };
     for (let i = 0; i < 31; i++) {
       deepArrNode = { id: i + 1, next: deepArrNode, leaf: null, children: [] };
     }
@@ -1360,7 +1533,11 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     f0Copy[0] = 0xff;
     expect(FloatSchema.getField0Bytes(true)[0]).toBe(origByte0);
 
-    const dirtyTarget: any = { f: 1, userName: 'old', user_name: 'stale-snake' };
+    const dirtyTarget = { f: 1, userName: 'old', user_name: 'stale-snake' } as {
+      f: number;
+      userName: string;
+      user_name?: string;
+    };
     FloatSchema.decode(FloatSchema.encode({ f: 2, userName: 'fresh' }), dirtyTarget);
     expect(Object.hasOwn(dirtyTarget, 'user_name')).toBe(false);
 
@@ -1436,5 +1613,240 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     expect(Array.from(viewed.single)).toEqual([1, 2, 3, 4]);
     expect(Array.from(viewed.list[1]!)).toEqual([30, 40]);
     expect(Array.from(viewed.dict['k']!)).toEqual([99, 100]);
+  });
+
+  it('decodes absent proto3 sub-messages as null and omits null on encode in DescriptorRegistry', () => {
+    const fds: FileDescriptorSetJSON = {
+      file: [
+        {
+          name: 'outer.proto',
+          package: 'test.proto3sub',
+          syntax: 'proto3',
+          messageType: [
+            {
+              name: 'Inner',
+              field: [{ name: 'val', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' }],
+            },
+            {
+              name: 'Outer',
+              field: [
+                {
+                  name: 'sub',
+                  number: 1,
+                  label: 'LABEL_OPTIONAL',
+                  type: 'TYPE_MESSAGE',
+                  typeName: '.test.proto3sub.Inner',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const registry = new DescriptorRegistry(fds);
+    const decoded = registry.decode('test.proto3sub.Outer', new Uint8Array(0));
+    assert.equal(
+      decoded.sub ?? null,
+      null,
+      `Expected absent proto3 sub-message to decode as null/undefined, got ${JSON.stringify(decoded.sub)}`,
+    );
+
+    const encoded = registry.encode('test.proto3sub.Outer', { sub: null });
+    assert.equal(
+      encoded.byteLength,
+      0,
+      `Expected encoding { sub: null } to produce 0 bytes, got ${encoded.byteLength} bytes`,
+    );
+  });
+
+  it('resolves package-relative sub-message typeName without a leading dot in DescriptorRegistry', () => {
+    const fds: FileDescriptorSetJSON = {
+      file: [
+        {
+          name: 'relative.proto',
+          package: 'test.proto3sub.rel',
+          syntax: 'proto3',
+          messageType: [
+            {
+              name: 'Inner',
+              field: [{ name: 'val', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' }],
+            },
+            {
+              name: 'Outer',
+              field: [
+                {
+                  name: 'sub',
+                  number: 1,
+                  label: 'LABEL_OPTIONAL',
+                  type: 'TYPE_MESSAGE',
+                  typeName: 'Inner',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const registry = new DescriptorRegistry(fds);
+    const encoded = registry.encode('test.proto3sub.rel.Outer', { sub: { val: 42 } });
+    assert.ok(encoded.byteLength > 0, 'Expected relative typeName sub-message to be encoded');
+    const decoded = registry.decode('test.proto3sub.rel.Outer', encoded);
+    assert.equal((decoded.sub as { val?: number } | undefined)?.val, 42);
+  });
+
+  it('preserves exact UINT64_MAX decimal strings without wrapping to 0n', () => {
+    const U64Msg = defineMessage<{ u: bigint | string; f: bigint | string }>('test.U64Msg', {
+      u: { fieldNum: 1, type: 'uint64', useBigInt: true },
+      f: { fieldNum: 2, type: 'fixed64', useBigInt: true },
+    });
+
+    const wire = U64Msg.encode({
+      u: '18446744073709551615',
+      f: '18446744073709551615',
+    });
+    const decoded = U64Msg.decode(wire);
+    assert.equal(decoded.u, 18446744073709551615n);
+    assert.equal(decoded.f, 18446744073709551615n);
+
+    const varintBuf = new Uint8Array(16);
+    writeVarintAt(varintBuf, 0, '18446744073709551615' as unknown as bigint);
+    const [v] = decodeVarintBigInt(varintBuf, 0);
+    assert.equal(v, 18446744073709551615n);
+  });
+
+  it('preserves exact INT64_MIN + 1 decimal strings without IEEE-754 rounding', () => {
+    const I64Msg = defineMessage<{
+      i: bigint | string;
+      s: bigint | string;
+      sf: bigint | string;
+    }>('test.I64Msg', {
+      i: { fieldNum: 1, type: 'int64', useBigInt: true },
+      s: { fieldNum: 2, type: 'sint64', useBigInt: true },
+      sf: { fieldNum: 3, type: 'sfixed64', useBigInt: true },
+    });
+
+    const wire = I64Msg.encode({
+      i: '-9223372036854775807',
+      s: '-9223372036854775807',
+      sf: '-9223372036854775807',
+    });
+    const decoded = I64Msg.decode(wire);
+    assert.equal(decoded.i, -9223372036854775807n);
+    assert.equal(decoded.s, -9223372036854775807n);
+    assert.equal(decoded.sf, -9223372036854775807n);
+  });
+
+  it('preserves exact IEEE-754 binary32 float32 values in MessageSchema decode', () => {
+    const FloatSchema = defineMessage<{ f13Float32: number }>('test.Float32ExactMsg', {
+      f13Float32: { fieldNum: 13, type: 'float32' },
+    });
+    const expected = Math.fround(0.1);
+    const bytes = FloatSchema.encode({ f13Float32: expected });
+
+    assert.equal(readFloat32(bytes, 13)[0], expected);
+    const decoded = FloatSchema.decode(bytes);
+    assert.equal(decoded.f13Float32, expected);
+  });
+
+  it('isolates subclass @omnibufField Stage 3 decorators from superclass schemas', () => {
+    abstract class AbstractGuard {
+      constructor() {
+        if (new.target === Base) {
+          throw new Error('Base cannot be instantiated without arguments');
+        }
+      }
+    }
+
+    class Base extends AbstractGuard {
+      @omnibufField(1, { type: 'uint32' })
+      baseId = 0;
+    }
+
+    class Sub extends Base {
+      @omnibufField(2, { type: 'string' })
+      subLabel = '';
+    }
+
+    const baseSchema = getClassSchema(Base);
+    const subSchema = getClassSchema(Sub);
+    assert.ok(baseSchema, 'Expected Base schema to be resolved');
+    assert.ok(subSchema, 'Expected Sub schema to be resolved');
+
+    const baseFieldNums = baseSchema.fields.map((f) => f.fieldNum);
+    assert.deepEqual(
+      baseFieldNums,
+      [1],
+      `Expected Base schema not to acquire Sub field #2, got fields [${baseFieldNums.join(', ')}]`,
+    );
+  });
+
+  it('preserves useBigInt on message-valued maps in DescriptorRegistry', () => {
+    const fds: FileDescriptorSetJSON = {
+      file: [
+        {
+          name: 'map_bigint.proto',
+          package: 'test.mapbi',
+          syntax: 'proto3',
+          messageType: [
+            {
+              name: 'Val',
+              field: [{ name: 'n', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' }],
+            },
+            {
+              name: 'Holder',
+              field: [
+                {
+                  name: 'items',
+                  number: 1,
+                  label: 'LABEL_REPEATED',
+                  type: 'TYPE_MESSAGE',
+                  typeName: '.test.mapbi.Holder.ItemsEntry',
+                },
+              ],
+              nestedType: [
+                {
+                  name: 'ItemsEntry',
+                  options: { mapEntry: true },
+                  field: [
+                    { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT64' },
+                    {
+                      name: 'value',
+                      number: 2,
+                      label: 'LABEL_OPTIONAL',
+                      type: 'TYPE_MESSAGE',
+                      typeName: '.test.mapbi.Val',
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const reg = new DescriptorRegistry(fds, { useBigInt: true });
+    const schema = reg.getSchema('test.mapbi.Holder')!;
+    const itemsField = schema.fields.find((f) => f.fieldNum === 1)!;
+    assert.equal(itemsField.useBigInt, true);
+  });
+
+  it('sorts numeric bool map keys consistently with bool wire encoding', () => {
+    const BoolMapSchema = defineMessage<{ m: Map<boolean | number, number> }>('test.BoolMap', {
+      m: { fieldNum: 1, type: 'map', mapKey: 'bool', mapVal: 'uint32' },
+    });
+    const m = new Map<boolean | number, number>([
+      [1, 100],
+      [false, 200],
+    ]);
+    const wire = BoolMapSchema.encode({ m }, { deterministic: true });
+    // After tag + container len + keyWT + valWT + count(2), first key byte must be 0 (false), then 1 (true)
+    const idxFalse = findSubsequence(wire, Uint8Array.from([0x00]));
+    assert.ok(idxFalse >= 0);
+    const decoded = decodeBlind(wire) as { field_1: Record<string, number> };
+    assert.deepEqual(Object.keys(decoded.field_1), ['false', 'true']);
+    assert.equal(decoded.field_1['false'], 200);
+    assert.equal(decoded.field_1['true'], 100);
   });
 });

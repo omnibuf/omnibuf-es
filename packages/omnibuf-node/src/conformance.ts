@@ -85,39 +85,45 @@ export const ConformanceResponseSchema: MessageSchema<ConformanceResponse> =
     json_payload: { fieldNum: 6, type: 'string' },
   });
 
-export const AllTypesSubMsgSchema: MessageSchema<any> = defineMessage('AllTypesSubMsg', {
-  id: { fieldNum: 1, type: 'uint32' },
-  label: { fieldNum: 2, type: 'string' },
-  flag: { fieldNum: 3, type: 'bool' },
-  score: { fieldNum: 4, type: 'sint64', wire: 'sint' },
-});
-
-export const TestAllTypesSchema: MessageSchema<any> = defineMessage('TestAllTypes', {
-  f1_uint32: { fieldNum: 1, type: 'uint32' },
-  f2_uint64: { fieldNum: 2, type: 'uint64' },
-  f3_sint32: { fieldNum: 3, type: 'sint32', wire: 'sint' },
-  f4_sint64: { fieldNum: 4, type: 'sint64', wire: 'sint' },
-  f5_bool: { fieldNum: 5, type: 'bool' },
-  f6_string: { fieldNum: 6, type: 'string' },
-  f7_bytes: { fieldNum: 7, type: 'bytes' },
-  f8_sub_msg: {
-    fieldNum: 8,
-    type: 'submsg',
-    optional: true,
-    subSchema: () => AllTypesSubMsgSchema,
+export const AllTypesSubMsgSchema: MessageSchema<Record<string, unknown>> = defineMessage(
+  'AllTypesSubMsg',
+  {
+    id: { fieldNum: 1, type: 'uint32' },
+    label: { fieldNum: 2, type: 'string' },
+    flag: { fieldNum: 3, type: 'bool' },
+    score: { fieldNum: 4, type: 'sint64', wire: 'sint' },
   },
-  f9_string_arr: { fieldNum: 9, type: 'string[]' },
-  f10_uint32_arr: { fieldNum: 10, type: 'uint32[]' },
-  f11_sub_msg_arr: { fieldNum: 11, type: 'submsg[]', subSchema: () => AllTypesSubMsgSchema },
-  f12_map_str_uint: { fieldNum: 12, type: 'map', mapKey: 'string', mapVal: 'uint64' },
-  f13_float32: { fieldNum: 13, type: 'float32' },
-  f14_float64: { fieldNum: 14, type: 'float64' },
-  f15_fixed32: { fieldNum: 15, type: 'fixed32', wire: 'fixed32' },
-  f16_fixed64: { fieldNum: 16, type: 'fixed64', wire: 'fixed64' },
-  f20_overflow_str: { fieldNum: 20, type: 'string' },
-});
+);
 
-export const TreeNodeSchema: MessageSchema<any> = defineMessage('TreeNode', {
+export const TestAllTypesSchema: MessageSchema<Record<string, unknown>> = defineMessage(
+  'TestAllTypes',
+  {
+    f1_uint32: { fieldNum: 1, type: 'uint32' },
+    f2_uint64: { fieldNum: 2, type: 'uint64' },
+    f3_sint32: { fieldNum: 3, type: 'sint32', wire: 'sint' },
+    f4_sint64: { fieldNum: 4, type: 'sint64', wire: 'sint' },
+    f5_bool: { fieldNum: 5, type: 'bool' },
+    f6_string: { fieldNum: 6, type: 'string' },
+    f7_bytes: { fieldNum: 7, type: 'bytes' },
+    f8_sub_msg: {
+      fieldNum: 8,
+      type: 'submsg',
+      optional: true,
+      subSchema: () => AllTypesSubMsgSchema,
+    },
+    f9_string_arr: { fieldNum: 9, type: 'string[]' },
+    f10_uint32_arr: { fieldNum: 10, type: 'uint32[]' },
+    f11_sub_msg_arr: { fieldNum: 11, type: 'submsg[]', subSchema: () => AllTypesSubMsgSchema },
+    f12_map_str_uint: { fieldNum: 12, type: 'map', mapKey: 'string', mapVal: 'uint64' },
+    f13_float32: { fieldNum: 13, type: 'float32' },
+    f14_float64: { fieldNum: 14, type: 'float64' },
+    f15_fixed32: { fieldNum: 15, type: 'fixed32', wire: 'fixed32' },
+    f16_fixed64: { fieldNum: 16, type: 'fixed64', wire: 'fixed64' },
+    f20_overflow_str: { fieldNum: 20, type: 'string' },
+  },
+);
+
+export const TreeNodeSchema: MessageSchema<Record<string, unknown>> = defineMessage('TreeNode', {
   id: { fieldNum: 1, type: 'uint32' },
   name: { fieldNum: 2, type: 'string' },
   weight: { fieldNum: 3, type: 'sint64', wire: 'sint' },
@@ -127,29 +133,38 @@ export const TreeNodeSchema: MessageSchema<any> = defineMessage('TreeNode', {
   labels: { fieldNum: 7, type: 'map', mapKey: 'string', mapVal: 'uint64' },
 });
 
-export const NestedNICSchema: MessageSchema<any> = defineMessage('NestedNIC', {
+export const NestedNICSchema: MessageSchema<Record<string, unknown>> = defineMessage('NestedNIC', {
   if_index: { fieldNum: 1, type: 'uint32' },
   mac: { fieldNum: 2, type: 'string' },
   ips: { fieldNum: 3, type: 'uint32[]' },
 });
 
-export const NestedServerSchema: MessageSchema<any> = defineMessage('NestedServer', {
-  server_id: { fieldNum: 1, type: 'uint32' },
-  hostname: { fieldNum: 2, type: 'string' },
-  nics: { fieldNum: 3, type: 'submsg[]', subSchema: () => NestedNICSchema },
-});
+export const NestedServerSchema: MessageSchema<Record<string, unknown>> = defineMessage(
+  'NestedServer',
+  {
+    server_id: { fieldNum: 1, type: 'uint32' },
+    hostname: { fieldNum: 2, type: 'string' },
+    nics: { fieldNum: 3, type: 'submsg[]', subSchema: () => NestedNICSchema },
+  },
+);
 
-export const NestedRackSchema: MessageSchema<any> = defineMessage('NestedRack', {
-  rack_id: { fieldNum: 1, type: 'uint32' },
-  zone: { fieldNum: 2, type: 'string' },
-  servers: { fieldNum: 3, type: 'submsg[]', subSchema: () => NestedServerSchema },
-});
+export const NestedRackSchema: MessageSchema<Record<string, unknown>> = defineMessage(
+  'NestedRack',
+  {
+    rack_id: { fieldNum: 1, type: 'uint32' },
+    zone: { fieldNum: 2, type: 'string' },
+    servers: { fieldNum: 3, type: 'submsg[]', subSchema: () => NestedServerSchema },
+  },
+);
 
-export const NestedClusterSchema: MessageSchema<any> = defineMessage('NestedCluster', {
-  cluster_name: { fieldNum: 1, type: 'string' },
-  racks: { fieldNum: 2, type: 'submsg[]', subSchema: () => NestedRackSchema },
-  epoch: { fieldNum: 3, type: 'uint64' },
-});
+export const NestedClusterSchema: MessageSchema<Record<string, unknown>> = defineMessage(
+  'NestedCluster',
+  {
+    cluster_name: { fieldNum: 1, type: 'string' },
+    racks: { fieldNum: 2, type: 'submsg[]', subSchema: () => NestedRackSchema },
+    epoch: { fieldNum: 3, type: 'uint64' },
+  },
+);
 
 /**
  * Built-in `FileDescriptorSetJSON` for `omnibuf.bench.PeerUpdate` and `omnibuf.conformance.TestAllTypes`
@@ -1033,34 +1048,31 @@ export function handleConformanceRequest(
           deterministic: true,
           selfDescribing: Boolean(req.self_describing),
         };
-        let targetSchema: MessageSchema<any>;
+        const roundtrip = <T extends object>(schema: MessageSchema<T>): ConformanceResponse => {
+          let msg: T;
+          try {
+            msg = schema.decode(payload);
+          } catch (err) {
+            resp.parse_error = err instanceof Error ? err.message : String(err);
+            return resp;
+          }
+          try {
+            resp.omnibuf_payload = schema.encode(msg, opts);
+          } catch (err) {
+            resp.serialize_error = err instanceof Error ? err.message : String(err);
+          }
+          return resp;
+        };
         switch (req.message_type) {
           case 'omnibuf.bench.PeerUpdate':
-            targetSchema = PeerUpdateSchema;
-            break;
+            return roundtrip(PeerUpdateSchema);
           case 'omnibuf.conformance.TreeNode':
-            targetSchema = TreeNodeSchema;
-            break;
+            return roundtrip(TreeNodeSchema);
           case 'omnibuf.conformance.NestedCluster':
-            targetSchema = NestedClusterSchema;
-            break;
+            return roundtrip(NestedClusterSchema);
           default:
-            targetSchema = TestAllTypesSchema;
-            break;
+            return roundtrip(TestAllTypesSchema);
         }
-        let msg;
-        try {
-          msg = targetSchema.decode(payload);
-        } catch (err) {
-          resp.parse_error = err instanceof Error ? err.message : String(err);
-          return resp;
-        }
-        try {
-          resp.omnibuf_payload = targetSchema.encode(msg, opts);
-        } catch (err) {
-          resp.serialize_error = err instanceof Error ? err.message : String(err);
-        }
-        return resp;
       }
 
       default:

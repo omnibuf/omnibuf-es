@@ -1,90 +1,18 @@
-# OmniBuf for TypeScript & JavaScript (`omnibuf-es`)
+# omnibuf-es
 
-[![CI](https://github.com/omnibuf/omnibuf-es/actions/workflows/ci.yml/badge.svg)](https://github.com/omnibuf/omnibuf-es/actions/workflows/ci.yml)
-[![Wire Spec: v0.1](https://img.shields.io/badge/spec-v0.1-111111?style=flat&labelColor=111111&color=FF4F18)](https://omnibuf.com/spec)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-[![Website](https://img.shields.io/badge/website-omnibuf.com-111111?style=flat&labelColor=111111&color=D4FF33)](https://omnibuf.com/es)
+[![OmniBuf Spec: v1 DRAFT-1](https://img.shields.io/badge/OmniBuf%20Spec-v1%20DRAFT--1-FF4F18)](https://omnibuf.com/spec)
 
-TypeScript and ECMAScript implementation of **[OmniBuf Wire Specification v0.1](https://omnibuf.com/spec)**.
+TypeScript and JavaScript implementation of the [OmniBuf v1 DRAFT-1 wire specification](https://omnibuf.com/spec). Documentation and benchmarks live at [omnibuf.com/es](https://omnibuf.com/es).
 
-OmniBuf is a binary wire format and Protobuf encoding designed for the hardware instructions and memory hierarchies of modern CPUs:
+## Install
 
-- **Prefix-Varints (`TZCNT` / `Math.clz32`)**: All variable-length integers and tags place their byte-length metadata in the lowest bits of the first byte (`1`, `2`, `4`, or `9` bytes little-endian), eliminating 7-bit continuation loops.
-- **16 Explicit 4-Bit Wire Types (`0..15`)**: Explicit length headers on every variable-length container (`string`, `bytes`, `submsg`, `array`, `map`, `extended`) and distinct scalar fixed/float wire types enable $O(1)$ header-hop field skipping.
-- **Single-Pass Serialization**: Overlong 2-byte Prefix-Varint length reservations allow single-pass forward buffer construction with $O(1)$ 16-bit little-endian backpatching.
-- **Zero-Decode Routing & Splicing**: `locateField` and `spliceFields` inspect or mutate individual fields in a serialized packet and preserve all other bytes in place.
-- **Self-Describing Mode (`Field #0`)**: Optional inline `SchemaMeta` (`Tag = 0x19`) enables schema-less `decodeBlind` / `decodeBlindJSON` inspection.
-
----
-
-## Packages
-
-| Package                                                              | Path                             | Description                                                                                                                                                                                                                                                |
-| :------------------------------------------------------------------- | :------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@omnibuf/core`](./packages/omnibuf)                                | `packages/omnibuf`               | Environment-agnostic wire primitives, single-pass `Encoder`, $O(1)$ header-hopping readers, `decodeBlind`, Tier 2 (`@bufbuild/protobuf` & `FileDescriptorSet`), and Tier 3 (`defineMessage` & `@omnibufMessage` / `@omnibufField` decorators).             |
-| [`@omnibuf/web`](./packages/omnibuf-web)                             | `packages/omnibuf-web`           | Browser & frontend package: `BrowserStringCodec` (`TextEncoder.encodeInto`), Web Streams framing (`createOmniBufEncodeStream`, `createOmniBufDecodeStream`), `Blob`/`Response`/`ArrayBuffer`/`DataURL` helpers, and `inspectPacket` for frontend devtools. |
-| [`@omnibuf/node`](./packages/omnibuf-node)                           | `packages/omnibuf-node`          | Node.js package: `NodeBufferStringCodec`, Node `Readable`/`Writable`/`Transform` stream framing (`writeFrame`, `readFrames`), `.fds.json`/`.fds.pb.gz` descriptor loaders, and the cross-language conformance adapter (`omnibuf-conformance-es`).          |
-| [`@omnibuf/protoc-gen-omnibuf-es`](./packages/protoc-gen-omnibuf-es) | `packages/protoc-gen-omnibuf-es` | Tier 1 `protoc` / `buf` compiler plugin generating single-pass encoders, decoders, and lazy `Opaque<Message>` views with `spliceFields`.                                                                                                                   |
-
----
-
-## `protobuf-es` v2 Message Structure & Runtime API
-
-Messages in `@omnibuf/core` follow the **`protobuf-es` (`@bufbuild/protobuf` v2)** plain-object message design:
-
-- Every message is a plain ECMAScript object implementing `Message<TypeName>` with `$typeName` and optional `$unknown: UnknownField[]`.
-- Field properties use `localName` (`camelCase`, e.g., `routerId`, `uptimeSec`, `rssiDbm`, `cpuLoad`, `peerAsn`, `latencyUs`), while `Field #0` (`SchemaMeta`) on the wire emits `.proto` `snake_case` field names (`router_id`, `uptime_sec`, etc.). Both `camelCase` and `snake_case` accessors work on message instances.
-- Standard `protobuf-es` v2 functions work across Tier 1 generated schemas, Tier 2 `@bufbuild/protobuf` `DescMessage` descriptors, and Tier 3 `defineMessage` / `@omnibufMessage` schemas:
-  - `create(schema, init?)`
-  - `toBinary(schema, message, options?)`
-  - `fromBinary(schema, bytes, options?)`
-  - `mergeFromBinary(schema, target, bytes, options?)`
-  - `isMessage(value, schema?)`
-  - `clone(schema, message)`
-  - `equals(schema, a, b, options?)`
-  - `clearField(schema, message, fieldNameOrNum)`
-
----
-
-## Three Integration Tiers
-
-### Tier 1: Generated Code (`@omnibuf/protoc-gen-omnibuf-es`)
-
-Generates `Message<TypeName>` interfaces, `<Msg>Schema`, `create<Msg>`, single-pass `encode<Msg>`, `decode<Msg>`, and lazy `Opaque<Msg>` wrappers with dirty-bitmask tracking and zero-decode `spliceFields` re-serialization:
-
-```ts
-import { OpaquePeerUpdate, PeerUpdateSchema } from '@omnibuf/node';
-import { create, toBinary, fromBinary } from '@omnibuf/core';
-
-const msg = create(PeerUpdateSchema, {
-  asn: 64512,
-  routerId: 'edge-rtr-fra01.core.backbone.net',
-  active: true,
-});
-const packetBytes = toBinary(PeerUpdateSchema, msg, { selfDescribing: true });
-
-const view = new OpaquePeerUpdate(packetBytes);
-if (view.getActive() && view.getAsn() === 64512) {
-  view.setSequence(99);
-  const forwardedBytes = view.marshal(); // Zero-decode splice of field #11 only
-}
+```bash
+npm install @omnibuf/core
 ```
 
-### Tier 2: Existing Protobuf Types (`@bufbuild/protobuf` or `FileDescriptorSet`)
+For runtime-specific stream framing and string codecs, install `@omnibuf/node` or `@omnibuf/web`.
 
-Use `create`, `toBinary`, `fromBinary`, `marshalProto`, or `unmarshalProto` directly with `@bufbuild/protobuf` `DescMessage` descriptors, or `DescriptorRegistry` with `.fds.json` / `.fds.pb.gz` files:
-
-```ts
-import { create, toBinary, fromBinary } from '@omnibuf/core';
-
-const msg = create(PeerUpdateDesc, { asn: 64512, routerId: 'rtr-01' });
-const bytes = toBinary(PeerUpdateDesc, msg, { selfDescribing: true });
-const decoded = fromBinary(PeerUpdateDesc, bytes);
-```
-
-### Tier 3: Native TypeScript Classes & Schemas (`defineMessage` / `@omnibufMessage`)
-
-No `.proto` files required. Use declarative `defineMessage` schemas or TypeScript `@omnibufMessage` / `@omnibufField` decorators:
+## Quick Usage
 
 ```ts
 import { defineMessage, create, toBinary, fromBinary, type Message } from '@omnibuf/core';
@@ -106,34 +34,20 @@ const packet = toBinary(PeerSchema, peer, { selfDescribing: true });
 const decoded = fromBinary(PeerSchema, packet);
 ```
 
----
+## Implementation Details
 
-## Benchmarks
+- **Packages**: `@omnibuf/core` holds the wire codec and schema runtime; `@omnibuf/node` adds Node stream framing, `Buffer` string codecs, and descriptor loaders; `@omnibuf/web` adds Web Streams framing and `TextEncoder` helpers.
+- **`@bufbuild/protobuf` v2 interop**: Messages follow the plain-object `Message<TypeName>` layout with `create`, `toBinary`, `fromBinary`, `mergeFromBinary`, `clone`, `equals`, and `DescMessage` descriptor support.
+- **Native schemas**: `defineMessage` and `@omnibufMessage` / `@omnibufField` decorators define codecs directly in TypeScript.
+- **Codegen**: `@omnibuf/protoc-gen-omnibuf-es` generates typed schemas, single-pass encoders/decoders, and lazy `Opaque` views backed by `spliceFields`.
+- **Blind decode**: `decodeBlind` and `decodeBlindJson` inspect self-describing `Field #0` packets.
 
-TypeScript and JavaScript benchmark results, methodology, and cross-language comparisons live at [omnibuf.com/benchmarks?lang=es](https://omnibuf.com/benchmarks?lang=es) (all languages at [omnibuf.com/benchmarks](https://omnibuf.com/benchmarks)). Run `just bench` to execute the local suite and update [`testdata/benchmarks.json`](testdata/benchmarks.json).
-
----
-
-## Development & Conformance Testing
+## Development
 
 ```bash
-just install
-just fmt-check
-just lint
-just build
-just test
-just conformance
+just install && just build && just test && just conformance
 ```
-
-The conformance runner and shared corpus are pinned to upstream OmniBuf revision
-`v0.1.0`. The first run downloads and builds the
-runner with Go; subsequent runs reuse the binary cached by revision under `bin/`.
-Set `CONFORMANCE_RUNNER` to an existing runner binary to test another version.
-When updating the suite, update both the revision in `scripts/run-conformance.mjs`
-and `testdata/conformance_corpus.json` from the same upstream commit.
-
----
 
 ## License
 
-Released under the [Apache 2.0 License](./LICENSE).
+Apache-2.0. See [LICENSE](./LICENSE).

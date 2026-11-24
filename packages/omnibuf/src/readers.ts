@@ -425,8 +425,8 @@ export function readElem(arrPayload: Uint8Array, index: number): [elem: Uint8Arr
   let foundElem: Uint8Array = new Uint8Array(0);
   for (let i = 0; i < count; i++) {
     if (pos >= n) return [new Uint8Array(0), false];
-    let elemLen = 0;
-    let en = 0;
+    let elemLen: number;
+    let en: number;
     const b0 = arrPayload[pos]!;
     if ((b0 & 1) !== 0) {
       elemLen = b0 >>> 1;
@@ -732,7 +732,7 @@ export function appendStringArrBody(dst: string[], body: Uint8Array): [out: stri
       return [[], false];
     }
     const sb = body[p]!;
-    let lenNum = 0;
+    let lenNum: number;
     if ((sb & 1) !== 0) {
       lenNum = sb >>> 1;
       p += 1;
@@ -1400,8 +1400,8 @@ export function readSubMsgMerged<T>(
   const n = packet.length;
   const useRange = decodeFn.length >= 4;
   while (pos < n) {
-    let fnum = 0;
-    let wt = 0;
+    let fnum: number;
+    let wt: number;
     const b0 = packet[pos]!;
     if ((b0 & 1) !== 0) {
       fnum = b0 >>> 5;
@@ -1430,7 +1430,7 @@ export function readSubMsgMerged<T>(
 
     if (fnum === fieldNum && wt === WireSubMsg) {
       if (pos >= n) return [null, false];
-      let lenNum = 0;
+      let lenNum: number;
       const lb = packet[pos]!;
       if ((lb & 1) !== 0) {
         lenNum = lb >>> 1;
@@ -1517,8 +1517,8 @@ function readMapEntryPayload(
   p: number,
   wt: number,
   scalarKind: string,
-  decodeSubMsg?: (sub: Uint8Array) => any,
-): [val: any, nextPos: number] {
+  decodeSubMsg?: (sub: Uint8Array) => unknown,
+): [val: unknown, nextPos: number] {
   switch (wt) {
     case WireString: {
       const [len, ln] = decodeVarintBigInt(body, p);
@@ -1651,7 +1651,51 @@ function expectedMapEntryWireType(kind: string): number {
   }
 }
 
-export function readTypedMap<V = any>(
+type MapScalarValueType<T extends string> = T extends 'string'
+  ? string
+  : T extends 'bytes'
+    ? Uint8Array
+    : T extends 'bool'
+      ? boolean
+      : T extends 'uint64' | 'sint64' | 'int64' | 'fixed64' | 'sfixed64'
+        ? number | bigint
+        : T extends
+              | 'uint32'
+              | 'sint32'
+              | 'int32'
+              | 'fixed32'
+              | 'sfixed32'
+              | 'float32'
+              | 'float64'
+              | 'enum'
+          ? number
+          : unknown;
+
+export function readTypedMap<V>(
+  packet: Uint8Array,
+  fieldNum: number,
+  keyType: string,
+  valType: 'submsg',
+  decodeSubMsg: (sub: Uint8Array) => V,
+  depth?: number,
+): [value: Record<string, V>, ok: boolean];
+export function readTypedMap<K extends string>(
+  packet: Uint8Array,
+  fieldNum: number,
+  keyType: string,
+  valType: K,
+  decodeSubMsg?: undefined,
+  depth?: number,
+): [value: Record<string, MapScalarValueType<K>>, ok: boolean];
+export function readTypedMap<V = unknown>(
+  packet: Uint8Array,
+  fieldNum: number,
+  keyType: string,
+  valType: string,
+  decodeSubMsg?: (sub: Uint8Array) => V,
+  depth?: number,
+): [value: Record<string, V>, ok: boolean];
+export function readTypedMap<V = unknown>(
   packet: Uint8Array,
   fieldNum: number,
   keyType: string,
@@ -1704,7 +1748,7 @@ export function readTypedMap<V = any>(
             configurable: true,
           });
         } else {
-          out[kStr] = vVal;
+          out[kStr] = vVal as V;
         }
       }
     } catch (err) {
@@ -1795,8 +1839,8 @@ export function activeOneofSlice(
 
   while (pos < n) {
     const fieldStart = pos;
-    let fnum = 0;
-    let wt = 0;
+    let fnum: number;
+    let wt: number;
     const b0 = packet[pos]!;
     if ((b0 & 1) !== 0) {
       fnum = b0 >>> 5;
@@ -2031,7 +2075,7 @@ export function spliceFields(
 
   while (pos < n) {
     const fieldStart = pos;
-    let tag = 0;
+    let tag: number;
     const b0 = raw[pos]!;
     if ((b0 & 1) !== 0) {
       tag = b0 >>> 1;

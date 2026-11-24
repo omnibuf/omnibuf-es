@@ -1,4 +1,3 @@
-import { validateValue, validateMapTypes } from './validation.js';
 // ============================================================================
 // Tier 3: Annotated Classes & Declarative Type Mapping for Plain Objects/Classes
 // ============================================================================
@@ -23,6 +22,7 @@ import {
   appendUintArrAutoBody,
   countSubMsgArrElems,
 } from './readers.js';
+import { validateMapTypes, validateValue } from './validation.js';
 import {
   MaxNestingDepth,
   WireArray,
@@ -81,17 +81,19 @@ export type Message<TypeName extends string = string> = {
  * Extracts the runtime message type `T` from a `MessageSchema<T>` or `DescMessage`.
  */
 export type MessageShape<S> =
-  S extends MessageSchema<infer T, any>
+  S extends MessageSchema<infer T, string>
     ? T
     : S extends { readonly typeName: infer N extends string }
-      ? Message<N> & Record<string, any>
-      : Record<string, any>;
+      ? Message<N> & Record<string, unknown>
+      : Record<string, unknown>;
 
 /**
  * Extracts the initializer shape accepted by `create(schema, init?)`.
  */
 export type MessageInitShape<S> =
-  S extends MessageSchema<infer T, any> ? Partial<T> & Record<string, any> : Record<string, any>;
+  S extends MessageSchema<infer T, string>
+    ? Partial<T> & Record<string, unknown>
+    : Record<string, unknown>;
 
 /**
  * Options for reading binary OmniBuf payloads (modeled after `@bufbuild/protobuf` `BinaryReadOptions`).
@@ -184,13 +186,13 @@ const RESERVED_OBJECT_PROPERTIES = new Set([
   'valueOf',
 ]);
 
-function getOwnProp(obj: Record<string, any>, key: string): any {
+function getOwnProp(obj: Record<string, unknown>, key: string): unknown {
   const desc = Object.getOwnPropertyDescriptor(obj, key);
   if (!desc) return undefined;
   return desc.get ? desc.get.call(obj) : desc.value;
 }
 
-function setOwnProp(obj: Record<string, any>, key: string, value: any): void {
+function setOwnProp(obj: Record<string, unknown>, key: string, value: unknown): void {
   const desc = Object.getOwnPropertyDescriptor(obj, key);
   if (desc?.set) {
     desc.set.call(obj, value);
@@ -204,7 +206,7 @@ function setOwnProp(obj: Record<string, any>, key: string, value: any): void {
   });
 }
 
-function setFieldOnObj(obj: Record<string, any>, f: CompiledField, value: any): void {
+function setFieldOnObj(obj: Record<string, unknown>, f: CompiledField, value: unknown): void {
   if (f.isProtoKey) {
     setOwnProp(obj, f.propKey, value);
   } else {
@@ -307,7 +309,7 @@ export interface FieldSpec {
   /** Optional `.proto` `oneof` group name (`snake_case`, e.g. `"my_result"`). */
   oneofProtoName?: string;
   /** Nested message schema for `submsg`, `submsg[]`, or `map` with submsg values. Supports lazy thunk for recursive types. */
-  subSchema?: MessageSchema<any> | (() => MessageSchema<any>);
+  subSchema?: MessageSchema<object> | (() => MessageSchema<object>);
   /** Map key type when `type === "map"`. */
   mapKey?: ScalarFieldType;
   /** Map value type when `type === "map"`. */
@@ -362,7 +364,7 @@ export interface CompiledField {
   mapValType?: ScalarFieldType | 'submsg';
   mapKeyWT?: number;
   mapValWT?: number;
-  readonly resolveSubSchema?: () => MessageSchema<any>;
+  readonly resolveSubSchema?: () => MessageSchema<object>;
 }
 
 function resolveEffectiveType(type: FieldType, wire?: WireOverride): FieldType {
@@ -503,10 +505,10 @@ function scalarWireType(t: ScalarFieldType | 'submsg'): number {
 /**
  * Optional generated fast-path hooks attached to a `MessageSchema<T>` by `protoc-gen-omnibuf-es`.
  */
-export interface GeneratedCodecHooks<T extends object = Record<string, any>> {
-  create?: () => T;
-  encode?: (enc: Encoder, msg: Partial<T>, options?: MarshalOptions) => void;
-  decode?: (data: Uint8Array, target?: T, depth?: number, options?: BinaryReadOptions) => T;
+export interface GeneratedCodecHooks<T extends object = Record<string, unknown>> {
+  create?(): T;
+  encode?(enc: Encoder, msg: Partial<T>, options?: MarshalOptions): void;
+  decode?(data: Uint8Array, target?: T, depth?: number, options?: BinaryReadOptions): T;
 }
 
 const sharedEncoder = new Encoder(8192);
@@ -517,7 +519,7 @@ let sharedEncoderInUse = false;
  * Modeled after `@bufbuild/protobuf` v2 `GenMessage<T>` / `DescMessage`.
  */
 export class MessageSchema<
-  T extends object = Record<string, any>,
+  T extends object = Record<string, unknown>,
   TypeName extends string = string,
 > {
   readonly typeName: TypeName;
@@ -532,14 +534,6 @@ export class MessageSchema<
   private readonly factory?: () => T;
   private readonly precomputedDescMap: PropertyDescriptorMap | null;
   private generatedHooks?: GeneratedCodecHooks<T>;
-  private generatedCreate?: () => T;
-  private generatedEncode?: (enc: Encoder, msg: Partial<T>, options?: MarshalOptions) => void;
-  private generatedDecode?: (
-    data: Uint8Array,
-    target?: T,
-    depth?: number,
-    options?: BinaryReadOptions,
-  ) => T;
   private readonly typeNameDesc: PropertyDescriptor;
   private cachedMeta: SchemaMeta | null = null;
   private cachedShallowMeta: SchemaMeta | null = null;
@@ -556,9 +550,6 @@ export class MessageSchema<
     this.shortName = shortMessageName(typeName);
     this.factory = factory;
     this.generatedHooks = generatedHooks;
-    this.generatedCreate = generatedHooks?.create;
-    this.generatedEncode = generatedHooks?.encode;
-    this.generatedDecode = generatedHooks?.decode;
     this.typeNameDesc = {
       value: typeName,
       enumerable: false,
@@ -587,7 +578,7 @@ export class MessageSchema<
       const subOpt = spec.subSchema;
       const resolveSubSchema = subOpt
         ? typeof subOpt === 'function'
-          ? (subOpt as () => MessageSchema<any>)
+          ? (subOpt as () => MessageSchema<object>)
           : () => subOpt
         : undefined;
 
@@ -624,8 +615,12 @@ export class MessageSchema<
       };
 
       if (effectiveType === 'map') {
-        const mk = spec.mapKey ?? (spec as any).mapKeyType ?? 'string';
-        const mv = spec.mapVal ?? (spec as any).mapValType ?? 'uint64';
+        const legacySpec = spec as FieldSpec & {
+          mapKeyType?: ScalarFieldType;
+          mapValType?: ScalarFieldType | 'submsg';
+        };
+        const mk = spec.mapKey ?? legacySpec.mapKeyType ?? 'string';
+        const mv = spec.mapVal ?? legacySpec.mapValType ?? 'uint64';
         cf.mapKeyType = mk;
         cf.mapValType = mv;
         cf.mapKeyWT = scalarWireType(mk);
@@ -692,10 +687,10 @@ export class MessageSchema<
       if (oneof.protoName !== oneof.localName) {
         const ln = oneof.localName;
         descMap[oneof.protoName] = {
-          get(this: any) {
+          get(this: Record<string, unknown>) {
             return this[ln];
           },
-          set(this: any, v: any) {
+          set(this: Record<string, unknown>, v: unknown) {
             this[ln] = v;
           },
           enumerable: false,
@@ -710,8 +705,8 @@ export class MessageSchema<
         const altCaseName = f.name;
         const propKey = f.propKey;
         descMap[propKey] = {
-          get(this: any) {
-            const g = this[oneofKey];
+          get(this: Record<string, unknown>) {
+            const g = this[oneofKey] as { case?: string; value?: unknown } | null | undefined;
             if (
               g &&
               typeof g === 'object' &&
@@ -721,9 +716,9 @@ export class MessageSchema<
             }
             return undefined;
           },
-          set(this: any, v: any) {
+          set(this: Record<string, unknown>, v: unknown) {
             if (v === undefined || v === null) {
-              const g = this[oneofKey];
+              const g = this[oneofKey] as { case?: string; value?: unknown } | null | undefined;
               if (
                 g &&
                 typeof g === 'object' &&
@@ -740,10 +735,10 @@ export class MessageSchema<
         };
         if (f.altKey) {
           descMap[f.altKey] = {
-            get(this: any) {
+            get(this: Record<string, unknown>) {
               return this[propKey];
             },
-            set(this: any, v: any) {
+            set(this: Record<string, unknown>, v: unknown) {
               this[propKey] = v;
             },
             enumerable: false,
@@ -755,10 +750,10 @@ export class MessageSchema<
       if (f.altKey) {
         const pk = f.propKey;
         descMap[f.altKey] = {
-          get(this: any) {
+          get(this: Record<string, unknown>) {
             return this[pk];
           },
-          set(this: any, v: any) {
+          set(this: Record<string, unknown>, v: unknown) {
             this[pk] = v;
           },
           enumerable: false,
@@ -789,7 +784,7 @@ export class MessageSchema<
     return this.byKey.get(fieldNameOrNum);
   }
 
-  private ensureAccessors(obj: Record<string, any>): void {
+  private ensureAccessors(obj: Record<string, unknown>): void {
     if (!('$typeName' in obj)) {
       Object.defineProperty(obj, '$typeName', {
         value: this.typeName,
@@ -806,10 +801,10 @@ export class MessageSchema<
         const ln = oneof.localName;
         const isProtoLn = ln === '__proto__';
         Object.defineProperty(obj, oneof.protoName, {
-          get() {
+          get(this: Record<string, unknown>) {
             return isProtoLn ? getOwnProp(this, ln) : this[ln];
           },
-          set(v: any) {
+          set(this: Record<string, unknown>, v: unknown) {
             if (isProtoLn) {
               setOwnProp(this, ln, v);
             } else {
@@ -830,8 +825,8 @@ export class MessageSchema<
         if (!propDesc || 'value' in propDesc) {
           const initialPlainVal = propDesc?.value;
           Object.defineProperty(obj, f.propKey, {
-            get() {
-              const g = this[oneofKey];
+            get(this: Record<string, unknown>) {
+              const g = this[oneofKey] as { case?: string; value?: unknown } | null | undefined;
               if (
                 g &&
                 typeof g === 'object' &&
@@ -841,9 +836,9 @@ export class MessageSchema<
               }
               return undefined;
             },
-            set(v: any) {
+            set(this: Record<string, unknown>, v: unknown) {
               if (v === undefined || v === null) {
-                const g = this[oneofKey];
+                const g = this[oneofKey] as { case?: string; value?: unknown } | null | undefined;
                 if (
                   g &&
                   typeof g === 'object' &&
@@ -866,10 +861,10 @@ export class MessageSchema<
           const pk = f.propKey;
           const isProtoPk = Boolean(f.isProtoKey);
           Object.defineProperty(obj, f.altKey, {
-            get() {
+            get(this: Record<string, unknown>) {
               return isProtoPk ? getOwnProp(this, pk) : this[pk];
             },
-            set(v: any) {
+            set(this: Record<string, unknown>, v: unknown) {
               if (isProtoPk) {
                 setOwnProp(this, pk, v);
               } else {
@@ -886,10 +881,10 @@ export class MessageSchema<
         const pk = f.propKey;
         const isProtoPk = Boolean(f.isProtoKey);
         Object.defineProperty(obj, f.altKey, {
-          get() {
+          get(this: Record<string, unknown>) {
             return isProtoPk ? getOwnProp(this, pk) : this[pk];
           },
-          set(v: any) {
+          set(this: Record<string, unknown>, v: unknown) {
             if (isProtoPk) {
               setOwnProp(this, pk, v);
             } else {
@@ -908,9 +903,6 @@ export class MessageSchema<
    */
   setGeneratedCodec(hooks: GeneratedCodecHooks<T>): this {
     this.generatedHooks = hooks;
-    this.generatedCreate = hooks.create;
-    this.generatedEncode = hooks.encode;
-    this.generatedDecode = hooks.decode;
     return this;
   }
 
@@ -921,7 +913,10 @@ export class MessageSchema<
    * - Accepts both `camelCase` (`localName`) and `snake_case` (`.proto` `name`) keys in `init`.
    * - Recursively initializes nested message fields, arrays, maps, and `oneof` case/value objects.
    */
-  create(init?: Partial<T> & Record<string, any>, creatingAncestors?: Set<MessageSchema<any>>): T {
+  create(
+    init?: Partial<T> & Record<string, unknown>,
+    creatingAncestors?: Set<MessageSchema<object>>,
+  ): T {
     if (init === undefined && this.generatedHooks?.create) {
       return this.generatedHooks.create();
     }
@@ -930,11 +925,11 @@ export class MessageSchema<
     }
     const hasGenCreate = Boolean(this.generatedHooks?.create);
     if (!hasGenCreate && this.precomputedDescMap !== null) {
-      const obj: any = {};
-      let nextCreating: Set<MessageSchema<any>> | undefined;
+      const obj: Record<string, unknown> = {};
+      let nextCreating: Set<MessageSchema<object>> | undefined;
       if (this.isCyclicOrDeep()) {
         nextCreating = new Set(creatingAncestors);
-        nextCreating.add(this);
+        nextCreating.add(this as MessageSchema<object>);
       }
       for (let i = 0; i < this.oneofs.length; i++) {
         obj[this.oneofs[i]!.localName] = { case: undefined };
@@ -950,18 +945,16 @@ export class MessageSchema<
       return this.applyInitToInstance(obj, init) as T;
     }
 
-    const obj: any = hasGenCreate
-      ? this.generatedHooks!.create!()
-      : this.factory
-        ? this.factory()
-        : {};
+    const obj: Record<string, unknown> = (
+      hasGenCreate ? this.generatedHooks!.create!() : this.factory ? this.factory() : {}
+    ) as Record<string, unknown>;
     if (!hasGenCreate) {
       this.ensureAccessors(obj);
 
-      let nextCreating: Set<MessageSchema<any>> | undefined;
+      let nextCreating: Set<MessageSchema<object>> | undefined;
       if (this.isCyclicOrDeep()) {
         nextCreating = new Set(creatingAncestors);
-        nextCreating.add(this);
+        nextCreating.add(this as MessageSchema<object>);
       }
 
       for (let i = 0; i < this.fields.length; i++) {
@@ -987,21 +980,23 @@ export class MessageSchema<
   }
 
   private applyInitToInstance(
-    obj: Record<string, any>,
-    init: Partial<T> & Record<string, any>,
-  ): Record<string, any> {
+    obj: Record<string, unknown>,
+    init: Partial<T> & Record<string, unknown>,
+  ): Record<string, unknown> {
+    const initRec = init as Record<string, unknown>;
     for (const oneof of this.oneofs) {
       const localVal =
         oneof.localName in Object.prototype
-          ? getOwnProp(init as any, oneof.localName)
-          : (init as any)[oneof.localName];
+          ? getOwnProp(initRec, oneof.localName)
+          : initRec[oneof.localName];
       const protoVal =
         oneof.protoName !== oneof.localName
           ? oneof.protoName in Object.prototype
-            ? getOwnProp(init as any, oneof.protoName)
-            : (init as any)[oneof.protoName]
+            ? getOwnProp(initRec, oneof.protoName)
+            : initRec[oneof.protoName]
           : undefined;
-      const initOneof = localVal ?? protoVal;
+      const initOneof = (localVal ?? protoVal) as
+        { case?: string; value?: unknown } | null | undefined;
       if (initOneof && typeof initOneof === 'object' && 'case' in initOneof) {
         if (initOneof.case === undefined) {
           obj[oneof.localName] = { case: undefined };
@@ -1022,14 +1017,14 @@ export class MessageSchema<
       }
     }
     for (const f of this.fields) {
-      const pVal = f.inObjectProto ? getOwnProp(init as any, f.propKey) : (init as any)[f.propKey];
+      const pVal = f.inObjectProto ? getOwnProp(initRec, f.propKey) : initRec[f.propKey];
       const initVal =
         pVal !== undefined
           ? pVal
           : f.altKey !== undefined
             ? f.altInObjectProto
-              ? getOwnProp(init as any, f.altKey)
-              : (init as any)[f.altKey]
+              ? getOwnProp(initRec, f.altKey)
+              : initRec[f.altKey]
             : undefined;
       if (initVal !== undefined) {
         if (f.oneof) {
@@ -1042,9 +1037,9 @@ export class MessageSchema<
         }
       }
     }
-    if (Array.isArray((init as any).$unknown) && (init as any).$unknown.length > 0) {
+    if (Array.isArray(initRec.$unknown) && initRec.$unknown.length > 0) {
       Object.defineProperty(obj, '$unknown', {
-        value: (init as any).$unknown.map((u: UnknownField) => ({
+        value: (initRec.$unknown as UnknownField[]).map((u: UnknownField) => ({
           no: u.no,
           wireType: u.wireType,
           data: u.data.slice(),
@@ -1064,10 +1059,11 @@ export class MessageSchema<
     msg: T,
     fieldNameOrNum: keyof T | string | number | { readonly number: number },
   ): void {
+    const rec = msg as Record<string, unknown>;
     if (typeof fieldNameOrNum === 'string') {
       const oneofGroup = this.oneofByName.get(fieldNameOrNum);
       if (oneofGroup) {
-        (msg as any)[oneofGroup.localName] = { case: undefined };
+        rec[oneofGroup.localName] = { case: undefined };
         return;
       }
     }
@@ -1076,29 +1072,29 @@ export class MessageSchema<
       throw new Error(`omnibuf: unknown field "${String(fieldNameOrNum)}" on ${this.typeName}`);
     }
     if (f.oneof) {
-      const g = (msg as any)[f.oneof];
+      const g = rec[f.oneof] as { case?: string } | null | undefined;
       if (
         g &&
         typeof g === 'object' &&
         (g.case === f.localName || g.case === f.name || g.case === f.propKey)
       ) {
-        (msg as any)[f.oneof] = { case: undefined };
+        rec[f.oneof] = { case: undefined };
       }
       return;
     }
     if (f.explicitPresence) {
-      setFieldOnObj(msg as any, f, undefined);
+      setFieldOnObj(rec, f, undefined);
       return;
     }
-    setFieldOnObj(msg as any, f, defaultFieldValue(f));
+    setFieldOnObj(rec, f, defaultFieldValue(f));
   }
 
   /**
    * Deep-clones `msg`, including nested messages, arrays, maps, `oneof` groups, `Uint8Array` buffers, and `$unknown` fields.
    */
   clone(msg: T): T {
-    const out: any = this.create();
-    const src = msg as Record<string, any>;
+    const out = this.create() as Record<string, unknown>;
+    const src = msg as Record<string, unknown>;
     for (const f of this.fields) {
       const val = getFieldFromMsg(src, f);
       if (f.oneof) {
@@ -1116,7 +1112,7 @@ export class MessageSchema<
     }
     if (Array.isArray(src.$unknown) && src.$unknown.length > 0) {
       Object.defineProperty(out, '$unknown', {
-        value: src.$unknown.map((u: UnknownField) => ({
+        value: (src.$unknown as UnknownField[]).map((u: UnknownField) => ({
           no: u.no,
           wireType: u.wireType,
           data: u.data.slice(),
@@ -1139,8 +1135,8 @@ export class MessageSchema<
   ): boolean {
     if (a === b) return true;
     if (!a || !b) return false;
-    const ma = a as Record<string, any>;
-    const mb = b as Record<string, any>;
+    const ma = a as Record<string, unknown>;
+    const mb = b as Record<string, unknown>;
     if (ma.$typeName !== undefined && mb.$typeName !== undefined && ma.$typeName !== mb.$typeName) {
       return false;
     }
@@ -1158,8 +1154,8 @@ export class MessageSchema<
       }
     }
     if (options?.unknown) {
-      const ua: UnknownField[] = ma.$unknown ?? [];
-      const ub: UnknownField[] = mb.$unknown ?? [];
+      const ua: UnknownField[] = (ma.$unknown as UnknownField[] | undefined) ?? [];
+      const ub: UnknownField[] = (mb.$unknown as UnknownField[] | undefined) ?? [];
       if (ua.length !== ub.length) return false;
       for (let i = 0; i < ua.length; i++) {
         const xa = ua[i]!;
@@ -1195,9 +1191,9 @@ export class MessageSchema<
     if (this.cachedCyclicOrDeep !== null) {
       return this.cachedCyclicOrDeep;
     }
-    const visiting = new Set<MessageSchema<any>>();
-    const visited = new Set<MessageSchema<any>>();
-    const dfs = (node: MessageSchema<any>, depth: number): boolean => {
+    const visiting = new Set<MessageSchema<object>>();
+    const visited = new Set<MessageSchema<object>>();
+    const dfs = (node: MessageSchema<object>, depth: number): boolean => {
       if (1 + depth * 2 > MaxNestingDepth) return true;
       if (visiting.has(node)) return true;
       if (visited.has(node)) return false;
@@ -1214,7 +1210,7 @@ export class MessageSchema<
       visited.add(node);
       return false;
     };
-    this.cachedCyclicOrDeep = dfs(this, 0);
+    this.cachedCyclicOrDeep = dfs(this as MessageSchema<object>, 0);
     return this.cachedCyclicOrDeep;
   }
 
@@ -1225,8 +1221,8 @@ export class MessageSchema<
    */
   getSchemaMeta(
     depth = 0,
-    msg?: Record<string, any>,
-    ancestors?: Set<MessageSchema<any>>,
+    msg?: Record<string, unknown>,
+    ancestors?: Set<MessageSchema<object>>,
     baseContainerDepth = 1,
   ): SchemaMeta {
     if (depth === 0 && baseContainerDepth === 1 && !msg && this.cachedMeta) {
@@ -1243,9 +1239,9 @@ export class MessageSchema<
     }
     const fieldsMap: Record<number, string> = {};
     const childrenMap: Record<number, SchemaMeta> = {};
-    const pathAncestors = ancestors ?? new Set<MessageSchema<any>>();
+    const pathAncestors = ancestors ?? new Set<MessageSchema<object>>();
     const nextAncestors = new Set(pathAncestors);
-    nextAncestors.add(this);
+    nextAncestors.add(this as MessageSchema<object>);
 
     const schemaDepth = baseContainerDepth + depth * 2;
     for (const f of this.fields) {
@@ -1260,7 +1256,7 @@ export class MessageSchema<
             if (rawVal && typeof rawVal === 'object') {
               childrenMap[f.fieldNum] = sub.getSchemaMeta(
                 depth + 1,
-                rawVal,
+                rawVal as Record<string, unknown>,
                 nextAncestors,
                 baseContainerDepth,
               );
@@ -1403,19 +1399,19 @@ export class MessageSchema<
       } else {
         writeField0SchemaMeta(
           enc,
-          this.getSchemaMeta(0, msg as Record<string, any>, undefined, 1),
+          this.getSchemaMeta(0, msg as Record<string, unknown>, undefined, 1),
           deterministic,
         );
       }
     }
-    if (this.generatedEncode !== undefined && (!selfDescribing || !this.isCyclicOrDeep())) {
-      this.generatedEncode(enc, msg, options);
+    if (this.generatedHooks?.encode !== undefined && (!selfDescribing || !this.isCyclicOrDeep())) {
+      this.generatedHooks.encode(enc, msg, options);
       return;
     }
     const rootCoveredHops = Math.floor((MaxNestingDepth - 2) / 2);
     this.encodeBody(
       enc,
-      msg as Record<string, any>,
+      msg as Record<string, unknown>,
       deterministic,
       writeUnknown,
       selfDescribing,
@@ -1429,7 +1425,7 @@ export class MessageSchema<
    */
   encodeBody(
     enc: Encoder,
-    msg: Record<string, any>,
+    msg: Record<string, unknown>,
     deterministic: boolean,
     writeUnknown = false,
     selfDescribing = false,
@@ -1467,14 +1463,19 @@ export class MessageSchema<
         }
         const subSchema = f.resolveSubSchema?.();
         if (!subSchema) continue;
-        if (f.omitEmpty && !f.oneof && rawVal && subSchema.isEmptyInstance(rawVal)) {
+        if (
+          f.omitEmpty &&
+          !f.oneof &&
+          rawVal &&
+          subSchema.isEmptyInstance(rawVal as Record<string, unknown>)
+        ) {
           continue;
         }
         enc.beginSubMsg(f.fieldNum);
         if (rawVal) {
           subSchema.encodeBody(
             enc,
-            rawVal,
+            rawVal as Record<string, unknown>,
             deterministic,
             writeUnknown,
             selfDescribing,
@@ -1484,7 +1485,7 @@ export class MessageSchema<
         } else if (!f.optional) {
           subSchema.encodeBody(
             enc,
-            subSchema.create(),
+            subSchema.create() as Record<string, unknown>,
             deterministic,
             writeUnknown,
             selfDescribing,
@@ -1522,7 +1523,7 @@ export class MessageSchema<
     }
   }
 
-  isEmptyInstance(msg: Record<string, any>): boolean {
+  isEmptyInstance(msg: Record<string, unknown>): boolean {
     if (!msg) return true;
     for (const f of this.fields) {
       const val = getFieldFromMsg(msg, f);
@@ -1548,15 +1549,19 @@ export class MessageSchema<
     startOffset = 0,
     endOffset = data.length,
   ): T {
-    if (this.generatedDecode !== undefined && startOffset === 0 && endOffset === data.length) {
-      return this.generatedDecode(data, target, depth, options);
+    if (
+      this.generatedHooks?.decode !== undefined &&
+      startOffset === 0 &&
+      endOffset === data.length
+    ) {
+      return this.generatedHooks.decode(data, target, depth, options);
     }
     const maxDepth = options?.recursionLimit ?? MaxNestingDepth;
     const readUnknown = options?.readUnknownFields ?? true;
     if (depth > maxDepth) {
       throw new Error(`omnibuf: nesting depth ${depth} exceeds MaxNestingDepth (${maxDepth})`);
     }
-    const out: Record<string, any> = (target ?? this.create()) as Record<string, any>;
+    const out: Record<string, unknown> = (target ?? this.create()) as Record<string, unknown>;
     if (target) {
       if (this.oneofs.length > 0) {
         this.ensureAccessors(out);
@@ -1567,9 +1572,9 @@ export class MessageSchema<
         for (let i = 0; i < this.oneofs.length; i++) {
           out[this.oneofs[i]!.localName] = { case: undefined };
         }
-        let nextCreating: Set<MessageSchema<any>> | undefined;
+        let nextCreating: Set<MessageSchema<object>> | undefined;
         if (this.isCyclicOrDeep()) {
-          nextCreating = new Set<MessageSchema<any>>([this]);
+          nextCreating = new Set<MessageSchema<object>>([this as MessageSchema<object>]);
         }
         for (let i = 0; i < this.fields.length; i++) {
           const f = this.fields[i]!;
@@ -1598,7 +1603,7 @@ export class MessageSchema<
     let unknownFields: UnknownField[] | null = Array.isArray(out.$unknown) ? out.$unknown : null;
 
     while (pos < n) {
-      let tag = 0;
+      let tag: number;
       const b0 = data[pos]!;
       if ((b0 & 1) !== 0) {
         tag = b0 >>> 1;
@@ -1662,7 +1667,7 @@ export class MessageSchema<
       }
 
       if (f.inObjectProto) {
-        const box: Record<string, any> = Object.create(null);
+        const box: Record<string, unknown> = Object.create(null);
         const cur = getOwnProp(out, f.propKey);
         if (cur !== undefined) {
           box[f.propKey] = cur;
@@ -1709,16 +1714,18 @@ export class MessageSchema<
   }
 }
 
-function getFieldFromMsg(msg: Record<string, any> | null | undefined, f: CompiledField): any {
+function getFieldFromMsg(
+  msg: Record<string, unknown> | null | undefined,
+  f: CompiledField,
+): unknown {
   if (!msg) return undefined;
   if (f.oneof) {
-    const group =
-      msg[f.oneof] ??
+    const group = (msg[f.oneof] ??
       (f.oneofProtoName
         ? f.oneofProtoInObjectProto
           ? getOwnProp(msg, f.oneofProtoName)
           : msg[f.oneofProtoName]
-        : undefined);
+        : undefined)) as { case?: string; value?: unknown } | null | undefined;
     if (group && typeof group === 'object' && 'case' in group) {
       if (group.case === f.localName || group.case === f.name || group.case === f.propKey) {
         return group.value;
@@ -1734,9 +1741,9 @@ function getFieldFromMsg(msg: Record<string, any> | null | undefined, f: Compile
   return undefined;
 }
 
-function coerce64(val: any, useBigInt: boolean, unsigned: boolean): number | bigint {
+function coerce64(val: unknown, useBigInt: boolean, unsigned: boolean): number | bigint {
   if (useBigInt || typeof val === 'string') {
-    const b = toBigInt64Input(val ?? 0);
+    const b = toBigInt64Input((val ?? 0) as number | bigint | string);
     const clamped = unsigned ? BigInt.asUintN(64, b) : BigInt.asIntN(64, b);
     if (useBigInt) return clamped;
     return unsigned
@@ -1760,23 +1767,23 @@ function coerce64(val: any, useBigInt: boolean, unsigned: boolean): number | big
   return Math.trunc(n);
 }
 
-function initFieldValue(f: CompiledField, val: any): unknown {
+function initFieldValue(f: CompiledField, val: unknown): unknown {
   if (val === null || val === undefined) {
     return defaultFieldValue(f);
   }
   if (f.effectiveType === 'submsg') {
     const sub = f.resolveSubSchema?.();
     if (!sub) return val;
-    return sub.create(val);
+    return sub.create(val as Record<string, unknown>);
   }
   if (f.effectiveType === 'submsg[]') {
     const sub = f.resolveSubSchema?.();
     if (!Array.isArray(val)) return [];
-    return sub ? val.map((item) => sub.create(item)) : Array.from(val);
+    return sub ? val.map((item) => sub.create(item as Record<string, unknown>)) : Array.from(val);
   }
   if (f.effectiveType.endsWith('[]')) {
     if (!Array.isArray(val) && !ArrayBuffer.isView(val)) return [];
-    const arr = Array.from(val as ArrayLike<any>);
+    const arr = Array.from(val as ArrayLike<unknown>);
     if (f.effectiveType === 'bytes[]') {
       return arr.map((b) =>
         b instanceof Uint8Array
@@ -1802,15 +1809,15 @@ function initFieldValue(f: CompiledField, val: any): unknown {
     const sub = f.resolveSubSchema?.();
     const isSubMsgVal = f.mapValType === 'submsg' && sub;
     if (val instanceof Map) {
-      const m = new Map();
+      const m = new Map<unknown, unknown>();
       for (const [k, v] of val.entries()) {
-        m.set(k, isSubMsgVal ? sub.create(v) : v);
+        m.set(k, isSubMsgVal ? sub.create(v as Record<string, unknown>) : v);
       }
       return m;
     }
-    const out: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val as Record<string, any>)) {
-      const mapped = isSubMsgVal ? sub.create(v) : v;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      const mapped = isSubMsgVal ? sub.create(v as Record<string, unknown>) : v;
       if (k === '__proto__') {
         Object.defineProperty(out, k, {
           value: mapped,
@@ -1843,25 +1850,27 @@ function initFieldValue(f: CompiledField, val: any): unknown {
   }
 }
 
-function cloneFieldValue(f: CompiledField, val: any): unknown {
+function cloneFieldValue(f: CompiledField, val: unknown): unknown {
   if (val === null || val === undefined) {
     return f.effectiveType === 'submsg' && f.optional ? null : defaultFieldValue(f);
   }
   if (f.effectiveType === 'submsg') {
     const sub = f.resolveSubSchema?.();
-    return sub ? sub.clone(val) : { ...val };
+    return sub ? sub.clone(val as object) : { ...(val as Record<string, unknown>) };
   }
   if (f.effectiveType === 'submsg[]') {
     const sub = f.resolveSubSchema?.();
     if (!Array.isArray(val)) return [];
-    return sub ? val.map((item) => sub.clone(item)) : val.map((x) => ({ ...x }));
+    return sub
+      ? val.map((item) => sub.clone(item as object))
+      : val.map((x) => ({ ...(x as Record<string, unknown>) }));
   }
   if (f.effectiveType === 'bytes') {
     return val instanceof Uint8Array ? val.slice() : new Uint8Array(0);
   }
   if (f.effectiveType === 'bytes[]') {
     return Array.isArray(val)
-      ? val.map((b: Uint8Array) => (b instanceof Uint8Array ? b.slice() : new Uint8Array(0)))
+      ? val.map((b: unknown) => (b instanceof Uint8Array ? b.slice() : new Uint8Array(0)))
       : [];
   }
   if (f.effectiveType.endsWith('[]')) {
@@ -1871,15 +1880,15 @@ function cloneFieldValue(f: CompiledField, val: any): unknown {
     const sub = f.resolveSubSchema?.();
     const isSubMsgVal = f.mapValType === 'submsg' && sub;
     if (val instanceof Map) {
-      const m = new Map();
+      const m = new Map<unknown, unknown>();
       for (const [k, v] of val.entries()) {
-        m.set(k, isSubMsgVal ? sub.clone(v) : v);
+        m.set(k, isSubMsgVal ? sub.clone(v as object) : v);
       }
       return m;
     }
-    const out: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val as Record<string, any>)) {
-      const cloned = isSubMsgVal ? sub.clone(v) : v;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      const cloned = isSubMsgVal ? sub.clone(v as object) : v;
       if (k === '__proto__') {
         Object.defineProperty(out, k, {
           value: cloned,
@@ -1904,7 +1913,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-function scalarValuesEqual(a: any, b: any): boolean {
+function scalarValuesEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (Number.isNaN(a) && Number.isNaN(b)) return true;
   if (
@@ -1925,15 +1934,15 @@ function scalarValuesEqual(a: any, b: any): boolean {
 
 function fieldValuesEqual(
   f: CompiledField,
-  a: any,
-  b: any,
+  a: unknown,
+  b: unknown,
   options?: { unknown?: boolean },
 ): boolean {
   if (f.effectiveType === 'submsg') {
     const sub = f.resolveSubSchema?.();
     if (!a && !b) return true;
     if (!a || !b) return false;
-    return sub ? sub.equals(a, b, options) : a === b;
+    return sub ? sub.equals(a as object, b as object, options) : a === b;
   }
   if (f.effectiveType === 'submsg[]') {
     const sub = f.resolveSubSchema?.();
@@ -1941,7 +1950,7 @@ function fieldValuesEqual(
     const arrB = Array.isArray(b) ? b : [];
     if (arrA.length !== arrB.length) return false;
     for (let i = 0; i < arrA.length; i++) {
-      if (sub && !sub.equals(arrA[i], arrB[i], options)) return false;
+      if (sub && !sub.equals(arrA[i] as object, arrB[i] as object, options)) return false;
     }
     return true;
   }
@@ -1957,24 +1966,24 @@ function fieldValuesEqual(
   if (f.effectiveType === 'map') {
     const sub = f.resolveSubSchema?.();
     const isSubMsgVal = f.mapValType === 'submsg' && sub;
-    const entriesA: [string, any][] =
+    const entriesA: [string, unknown][] =
       a instanceof Map
         ? Array.from(a.entries()).map(([k, v]) => [String(k), v])
         : a && typeof a === 'object'
-          ? Object.entries(a)
+          ? Object.entries(a as Record<string, unknown>)
           : [];
-    const entriesB: Map<string, any> =
+    const entriesB: Map<string, unknown> =
       b instanceof Map
         ? new Map(Array.from(b.entries()).map(([k, v]) => [String(k), v]))
         : b && typeof b === 'object'
-          ? new Map(Object.entries(b))
+          ? new Map(Object.entries(b as Record<string, unknown>))
           : new Map();
     if (entriesA.length !== entriesB.size) return false;
     for (const [k, va] of entriesA) {
       if (!entriesB.has(k)) return false;
       const vb = entriesB.get(k);
       if (isSubMsgVal) {
-        if (!sub.equals(va, vb, options)) return false;
+        if (!sub.equals(va as object, vb as object, options)) return false;
       } else if (!scalarValuesEqual(va, vb)) {
         return false;
       }
@@ -1993,7 +2002,7 @@ function fieldValuesEqual(
  * Checks whether `arg` is a `Message` instance, optionally verifying its `$typeName` matches `schema`.
  * Modeled after `@bufbuild/protobuf` v2 `isMessage(arg, schema?)`.
  */
-export function isMessage<T extends Message<any> = Message>(
+export function isMessage<T extends Message<string> = Message>(
   arg: unknown,
   schema?: { readonly typeName: string; readonly shortName?: string },
 ): arg is T {
@@ -2001,21 +2010,24 @@ export function isMessage<T extends Message<any> = Message>(
     typeof arg !== 'object' ||
     arg === null ||
     !('$typeName' in arg) ||
-    typeof (arg as any).$typeName !== 'string'
+    typeof (arg as { $typeName?: unknown }).$typeName !== 'string'
   ) {
     return false;
   }
   if (schema === undefined) {
     return true;
   }
-  const actualType = (arg as any).$typeName;
+  const actualType = (arg as { $typeName: string }).$typeName;
   return (
     actualType === schema.typeName ||
     (schema.shortName !== undefined && actualType === schema.shortName)
   );
 }
 
-function defaultFieldValue(f: CompiledField, creatingAncestors?: Set<MessageSchema<any>>): unknown {
+function defaultFieldValue(
+  f: CompiledField,
+  creatingAncestors?: Set<MessageSchema<object>>,
+): unknown {
   if (f.explicitPresence) return undefined;
   if (f.effectiveType.endsWith('[]')) return [];
   if (f.effectiveType === 'map') return {};
@@ -2044,16 +2056,16 @@ function defaultFieldValue(f: CompiledField, creatingAncestors?: Set<MessageSche
   }
 }
 
-function isFieldValueEmpty(f: CompiledField, val: any): boolean {
+function isFieldValueEmpty(f: CompiledField, val: unknown): boolean {
   if (val === null || val === undefined) return true;
   if (f.effectiveType.endsWith('[]')) {
     return !Array.isArray(val) && !ArrayBuffer.isView(val)
       ? true
-      : (val as ArrayLike<any>).length === 0;
+      : (val as ArrayLike<unknown>).length === 0;
   }
   if (f.effectiveType === 'map') {
     if (val instanceof Map) return val.size === 0;
-    return Object.keys(val).length === 0;
+    return Object.keys(val as Record<string, unknown>).length === 0;
   }
   switch (f.effectiveType) {
     case 'bool':
@@ -2064,7 +2076,7 @@ function isFieldValueEmpty(f: CompiledField, val: any): boolean {
       return (val as Uint8Array).length === 0;
     case 'submsg': {
       const sub = f.resolveSubSchema?.();
-      return sub ? sub.isEmptyInstance(val) : true;
+      return sub ? sub.isEmptyInstance(val as Record<string, unknown>) : true;
     }
     case 'float32':
     case 'float64':
@@ -2077,7 +2089,7 @@ function isFieldValueEmpty(f: CompiledField, val: any): boolean {
 function encodeFieldValue(
   enc: Encoder,
   f: CompiledField,
-  rawVal: any,
+  rawVal: unknown,
   deterministic: boolean,
   writeUnknown = false,
   selfDescribing = false,
@@ -2094,7 +2106,7 @@ function encodeFieldValue(
       if (typeof v === 'number' && v >= 0 && v <= 9007199254740991) {
         enc.writeUint(fnum, v);
       } else {
-        enc.writeUint(fnum, BigInt.asUintN(64, toBigInt64Input(v)));
+        enc.writeUint(fnum, BigInt.asUintN(64, toBigInt64Input(v as number | bigint | string)));
       }
       break;
     }
@@ -2105,7 +2117,7 @@ function encodeFieldValue(
       break;
     case 'sint64':
     case 'int64':
-      enc.writeInt(fnum, rawVal ?? 0);
+      enc.writeInt(fnum, (rawVal ?? 0) as number | bigint);
       break;
     case 'bool':
       enc.writeBool(fnum, Boolean(rawVal));
@@ -2136,62 +2148,62 @@ function encodeFieldValue(
       enc.writeFloat64(fnum, Number(rawVal ?? 0));
       break;
     case 'fixed64':
-      enc.writeFixed64(fnum, rawVal ?? 0);
+      enc.writeFixed64(fnum, (rawVal ?? 0) as number | bigint);
       break;
     case 'sfixed64':
-      enc.writeSfixed64(fnum, rawVal ?? 0);
+      enc.writeSfixed64(fnum, (rawVal ?? 0) as number | bigint);
       break;
     case 'string[]':
-      enc.writeStringArr(fnum, Array.isArray(rawVal) ? rawVal : []);
+      enc.writeStringArr(fnum, Array.isArray(rawVal) ? (rawVal as string[]) : []);
       break;
     case 'bytes[]':
-      enc.writeBytesArr(fnum, Array.isArray(rawVal) ? rawVal : []);
+      enc.writeBytesArr(fnum, Array.isArray(rawVal) ? (rawVal as Uint8Array[]) : []);
       break;
     case 'bool[]':
-      enc.writeBoolArr(fnum, Array.isArray(rawVal) ? rawVal : []);
+      enc.writeBoolArr(fnum, Array.isArray(rawVal) ? (rawVal as boolean[]) : []);
       break;
     case 'uint32[]':
-      enc.writeUint32Arr(fnum, rawVal ?? []);
+      enc.writeUint32Arr(fnum, (rawVal ?? []) as ArrayLike<number>);
       break;
     case 'uint64[]':
-      enc.writeUintArr(fnum, rawVal ?? []);
+      enc.writeUintArr(fnum, (rawVal ?? []) as ArrayLike<number | bigint>);
       break;
     case 'sint32[]':
     case 'int32[]':
     case 'enum[]':
     case 'sint64[]':
     case 'int64[]':
-      enc.writeSintArr(fnum, rawVal ?? []);
+      enc.writeSintArr(fnum, (rawVal ?? []) as ArrayLike<number | bigint>);
       break;
     case 'float32[]':
-      enc.writeFloat32Arr(fnum, rawVal ?? []);
+      enc.writeFloat32Arr(fnum, (rawVal ?? []) as ArrayLike<number>);
       break;
     case 'fixed32[]':
-      enc.writeFixed32Arr(fnum, rawVal ?? []);
+      enc.writeFixed32Arr(fnum, (rawVal ?? []) as ArrayLike<number>);
       break;
     case 'sfixed32[]':
-      enc.writeSfixed32Arr(fnum, rawVal ?? []);
+      enc.writeSfixed32Arr(fnum, (rawVal ?? []) as ArrayLike<number>);
       break;
     case 'float64[]':
-      enc.writeFloat64Arr(fnum, rawVal ?? []);
+      enc.writeFloat64Arr(fnum, (rawVal ?? []) as ArrayLike<number>);
       break;
     case 'fixed64[]':
-      enc.writeFixed64Arr(fnum, rawVal ?? []);
+      enc.writeFixed64Arr(fnum, (rawVal ?? []) as ArrayLike<number | bigint>);
       break;
     case 'sfixed64[]':
-      enc.writeSfixed64Arr(fnum, rawVal ?? []);
+      enc.writeSfixed64Arr(fnum, (rawVal ?? []) as ArrayLike<number | bigint>);
       break;
     case 'submsg[]': {
       const subSchema = f.resolveSubSchema?.();
       if (!subSchema) break;
-      const items: any[] = Array.isArray(rawVal) ? rawVal : [];
+      const items: unknown[] = Array.isArray(rawVal) ? rawVal : [];
       enc.beginSubMsgArr(fnum);
       for (let i = 0; i < items.length; i++) {
         enc.beginSubMsgElem();
         if (items[i] !== null && items[i] !== undefined) {
           subSchema.encodeBody(
             enc,
-            items[i],
+            items[i] as Record<string, unknown>,
             deterministic,
             writeUnknown,
             selfDescribing,
@@ -2220,7 +2232,7 @@ function encodeFieldValue(
   }
 }
 
-function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void {
+function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: unknown): void {
   switch (t) {
     case 'string':
       enc.writeRawStringPayload(String(val ?? ''));
@@ -2241,7 +2253,7 @@ function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void 
       const v =
         typeof val === 'number' && val >= 0 && val <= 9007199254740991
           ? val
-          : BigInt.asUintN(64, toBigInt64Input(val ?? 0));
+          : BigInt.asUintN(64, toBigInt64Input((val ?? 0) as number | bigint | string));
       enc.writeRawVarint(v);
       break;
     }
@@ -2252,7 +2264,7 @@ function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void 
       break;
     case 'sint64':
     case 'int64': {
-      enc.writeRawVarint(encodeZigZag(val ?? 0));
+      enc.writeRawVarint(encodeZigZag((val ?? 0) as number | bigint));
       break;
     }
     case 'float32':
@@ -2267,7 +2279,7 @@ function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void 
       break;
     case 'fixed64':
     case 'sfixed64': {
-      enc.writeRawFixed64(val ?? 0);
+      enc.writeRawFixed64((val ?? 0) as number | bigint);
       break;
     }
     case 'bool': {
@@ -2278,7 +2290,7 @@ function encodeMapScalarEntry(enc: Encoder, t: ScalarFieldType, val: any): void 
   }
 }
 
-function compareMapKeys(keyType: ScalarFieldType, a: any, b: any): number {
+function compareMapKeys(keyType: ScalarFieldType, a: unknown, b: unknown): number {
   switch (keyType) {
     case 'string': {
       return compareUTF8Strings(String(a), String(b));
@@ -2289,8 +2301,8 @@ function compareMapKeys(keyType: ScalarFieldType, a: any, b: any): number {
       return ba - bb;
     }
     default: {
-      const na = BigInt(a);
-      const nb = BigInt(b);
+      const na = BigInt(a as string | number | bigint | boolean);
+      const nb = BigInt(b as string | number | bigint | boolean);
       return na < nb ? -1 : na > nb ? 1 : 0;
     }
   }
@@ -2299,7 +2311,7 @@ function compareMapKeys(keyType: ScalarFieldType, a: any, b: any): number {
 function encodeMapField(
   enc: Encoder,
   f: CompiledField,
-  rawVal: any,
+  rawVal: unknown,
   deterministic: boolean,
   writeUnknown = false,
   selfDescribing = false,
@@ -2312,11 +2324,11 @@ function encodeMapField(
   const valType = f.mapValType ?? 'uint64';
   const subSchema = f.resolveSubSchema?.();
 
-  const entries: [any, any][] =
+  const entries: [unknown, unknown][] =
     rawVal instanceof Map
       ? Array.from(rawVal.entries())
       : rawVal && typeof rawVal === 'object'
-        ? Object.entries(rawVal)
+        ? Object.entries(rawVal as Record<string, unknown>)
         : [];
 
   enc.writeTag(f.fieldNum, WireMap);
@@ -2337,7 +2349,7 @@ function encodeMapField(
       if (v && subSchema) {
         subSchema.encodeBody(
           enc,
-          v,
+          v as Record<string, unknown>,
           deterministic,
           writeUnknown,
           selfDescribing,
@@ -2358,7 +2370,7 @@ function decodeCompiledFieldValue(
   pos: number,
   wt: number,
   f: CompiledField,
-  out: Record<string, any>,
+  out: Record<string, unknown>,
   alreadySeen: boolean,
   depth: number,
   maxDepth: number,
@@ -2706,14 +2718,14 @@ function decodeCompiledFieldValue(
           const elemCount = data[arrStart + 1]! >>> 1;
           let p = arrStart + 2;
           if (elemCount <= arrEnd - p && (elemCount > 0 || p === arrEnd)) {
-            const elems: any[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
+            const elems: unknown[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
             const origLen = elems.length;
             for (let i = 0; i < elemCount; i++) {
               if (p >= arrEnd) {
                 elems.length = origLen;
                 throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
               }
-              let elNum = 0;
+              let elNum: number;
               const eb0 = data[p]!;
               if ((eb0 & 1) !== 0) {
                 elNum = eb0 >>> 1;
@@ -2757,7 +2769,7 @@ function decodeCompiledFieldValue(
       if (!ok) {
         throw new Error(`omnibuf: corrupt submsg array at ${pos}`);
       }
-      const elems: any[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
+      const elems: unknown[] = alreadySeen && Array.isArray(out[key]) ? out[key] : [];
       let [, , p] = parseArrayHeader(arrPayload);
       for (let i = 0; i < elemCount; i++) {
         const [el, en] = decodeVarintBigInt(arrPayload, p);
@@ -2789,10 +2801,10 @@ function decodeMapScalarEntry(
   body: Uint8Array,
   p: number,
   wt: number,
-  subSchema: MessageSchema<any> | undefined,
+  subSchema: MessageSchema<object> | undefined,
   depth: number,
   options?: BinaryReadOptions,
-): [val: any, nextPos: number] {
+): [val: unknown, nextPos: number] {
   switch (wt) {
     case WireString: {
       if (p < body.length && (body[p]! & 1) !== 0) {
@@ -2869,26 +2881,30 @@ function decodeMapScalarEntry(
 }
 
 function convertMapScalarValue(
-  v: any,
+  v: unknown,
   type: ScalarFieldType | 'submsg' | undefined,
   useBigInt: boolean,
-): any {
+): unknown {
   switch (type) {
     case 'bool':
       return Boolean(v);
     case 'float32':
       return float32FromBits(Number(v));
     case 'float64':
-      return float64FromBits(BigInt(v));
+      return float64FromBits(BigInt(v as string | number | bigint | boolean));
     case 'uint32':
-      return typeof v === 'number' ? v >>> 0 : Number(BigInt(v) & 0xffffffffn) >>> 0;
+      return typeof v === 'number'
+        ? v >>> 0
+        : Number(BigInt(v as string | number | bigint | boolean) & 0xffffffffn) >>> 0;
     case 'sfixed32':
     case 'int32':
     case 'sint32':
     case 'enum':
-      return typeof v === 'number' ? v | 0 : Number(BigInt(v) & 0xffffffffn) | 0;
+      return typeof v === 'number'
+        ? v | 0
+        : Number(BigInt(v as string | number | bigint | boolean) & 0xffffffffn) | 0;
     case 'sfixed64': {
-      const signed = BigInt.asIntN(64, BigInt(v));
+      const signed = BigInt.asIntN(64, BigInt(v as string | number | bigint | boolean));
       return useBigInt || signed < -9007199254740991n || signed > 9007199254740991n
         ? signed
         : Number(signed);
@@ -2900,7 +2916,7 @@ function convertMapScalarValue(
 
 function decodeMapFieldBody(
   f: CompiledField,
-  out: Record<string, any>,
+  out: Record<string, unknown>,
   body: Uint8Array,
   alreadySeen: boolean,
   depth: number,
@@ -2920,12 +2936,15 @@ function decodeMapFieldBody(
   const subSchema = f.resolveSubSchema?.();
   const existing = out[f.propKey];
   const isMapInstance = existing instanceof Map;
-  let targetMap: Map<any, any> | Record<string, any>;
+  let targetMap: Map<unknown, unknown> | Record<string, unknown>;
   if (isMapInstance) {
     if (!alreadySeen) existing.clear();
     targetMap = existing;
   } else {
-    targetMap = alreadySeen && existing && typeof existing === 'object' ? existing : {};
+    targetMap =
+      alreadySeen && existing && typeof existing === 'object'
+        ? (existing as Record<string, unknown>)
+        : {};
     out[f.propKey] = targetMap;
   }
 
@@ -2949,8 +2968,16 @@ function decodeMapFieldBody(
   for (let i = 0; i < c; i++) {
     const [kv, nextP] = decodeMapScalarEntry(body, p, expKeyWT, undefined, depth, options);
     const [rawVv, nextP2] = decodeMapScalarEntry(body, nextP, expValWT, subSchema, depth, options);
-    const vv = convertMapScalarValue(isVal64 ? BigInt(rawVv) : rawVv, f.mapValType, f.useBigInt);
-    const key = convertMapScalarValue(isKey64 ? BigInt(kv) : kv, f.mapKeyType, f.useBigInt);
+    const vv = convertMapScalarValue(
+      isVal64 ? BigInt(rawVv as string | number | bigint | boolean) : rawVv,
+      f.mapValType,
+      f.useBigInt,
+    );
+    const key = convertMapScalarValue(
+      isKey64 ? BigInt(kv as string | number | bigint | boolean) : kv,
+      f.mapKeyType,
+      f.useBigInt,
+    );
     p = nextP2;
     if (targetMap instanceof Map) {
       targetMap.set(key, vv);
@@ -2977,7 +3004,7 @@ function decodeMapFieldBody(
  * Defines a declarative `MessageSchema<T>` for plain TypeScript objects or classes.
  */
 export function defineMessage<
-  T extends object = Record<string, any>,
+  T extends object = Record<string, unknown>,
   TypeName extends string = string,
 >(
   typeName: TypeName,
@@ -2995,28 +3022,42 @@ export function defineMessage<
 const SCHEMA_SYMBOL = Symbol.for('omnibuf.schema');
 const PENDING_FIELDS_SYMBOL = Symbol.for('omnibuf.pendingFields');
 
-if (!(Symbol as any).metadata) {
-  (Symbol as any).metadata = Symbol.for('Symbol.metadata');
+const symbolWithMetadata = Symbol as SymbolConstructor & { metadata?: symbol };
+if (!symbolWithMetadata.metadata) {
+  symbolWithMetadata.metadata = Symbol.for('Symbol.metadata');
 }
 
 const classPendingFields = new WeakMap<object, Record<string, FieldSpec>>();
-const classSchemaRegistry = new WeakMap<object, MessageSchema<any>>();
+const classSchemaRegistry = new WeakMap<object, MessageSchema<object>>();
 
 export type DecoratorFieldOptions = Partial<Omit<FieldSpec, 'fieldNum'>>;
+
+interface DecoratedConstructor<T extends object = object> {
+  new (...args: never[]): T;
+  [SCHEMA_SYMBOL]?: MessageSchema<T>;
+  __omnibufTypeName?: string;
+  [key: symbol]: unknown;
+}
 
 /**
  * Field decorator for declaring OmniBuf field metadata on a TypeScript class property.
  * Supports both Stage 3 standard decorators (`(target, context: ClassFieldDecoratorContext)`)
  * and legacy experimental decorators (`(target, propertyKey)`).
  */
-export function omnibufField(fieldNum: number, options: DecoratorFieldOptions = {}): any {
+export function omnibufField(
+  fieldNum: number,
+  options: DecoratorFieldOptions = {},
+): (target: unknown, contextOrPropKey: ClassFieldDecoratorContext | string | symbol) => void {
   const spec: FieldSpec = {
     ...options,
     fieldNum,
     type: options.type ?? 'string',
   };
 
-  return function (target: any, contextOrPropKey: any): any {
+  return function (
+    target: unknown,
+    contextOrPropKey: ClassFieldDecoratorContext | string | symbol,
+  ): void {
     // Stage 3 standard decorator: contextOrPropKey is ClassFieldDecoratorContext
     if (
       contextOrPropKey &&
@@ -3026,21 +3067,21 @@ export function omnibufField(fieldNum: number, options: DecoratorFieldOptions = 
     ) {
       const propKey = String(contextOrPropKey.name);
       if (contextOrPropKey.metadata) {
-        const metaObj = contextOrPropKey.metadata as Record<symbol, any>;
+        const metaObj = contextOrPropKey.metadata as Record<symbol, Record<string, FieldSpec>>;
         if (!Object.hasOwn(metaObj, PENDING_FIELDS_SYMBOL)) {
           const inherited = metaObj[PENDING_FIELDS_SYMBOL];
-          const own = Object.create(null);
+          const own = Object.create(null) as Record<string, FieldSpec>;
           if (inherited) {
             Object.assign(own, inherited);
           }
           metaObj[PENDING_FIELDS_SYMBOL] = own;
         }
-        metaObj[PENDING_FIELDS_SYMBOL][propKey] = spec;
+        metaObj[PENDING_FIELDS_SYMBOL]![propKey] = spec;
       }
       // Also attach an initializer so instances without Symbol.metadata still register on constructor
       if (typeof contextOrPropKey.addInitializer === 'function') {
-        contextOrPropKey.addInitializer(function (this: any) {
-          const ctor = this?.constructor;
+        contextOrPropKey.addInitializer(function (this: unknown) {
+          const ctor = (this as { constructor?: object } | null | undefined)?.constructor;
           if (ctor) {
             let map = classPendingFields.get(ctor);
             if (!map) {
@@ -3055,7 +3096,10 @@ export function omnibufField(fieldNum: number, options: DecoratorFieldOptions = 
     }
 
     // Legacy experimental decorator: target is prototype, contextOrPropKey is string | symbol
-    const ctor = typeof target === 'function' ? target : target?.constructor;
+    const ctor =
+      typeof target === 'function'
+        ? target
+        : (target as { constructor?: object } | null | undefined)?.constructor;
     const propKey = String(contextOrPropKey);
     if (ctor) {
       let map = classPendingFields.get(ctor);
@@ -3071,18 +3115,33 @@ export function omnibufField(fieldNum: number, options: DecoratorFieldOptions = 
 /**
  * Class decorator that compiles and registers an OmniBuf `MessageSchema` for the class.
  */
-export function omnibufMessage(typeName?: string): any {
-  return function (target: any, context?: any): any {
+export function omnibufMessage(
+  typeName?: string,
+): <T extends abstract new (...args: never[]) => object>(
+  target: T,
+  context?: ClassDecoratorContext,
+) => T {
+  return function <T extends abstract new (...args: never[]) => object>(
+    target: T,
+    context?: ClassDecoratorContext,
+  ): T {
     const name =
       typeName ||
       (context && typeof context === 'object' && context.name
         ? String(context.name)
         : target.name || 'Message');
 
-    const symMeta = (Symbol as any).metadata;
+    const symMeta = symbolWithMetadata.metadata;
+    const targetRec = target as unknown as Record<
+      symbol,
+      Record<symbol, Record<string, FieldSpec>>
+    > & {
+      __omnibufTypeName?: string;
+    };
+    const contextMeta = context?.metadata as Record<symbol, Record<string, FieldSpec>> | undefined;
     const metadataFields =
-      context?.metadata?.[PENDING_FIELDS_SYMBOL] ??
-      (symMeta ? (target as any)[symMeta]?.[PENDING_FIELDS_SYMBOL] : undefined);
+      contextMeta?.[PENDING_FIELDS_SYMBOL] ??
+      (symMeta ? targetRec[symMeta]?.[PENDING_FIELDS_SYMBOL] : undefined);
 
     if (metadataFields) {
       let map = classPendingFields.get(target);
@@ -3093,7 +3152,7 @@ export function omnibufMessage(typeName?: string): any {
       Object.assign(map, metadataFields);
     }
 
-    (target as any).__omnibufTypeName = name;
+    targetRec.__omnibufTypeName = name;
     return target;
   };
 }
@@ -3102,25 +3161,26 @@ export function omnibufMessage(typeName?: string): any {
  * Explicitly binds a `MessageSchema<T>` to a class constructor.
  */
 export function registerClassSchema<T extends object>(
-  ctor: new (...args: any[]) => T,
+  ctor: new (...args: never[]) => T,
   schema: MessageSchema<T>,
 ): void {
-  classSchemaRegistry.set(ctor, schema);
-  (ctor as any)[SCHEMA_SYMBOL] = schema;
+  classSchemaRegistry.set(ctor, schema as MessageSchema<object>);
+  (ctor as unknown as DecoratedConstructor<T>)[SCHEMA_SYMBOL] = schema;
 }
 
 /**
  * Retrieves or compiles the `MessageSchema<T>` for a decorated class constructor or instance.
  */
 export function getClassSchema<T extends object>(
-  ctorOrInstance: (new (...args: any[]) => T) | T,
+  ctorOrInstance: (new (...args: never[]) => T) | T,
 ): MessageSchema<T> | null {
-  const ctor: any =
-    typeof ctorOrInstance === 'function' ? ctorOrInstance : ctorOrInstance?.constructor;
-  if (!ctor || ctor === Object) return null;
+  const ctor = (
+    typeof ctorOrInstance === 'function' ? ctorOrInstance : ctorOrInstance?.constructor
+  ) as DecoratedConstructor<T> | undefined;
+  if (!ctor || (ctor as unknown) === Object) return null;
 
   const existing =
-    classSchemaRegistry.get(ctor) ??
+    (classSchemaRegistry.get(ctor) as MessageSchema<T> | undefined) ??
     (Object.hasOwn(ctor, SCHEMA_SYMBOL) ? ctor[SCHEMA_SYMBOL] : undefined);
   if (existing) return existing;
 
@@ -3133,9 +3193,11 @@ export function getClassSchema<T extends object>(
     }
   }
 
-  const symMeta = (Symbol as any).metadata;
-  const pending =
-    classPendingFields.get(ctor) ?? (symMeta ? ctor[symMeta]?.[PENDING_FIELDS_SYMBOL] : undefined);
+  const symMeta = symbolWithMetadata.metadata;
+  const metaBag = symMeta
+    ? (ctor[symMeta] as Record<symbol, Record<string, FieldSpec>> | undefined)
+    : undefined;
+  const pending = classPendingFields.get(ctor) ?? metaBag?.[PENDING_FIELDS_SYMBOL];
   if (!pending || Object.keys(pending).length === 0) {
     return null;
   }
@@ -3145,7 +3207,7 @@ export function getClassSchema<T extends object>(
     ctor.name ||
     'Message';
   const schema = new MessageSchema<T>(name, pending, () => new ctor());
-  classSchemaRegistry.set(ctor, schema);
+  classSchemaRegistry.set(ctor, schema as MessageSchema<object>);
   ctor[SCHEMA_SYMBOL] = schema;
   return schema;
 }

@@ -7,19 +7,19 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-function expect(actual: any, message?: string) {
+function expect(actual: unknown, message?: string) {
   return {
-    toBe(expected: any) {
+    toBe(expected: unknown) {
       assert.strictEqual(actual, expected, message);
     },
-    toEqual(expected: any) {
+    toEqual(expected: unknown) {
       assert.deepStrictEqual(actual, expected, message);
     },
     toThrow() {
-      assert.throws(actual, message);
+      assert.throws(actual as () => unknown, message);
     },
     not: {
-      toBe(expected: any) {
+      toBe(expected: unknown) {
         assert.notStrictEqual(actual, expected, message);
       },
     },
@@ -459,7 +459,10 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
           const [meta, ok] = readField0SchemaMeta(respSD.omnibuf_payload);
           expect(ok).toBe(true);
           expect(meta?.fields?.[2]).toBe('name');
-          const blindTreeSD = decodeBlind(respSD.omnibuf_payload) as Record<string, any>;
+          const blindTreeSD = decodeBlind(respSD.omnibuf_payload) as {
+            name?: unknown;
+            primary?: { name?: unknown };
+          };
           expect(typeof blindTreeSD.name).toBe('string');
           if (blindTreeSD.primary !== undefined) {
             expect(typeof blindTreeSD.primary.name).toBe('string');
