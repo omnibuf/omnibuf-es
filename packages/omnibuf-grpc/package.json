@@ -1,7 +1,7 @@
 {
   "name": "@omnibuf/grpc",
   "version": "0.1.0",
-  "description": "Detached @grpc/grpc-js marshallers and method definitions for OmniBuf",
+  "description": "OmniBuf marshallers and method definitions for @grpc/grpc-js",
   "type": "module",
   "license": "Apache-2.0",
   "sideEffects": false,
@@ -16,7 +16,8 @@
   },
   "files": [
     "dist",
-    "LICENSE"
+    "LICENSE",
+    "README.md"
   ],
   "repository": {
     "type": "git",

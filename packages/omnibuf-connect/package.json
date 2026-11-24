@@ -1,7 +1,7 @@
 {
   "name": "@omnibuf/connect",
   "version": "0.1.0",
-  "description": "Detached @connectrpc/connect binary codec for OmniBuf",
+  "description": "OmniBuf binary codec and unary handlers for @connectrpc/connect",
   "type": "module",
   "license": "Apache-2.0",
   "sideEffects": false,
@@ -16,7 +16,8 @@
   },
   "files": [
     "dist",
-    "LICENSE"
+    "LICENSE",
+    "README.md"
   ],
   "repository": {
     "type": "git",
