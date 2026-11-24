@@ -35,7 +35,6 @@ import {
   nextContainerField,
   parseArrayHeader,
   parseMapHeader,
-  readLenSlice,
   skipValidatedValue,
   validateField0At,
 } from './wire.js';
