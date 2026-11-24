@@ -4,6 +4,9 @@
   "description": "OmniBuf binary codec and unary handlers for @connectrpc/connect",
   "type": "module",
   "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

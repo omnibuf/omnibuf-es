@@ -76,7 +76,7 @@ jobs:
             rm -f "$pkg"/*.tgz
             (cd "$pkg" && pnpm pack)
             tgz=$(ls "$pkg"/*.tgz | head -n 1)
-            npm publish "$tgz" --provenance --loglevel verbose "${TAG_ARGS[@]}" || STATUS=1
+            npm publish "$tgz" --access public --provenance --loglevel verbose "${TAG_ARGS[@]}" || STATUS=1
             rm -f "$tgz"
           done
           exit $STATUS
