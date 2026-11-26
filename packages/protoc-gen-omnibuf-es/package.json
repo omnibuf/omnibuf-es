@@ -1,6 +1,6 @@
 {
   "name": "@omnibuf/protoc-gen-omnibuf-es",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Protobuf compiler plugin generating TypeScript single-pass encoders, switch decoders, and lazy Opaque<T> views for OmniBuf",
   "type": "module",
   "license": "Apache-2.0",

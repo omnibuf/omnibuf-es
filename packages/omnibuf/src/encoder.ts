@@ -94,14 +94,16 @@ export class Encoder {
   beginMessage(minRemaining = 1024): number {
     this.depth = 0;
     if (this.buf.length > MAX_RETAINED_SLAB) {
-      this.buf = new Uint8Array(Math.max(8192, minRemaining));
+      const cap = Math.max(8192, minRemaining);
+      this.buf = cap > 8192 ? allocBytes(cap) : new Uint8Array(cap);
       this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
       this.pos = 0;
     } else if (this.buf.length - this.pos < minRemaining) {
       if (this.buf.length >= minRemaining) {
         this.pos = 0;
       } else {
-        this.buf = new Uint8Array(Math.max(8192, minRemaining));
+        const cap = Math.max(8192, minRemaining);
+        this.buf = cap > 8192 ? allocBytes(cap) : new Uint8Array(cap);
         this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
         this.pos = 0;
       }
@@ -110,11 +112,20 @@ export class Encoder {
   }
 
   /**
-   * Returns a standalone `Uint8Array` copy of `[startPos, this.pos)` in the slab.
+   * Returns a standalone `Uint8Array` of `[startPos, this.pos)` from the slab.
+   * For freshly grown oversized slabs (> 256 KiB) with >= 50% utilization, transfers ownership
+   * of the slab directly instead of copying and discarding it.
    */
   endMessage(startPos: number): Uint8Array {
     const endPos = this.pos;
     const len = endPos - startPos;
+    if (this.buf.length > MAX_RETAINED_SLAB && startPos === 0 && len * 2 >= this.buf.length) {
+      const out = this.buf.subarray(0, endPos);
+      this.buf = new Uint8Array(8192);
+      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+      this.pos = 0;
+      return out;
+    }
     const out = allocBytes(len);
     if (len > 0) {
       out.set(this.buf.subarray(startPos, endPos), 0);
@@ -180,14 +191,48 @@ export class Encoder {
   ensureCapacity(additional: number): void {
     const needed = this.pos + additional;
     if (needed <= this.buf.length) return;
-    let nextCap = Math.max(64, this.buf.length * 2);
-    while (nextCap < needed) {
-      nextCap *= 2;
+    let nextCap: number;
+    if (needed > MAX_RETAINED_SLAB) {
+      nextCap = Math.max(this.buf.length * 2, needed);
+    } else {
+      nextCap = Math.max(64, this.buf.length * 2);
+      while (nextCap < needed) {
+        nextCap *= 2;
+      }
     }
-    const nextBuf = new Uint8Array(nextCap);
+    const nextBuf = allocBytes(nextCap);
     nextBuf.set(this.buf.subarray(0, this.pos), 0);
     this.buf = nextBuf;
     this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+  }
+
+  /**
+   * Exposes the internal backing buffer for generated tight-loop encoders.
+   * Callers must call `ensureCapacity` before writing and `setPos` after advancing.
+   */
+  get rawBuf(): Uint8Array {
+    return this.buf;
+  }
+
+  /**
+   * Exposes the internal `DataView` aligned to `rawBuf` for generated tight-loop encoders.
+   */
+  get rawView(): DataView {
+    return this.view;
+  }
+
+  /**
+   * Current write offset in `rawBuf`.
+   */
+  get rawPos(): number {
+    return this.pos;
+  }
+
+  /**
+   * Updates the write offset after writing directly into `rawBuf`.
+   */
+  setPos(pos: number): void {
+    this.pos = pos;
   }
 
   /**
@@ -1102,20 +1147,26 @@ export class Encoder {
 
   /**
    * Starts a repeated sub-message array (`WireArray = 13`, `ElementType = WireSubMsg = 12`) in a single pass.
+   * When `knownCount` is provided, writes the element count up front and avoids shifting the array body in `endSubMsgArr`.
    */
-  beginSubMsgArr(fieldNum: number, minBodyBytes = 0): void {
+  beginSubMsgArr(fieldNum: number, minBodyBytes = 0, knownCount?: number): void {
     this.writeTag(fieldNum, WireArray);
     this.beginContainer(minBodyBytes);
-    this.elemCountStack[this.depth - 1] = 0;
     this.writeByte(WireSubMsg);
-    this.writeByte(0x01); // 1-byte Prefix-Varint(0) count slot
+    if (knownCount !== undefined && knownCount >= 0) {
+      this.elemCountStack[this.depth - 1] = -1;
+      this.writeRawVarint(knownCount);
+    } else {
+      this.elemCountStack[this.depth - 1] = 0;
+      this.writeByte(0x01); // 1-byte Prefix-Varint(0) count slot
+    }
   }
 
   /**
    * Starts the next element inside an open `WireArray(WireSubMsg)` by reserving its length prefix.
    */
   beginSubMsgElem(minBodyBytes = 0): void {
-    if (this.depth > 0) {
+    if (this.depth > 0 && this.elemCountStack[this.depth - 1]! >= 0) {
       this.elemCountStack[this.depth - 1]!++;
     }
     this.beginContainer(minBodyBytes);
@@ -1129,16 +1180,45 @@ export class Encoder {
   }
 
   /**
-   * Finishes the open `WireArray(WireSubMsg)` and backpatches its element count and total byte length.
+   * Starts a small sub-message element whose encoded body is statically expected to be <= 127 bytes.
+   * Reserves a 1-byte Prefix-Varint length slot and returns its byte offset for `endSmallSubMsgElem`.
+   */
+  beginSmallSubMsgElem(maxBodyBytes = 127): number {
+    if (this.depth > 0 && this.elemCountStack[this.depth - 1]! >= 0) {
+      this.elemCountStack[this.depth - 1]!++;
+    }
+    if (this.pos + 1 + maxBodyBytes > this.buf.length) {
+      this.ensureCapacity(1 + maxBodyBytes);
+    }
+    return this.pos++;
+  }
+
+  /**
+   * Finishes a small sub-message element started by `beginSmallSubMsgElem` and writes its length prefix.
+   * Falls back to expanding the varint if unexpected unknown fields pushed the body past 127 bytes.
+   */
+  endSmallSubMsgElem(lenPos: number): void {
+    const subLen = this.pos - (lenPos + 1);
+    if (subLen <= 127) {
+      this.buf[lenPos] = ((subLen << 1) | 1) & 0xff;
+      return;
+    }
+    this.patchReservedVarint(lenPos, subLen);
+  }
+
+  /**
+   * Finishes the open `WireArray(WireSubMsg)` and backpatches its element count (if unknown up front) and total byte length.
    */
   endSubMsgArr(): void {
     if (this.depth <= 0) {
       throw new Error('omnibuf: endSubMsgArr called without matching beginSubMsgArr');
     }
-    const lenPos = this.lenStack[this.depth - 1]!;
-    const reserved = this.lenWidthStack[this.depth - 1]!;
     const count = this.elemCountStack[this.depth - 1]!;
-    this.patchReservedVarint(lenPos + reserved + 1, count);
+    if (count >= 0) {
+      const lenPos = this.lenStack[this.depth - 1]!;
+      const reserved = this.lenWidthStack[this.depth - 1]!;
+      this.patchReservedVarint(lenPos + reserved + 1, count);
+    }
     this.endContainer();
   }
 

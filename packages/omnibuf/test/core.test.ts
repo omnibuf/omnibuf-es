@@ -1849,4 +1849,46 @@ describe('@omnibuf/core - Tier 2 (@bufbuild/protobuf DescMessage) & Tier 3 (Deco
     assert.equal(decoded.field_1['false'], 200);
     assert.equal(decoded.field_1['true'], 100);
   });
+
+  it('supports known-count beginSubMsgArr, 1-byte beginSmallSubMsgElem with overflow fallback, and oversized slab handoff', () => {
+    // 1. Known-count beginSubMsgArr + beginSmallSubMsgElem (small + >127B overflow fallback)
+    const enc = new Encoder(128);
+    enc.beginSubMsgArr(1, 0, 2);
+    const lp0 = enc.beginSmallSubMsgElem(32);
+    enc.writeInt(1, -42);
+    enc.writeFloat64(2, 3.25);
+    enc.endSmallSubMsgElem(lp0);
+
+    // Second element overflows 127 bytes to test patchReservedVarint fallback
+    const lp1 = enc.beginSmallSubMsgElem(32);
+    enc.writeInt(1, 7);
+    enc.writeString(3, 'x'.repeat(200));
+    enc.endSmallSubMsgElem(lp1);
+    enc.endSubMsgArr();
+
+    const wire = enc.finish();
+    const blind = decodeBlind(wire) as { field_1: Array<Record<string, unknown>> };
+    assert.equal(blind.field_1.length, 2);
+    assert.equal(blind.field_1[0]!.field_1, -42);
+    assert.equal(blind.field_1[0]!.field_2, 3.25);
+    assert.equal(blind.field_1[1]!.field_1, 7);
+    assert.equal(blind.field_1[1]!.field_3, 'x'.repeat(200));
+
+    // 2. Oversized slab (>256 KiB) zero-copy handoff in endMessage resets slab safely without aliasing
+    const slabEnc = new Encoder(8192);
+    const start1 = slabEnc.beginMessage();
+    const payload = new Uint8Array(300 * 1024);
+    payload.fill(0x5a);
+    slabEnc.writeBytes(1, payload);
+    const out1 = slabEnc.endMessage(start1);
+    assert.ok(out1.byteLength > 300 * 1024);
+    assert.equal((slabEnc as unknown as { buf: Uint8Array }).buf.length, 8192);
+
+    // Subsequent encode must not mutate out1
+    const start2 = slabEnc.beginMessage();
+    slabEnc.writeBytes(1, new Uint8Array(16).fill(0x11));
+    const out2 = slabEnc.endMessage(start2);
+    assert.notEqual(out1.buffer, out2.buffer);
+    assert.equal(out1[out1.length - 1], 0x5a);
+  });
 });

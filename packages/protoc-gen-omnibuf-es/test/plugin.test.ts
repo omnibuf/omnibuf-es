@@ -1555,4 +1555,100 @@ describe('@omnibuf/protoc-gen-omnibuf-es - Generated Codec & Opaque Invariants',
       await cleanup();
     }
   });
+
+  it('round-trips large (>16 KiB) repeated scalar sub-messages with inline encode, 4B decode fast path, extremes, and $unknown', async () => {
+    const fds: FileDescriptorSetJSON = {
+      file: [
+        {
+          name: 'fast_items.proto',
+          package: 'bench.fast',
+          syntax: 'proto3',
+          messageType: [
+            {
+              name: 'Point',
+              field: [
+                { name: 'x', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+                { name: 'y', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_DOUBLE' },
+                { name: 'z', number: 3, label: 'LABEL_OPTIONAL', type: 'TYPE_FLOAT' },
+                { name: 'u', number: 4, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT32' },
+                { name: 'f', number: 5, label: 'LABEL_OPTIONAL', type: 'TYPE_FIXED32' },
+                { name: 'sf', number: 6, label: 'LABEL_OPTIONAL', type: 'TYPE_SFIXED32' },
+                { name: 'ok', number: 7, label: 'LABEL_OPTIONAL', type: 'TYPE_BOOL' },
+              ],
+            },
+            {
+              name: 'Cloud',
+              field: [
+                {
+                  name: 'points',
+                  number: 1,
+                  label: 'LABEL_REPEATED',
+                  type: 'TYPE_MESSAGE',
+                  typeName: '.bench.fast.Point',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { mod, cleanup } = await compileAndImportGenerated(fds);
+    try {
+      // 1,200 points > 30 KiB (>16,383 bytes) to exercise 4-byte arrLen and 2-byte elemCount fast paths
+      const points = [];
+      for (let i = 0; i < 1200; i++) {
+        points.push({
+          x: i === 0 ? -2147483648 : i === 1 ? 2147483647 : i % 2 === 0 ? i * 1000 : -i * 1000,
+          y: i * 1.125 + 0.0001,
+          z: Math.fround(i * -0.5 + 0.25),
+          u: i === 0 ? 4294967295 : i * 70000,
+          f: (i * 1234567) >>> 0,
+          sf: i % 2 === 0 ? -(i + 1) * 9999 : i * 9999,
+          ok: i % 3 === 0,
+        });
+      }
+      // Attach an unknown field to one item to verify the $unknown fallback inside the inline loop
+      const unkEnc = new Encoder();
+      unkEnc.writeRawStringPayload('extra-unknown-payload');
+      const unkBytes = unkEnc.finish();
+      Object.defineProperty(points[5], '$unknown', {
+        value: [{ no: 99, wireType: WireString, data: unkBytes }],
+        enumerable: false,
+      });
+
+      const wire: Uint8Array = mod.CloudSchema.encode({ points }, { writeUnknownFields: true });
+      assert.ok(wire.byteLength > 16383, `Expected >16 KiB wire payload, got ${wire.byteLength}`);
+
+      const decoded = mod.CloudSchema.decode(wire, undefined, 0, { readUnknownFields: true });
+      assert.equal(decoded.points.length, points.length);
+      for (let i = 0; i < points.length; i++) {
+        assert.equal(decoded.points[i].x, points[i]!.x);
+        assert.equal(decoded.points[i].y, points[i]!.y);
+        assert.equal(decoded.points[i].z, points[i]!.z);
+        assert.equal(decoded.points[i].u, points[i]!.u);
+        assert.equal(decoded.points[i].f, points[i]!.f);
+        assert.equal(decoded.points[i].sf, points[i]!.sf);
+        assert.equal(decoded.points[i].ok, points[i]!.ok);
+      }
+      assert.equal(
+        (decoded.points[5] as { $unknown?: Array<{ no: number }> }).$unknown?.[0]?.no,
+        99,
+      );
+
+      // Verify blind decoder agrees on wire validity
+      const blind = decodeBlind(wire) as { field_1: unknown[] };
+      assert.equal(blind.field_1.length, 1200);
+
+      // Verify corrupt 4-byte submsg array claiming huge elemCount is rejected before allocating
+      const corrupt = new Encoder();
+      corrupt.writeTag(1, WireArray);
+      corrupt.writeRawVarint(16384); // 4-byte arrLen exceeding buffer
+      corrupt.writeByte(WireSubMsg);
+      corrupt.writeRawVarint(500000);
+      assert.throws(() => mod.decodeCloud(corrupt.finish()));
+    } finally {
+      await cleanup();
+    }
+  });
 });

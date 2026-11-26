@@ -1,6 +1,6 @@
 {
   "name": "omnibuf-es",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "private": true,
   "description": "TypeScript implementation of the OmniBuf binary wire format for Node.js and browsers",
   "type": "module",
