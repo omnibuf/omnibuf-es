@@ -28,6 +28,30 @@ import {
   decodeTestAllTypes,
   marshalTestAllTypesOmniBuf,
 } from './gen/conformance_omnibuf.pb.js';
+import {
+  Editions2023Status,
+  OpaqueTestEditions2023,
+  createEditions2023Child,
+  createTestEditions2023,
+  decodeTestEditions2023,
+  marshalTestEditions2023OmniBuf,
+} from './gen/editions_2023_omnibuf.pb.js';
+import {
+  Editions2024Status,
+  OpaqueTestEditions2024,
+  createEditions2024Child,
+  createTestEditions2024,
+  decodeTestEditions2024,
+  marshalTestEditions2024OmniBuf,
+} from './gen/editions_2024_omnibuf.pb.js';
+import {
+  Editions2026Status,
+  OpaqueTestEditions2026,
+  createEditions2026Child,
+  createTestEditions2026,
+  decodeTestEditions2026,
+  marshalTestEditions2026OmniBuf,
+} from './gen/editions_2026_omnibuf.pb.js';
 
 export const WireFormatUnspecified = 0;
 export const WireFormatOmniBuf = 1;
@@ -287,6 +311,422 @@ export const CONFORMANCE_FDS: FileDescriptorSetJSON = {
               field: [
                 { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
                 { name: 'value', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_UINT64' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'omnibuf/conformance/editions_2023.proto',
+      package: 'omnibuf.conformance',
+      syntax: 'editions',
+      edition: 1000,
+      enumType: [
+        {
+          name: 'Editions2023Status',
+          value: [
+            { name: 'EDITIONS2023_STATUS_UNSPECIFIED', number: 0 },
+            { name: 'EDITIONS2023_STATUS_ACTIVE', number: 1 },
+            { name: 'EDITIONS2023_STATUS_PAUSED', number: 2 },
+          ],
+        },
+      ],
+      messageType: [
+        {
+          name: 'Editions2023Child',
+          field: [
+            { name: 'id', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+            { name: 'note', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+          ],
+        },
+        {
+          name: 'TestEditions2023',
+          oneofDecl: [{ name: 'choice' }],
+          field: [
+            { name: 'explicit_int', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+            { name: 'explicit_bool', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_BOOL' },
+            { name: 'explicit_string', number: 3, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+            { name: 'explicit_bytes', number: 4, label: 'LABEL_OPTIONAL', type: 'TYPE_BYTES' },
+            { name: 'explicit_double', number: 5, label: 'LABEL_OPTIONAL', type: 'TYPE_DOUBLE' },
+            {
+              name: 'status',
+              number: 6,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_ENUM',
+              typeName: '.omnibuf.conformance.Editions2023Status',
+            },
+            {
+              name: 'implicit_count',
+              number: 7,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_INT32',
+              options: { features: { fieldPresence: 'IMPLICIT' } },
+            },
+            {
+              name: 'implicit_flag',
+              number: 8,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_BOOL',
+              options: { features: { fieldPresence: 'IMPLICIT' } },
+            },
+            {
+              name: 'child',
+              number: 9,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2023Child',
+            },
+            {
+              name: 'delimited_child',
+              number: 10,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2023Child',
+              options: { features: { messageEncoding: 'DELIMITED' } },
+            },
+            { name: 'packed_vals', number: 11, label: 'LABEL_REPEATED', type: 'TYPE_INT32' },
+            {
+              name: 'expanded_vals',
+              number: 12,
+              label: 'LABEL_REPEATED',
+              type: 'TYPE_INT32',
+              options: { features: { repeatedFieldEncoding: 'EXPANDED' } },
+            },
+            {
+              name: 'scores',
+              number: 13,
+              label: 'LABEL_REPEATED',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.TestEditions2023.ScoresEntry',
+            },
+            {
+              name: 'choice_int',
+              number: 14,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_INT32',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_text',
+              number: 15,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_STRING',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_flag',
+              number: 16,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_BOOL',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_child',
+              number: 17,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2023Child',
+              oneofIndex: 0,
+            },
+          ],
+          nestedType: [
+            {
+              name: 'ScoresEntry',
+              options: { mapEntry: true },
+              field: [
+                { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+                { name: 'value', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'omnibuf/conformance/editions_2024.proto',
+      package: 'omnibuf.conformance',
+      syntax: 'editions',
+      edition: 1001,
+      options: {
+        features: {
+          fieldPresence: 'IMPLICIT',
+          repeatedFieldEncoding: 'EXPANDED',
+        },
+      },
+      enumType: [
+        {
+          name: 'Editions2024Status',
+          value: [
+            { name: 'EDITIONS2024_STATUS_UNSPECIFIED', number: 0 },
+            { name: 'EDITIONS2024_STATUS_ACTIVE', number: 1 },
+            { name: 'EDITIONS2024_STATUS_PAUSED', number: 2 },
+          ],
+        },
+      ],
+      messageType: [
+        {
+          name: 'Editions2024Child',
+          field: [
+            {
+              name: 'id',
+              number: 1,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_INT32',
+              options: { features: { fieldPresence: 'EXPLICIT' } },
+            },
+            {
+              name: 'note',
+              number: 2,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_STRING',
+              options: { features: { fieldPresence: 'EXPLICIT' } },
+            },
+          ],
+        },
+        {
+          name: 'TestEditions2024',
+          options: { features: { jsonFormat: 'LEGACY_BEST_EFFORT' } },
+          oneofDecl: [{ name: 'choice' }],
+          field: [
+            {
+              name: 'explicit_int',
+              number: 1,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_INT32',
+              options: { features: { fieldPresence: 'EXPLICIT' } },
+            },
+            {
+              name: 'explicit_bool',
+              number: 2,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_BOOL',
+              options: { features: { fieldPresence: 'EXPLICIT' } },
+            },
+            {
+              name: 'explicit_string',
+              number: 3,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_STRING',
+              options: { features: { fieldPresence: 'EXPLICIT' } },
+            },
+            {
+              name: 'explicit_bytes',
+              number: 4,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_BYTES',
+              options: { features: { fieldPresence: 'EXPLICIT' } },
+            },
+            {
+              name: 'explicit_double',
+              number: 5,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_DOUBLE',
+              options: { features: { fieldPresence: 'EXPLICIT' } },
+            },
+            {
+              name: 'status',
+              number: 6,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_ENUM',
+              typeName: '.omnibuf.conformance.Editions2024Status',
+              options: { features: { fieldPresence: 'EXPLICIT' } },
+            },
+            { name: 'implicit_count', number: 7, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+            { name: 'implicit_flag', number: 8, label: 'LABEL_OPTIONAL', type: 'TYPE_BOOL' },
+            {
+              name: 'child',
+              number: 9,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2024Child',
+            },
+            {
+              name: 'delimited_child',
+              number: 10,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2024Child',
+              options: { features: { messageEncoding: 'DELIMITED' } },
+            },
+            {
+              name: 'packed_vals',
+              number: 11,
+              label: 'LABEL_REPEATED',
+              type: 'TYPE_INT32',
+              options: { features: { repeatedFieldEncoding: 'PACKED' } },
+            },
+            { name: 'expanded_vals', number: 12, label: 'LABEL_REPEATED', type: 'TYPE_INT32' },
+            {
+              name: 'scores',
+              number: 13,
+              label: 'LABEL_REPEATED',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.TestEditions2024.ScoresEntry',
+            },
+            {
+              name: 'choice_int',
+              number: 14,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_INT32',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_text',
+              number: 15,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_STRING',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_flag',
+              number: 16,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_BOOL',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_child',
+              number: 17,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2024Child',
+              oneofIndex: 0,
+            },
+          ],
+          nestedType: [
+            {
+              name: 'ScoresEntry',
+              options: { mapEntry: true },
+              field: [
+                { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+                { name: 'value', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'omnibuf/conformance/editions_2026.proto',
+      package: 'omnibuf.conformance',
+      syntax: 'editions',
+      edition: 1002,
+      enumType: [
+        {
+          name: 'Editions2026Status',
+          value: [
+            { name: 'EDITIONS2026_STATUS_UNSPECIFIED', number: 0 },
+            { name: 'EDITIONS2026_STATUS_ACTIVE', number: 1 },
+            { name: 'EDITIONS2026_STATUS_PAUSED', number: 2 },
+          ],
+        },
+      ],
+      messageType: [
+        {
+          name: 'Editions2026Child',
+          field: [
+            { name: 'id', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+            { name: 'note', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+          ],
+        },
+        {
+          name: 'TestEditions2026',
+          oneofDecl: [{ name: 'choice' }],
+          field: [
+            { name: 'explicit_int', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
+            { name: 'explicit_bool', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_BOOL' },
+            { name: 'explicit_string', number: 3, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+            { name: 'explicit_bytes', number: 4, label: 'LABEL_OPTIONAL', type: 'TYPE_BYTES' },
+            { name: 'explicit_double', number: 5, label: 'LABEL_OPTIONAL', type: 'TYPE_DOUBLE' },
+            {
+              name: 'status',
+              number: 6,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_ENUM',
+              typeName: '.omnibuf.conformance.Editions2026Status',
+            },
+            {
+              name: 'implicit_count',
+              number: 7,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_INT32',
+              options: { features: { fieldPresence: 'IMPLICIT' } },
+            },
+            {
+              name: 'implicit_flag',
+              number: 8,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_BOOL',
+              options: { features: { fieldPresence: 'IMPLICIT' } },
+            },
+            {
+              name: 'child',
+              number: 9,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2026Child',
+            },
+            {
+              name: 'delimited_child',
+              number: 10,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2026Child',
+              options: { features: { messageEncoding: 'DELIMITED' } },
+            },
+            { name: 'packed_vals', number: 11, label: 'LABEL_REPEATED', type: 'TYPE_INT32' },
+            {
+              name: 'expanded_vals',
+              number: 12,
+              label: 'LABEL_REPEATED',
+              type: 'TYPE_INT32',
+              options: { features: { repeatedFieldEncoding: 'EXPANDED' } },
+            },
+            {
+              name: 'scores',
+              number: 13,
+              label: 'LABEL_REPEATED',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.TestEditions2026.ScoresEntry',
+            },
+            {
+              name: 'choice_int',
+              number: 14,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_INT32',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_text',
+              number: 15,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_STRING',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_flag',
+              number: 16,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_BOOL',
+              oneofIndex: 0,
+            },
+            {
+              name: 'choice_child',
+              number: 17,
+              label: 'LABEL_OPTIONAL',
+              type: 'TYPE_MESSAGE',
+              typeName: '.omnibuf.conformance.Editions2026Child',
+              oneofIndex: 0,
+            },
+          ],
+          nestedType: [
+            {
+              name: 'ScoresEntry',
+              options: { mapEntry: true },
+              field: [
+                { name: 'key', number: 1, label: 'LABEL_OPTIONAL', type: 'TYPE_STRING' },
+                { name: 'value', number: 2, label: 'LABEL_OPTIONAL', type: 'TYPE_INT32' },
               ],
             },
           ],
@@ -628,7 +1068,365 @@ export const TestAllTypesProtobufDesc: ProtobufDescMessage = {
   ],
 };
 
+function makeEditionsProtobufDesc(
+  year: '2023' | '2024' | '2026',
+  edition: number,
+): ProtobufDescMessage {
+  const file = {
+    name: `omnibuf/conformance/editions_${year}`,
+    edition,
+    proto: {
+      name: `omnibuf/conformance/editions_${year}.proto`,
+      syntax: 'editions',
+      edition,
+    },
+  };
+  const statusEnum = {
+    name: `Editions${year}Status`,
+    typeName: `omnibuf.conformance.Editions${year}Status`,
+    open: true,
+    values: [
+      { name: `EDITIONS${year}_STATUS_UNSPECIFIED`, number: 0 },
+      { name: `EDITIONS${year}_STATUS_ACTIVE`, number: 1 },
+      { name: `EDITIONS${year}_STATUS_PAUSED`, number: 2 },
+    ],
+  };
+  const childDesc: ProtobufDescMessage = {
+    typeName: `omnibuf.conformance.Editions${year}Child`,
+    file,
+    fields: [
+      {
+        number: 1,
+        name: 'id',
+        localName: 'id',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.INT32,
+        presence: 1,
+        utf8Validation: true,
+      },
+      {
+        number: 2,
+        name: 'note',
+        localName: 'note',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.STRING,
+        presence: 1,
+        utf8Validation: true,
+      },
+    ],
+  };
+  const choiceOneof = { name: 'choice', localName: 'choice' };
+  return {
+    typeName: `omnibuf.conformance.TestEditions${year}`,
+    file,
+    fields: [
+      {
+        number: 1,
+        name: 'explicit_int',
+        localName: 'explicitInt',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.INT32,
+        presence: 1,
+        utf8Validation: true,
+      },
+      {
+        number: 2,
+        name: 'explicit_bool',
+        localName: 'explicitBool',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.BOOL,
+        presence: 1,
+        utf8Validation: true,
+      },
+      {
+        number: 3,
+        name: 'explicit_string',
+        localName: 'explicitString',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.STRING,
+        presence: 1,
+        utf8Validation: true,
+      },
+      {
+        number: 4,
+        name: 'explicit_bytes',
+        localName: 'explicitBytes',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.BYTES,
+        presence: 1,
+        utf8Validation: true,
+      },
+      {
+        number: 5,
+        name: 'explicit_double',
+        localName: 'explicitDouble',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.DOUBLE,
+        presence: 1,
+        utf8Validation: true,
+      },
+      {
+        number: 6,
+        name: 'status',
+        localName: 'status',
+        fieldKind: 'enum',
+        enum: statusEnum,
+        presence: 1,
+        utf8Validation: true,
+      },
+      {
+        number: 7,
+        name: 'implicit_count',
+        localName: 'implicitCount',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.INT32,
+        presence: 2,
+        utf8Validation: true,
+      },
+      {
+        number: 8,
+        name: 'implicit_flag',
+        localName: 'implicitFlag',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.BOOL,
+        presence: 2,
+        utf8Validation: true,
+      },
+      {
+        number: 9,
+        name: 'child',
+        localName: 'child',
+        fieldKind: 'message',
+        message: childDesc,
+        presence: 1,
+        delimitedEncoding: false,
+        utf8Validation: true,
+      },
+      {
+        number: 10,
+        name: 'delimited_child',
+        localName: 'delimitedChild',
+        fieldKind: 'message',
+        message: childDesc,
+        presence: 1,
+        delimitedEncoding: true,
+        utf8Validation: true,
+      },
+      {
+        number: 11,
+        name: 'packed_vals',
+        localName: 'packedVals',
+        fieldKind: 'list',
+        listKind: 'scalar',
+        scalar: ProtoScalarType.INT32,
+        presence: 2,
+        utf8Validation: true,
+      },
+      {
+        number: 12,
+        name: 'expanded_vals',
+        localName: 'expandedVals',
+        fieldKind: 'list',
+        listKind: 'scalar',
+        scalar: ProtoScalarType.INT32,
+        presence: 2,
+        utf8Validation: true,
+      },
+      {
+        number: 13,
+        name: 'scores',
+        localName: 'scores',
+        fieldKind: 'map',
+        mapKey: ProtoScalarType.STRING,
+        mapKind: 'scalar',
+        scalar: ProtoScalarType.INT32,
+        presence: 2,
+        utf8Validation: true,
+      },
+      {
+        number: 14,
+        name: 'choice_int',
+        localName: 'choiceInt',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.INT32,
+        presence: 1,
+        oneof: choiceOneof,
+        utf8Validation: true,
+      },
+      {
+        number: 15,
+        name: 'choice_text',
+        localName: 'choiceText',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.STRING,
+        presence: 1,
+        oneof: choiceOneof,
+        utf8Validation: true,
+      },
+      {
+        number: 16,
+        name: 'choice_flag',
+        localName: 'choiceFlag',
+        fieldKind: 'scalar',
+        scalar: ProtoScalarType.BOOL,
+        presence: 1,
+        oneof: choiceOneof,
+        utf8Validation: true,
+      },
+      {
+        number: 17,
+        name: 'choice_child',
+        localName: 'choiceChild',
+        fieldKind: 'message',
+        message: childDesc,
+        presence: 1,
+        oneof: choiceOneof,
+        utf8Validation: true,
+      },
+    ],
+  };
+}
+
+export const TestEditions2023ProtobufDesc: ProtobufDescMessage = makeEditionsProtobufDesc(
+  '2023',
+  1000,
+);
+export const TestEditions2024ProtobufDesc: ProtobufDescMessage = makeEditionsProtobufDesc(
+  '2024',
+  1001,
+);
+export const TestEditions2026ProtobufDesc: ProtobufDescMessage = makeEditionsProtobufDesc(
+  '2026',
+  1002,
+);
+
 const defaultRegistry = new DescriptorRegistry(CONFORMANCE_FDS);
+
+interface EditionsChildLike {
+  id?: number | undefined;
+  note?: string | undefined;
+}
+
+interface EditionsMessageLike {
+  explicitInt?: number | undefined;
+  explicitBool?: boolean | undefined;
+  explicitString?: string | undefined;
+  explicitBytes?: Uint8Array | undefined;
+  explicitDouble?: number | undefined;
+  status?: number | undefined;
+  implicitCount: number;
+  implicitFlag: boolean;
+  child: EditionsChildLike | null;
+  delimitedChild: EditionsChildLike | null;
+  packedVals: number[];
+  expandedVals: number[];
+  scores: Record<string, number>;
+  choice: { case: string | undefined; value?: unknown };
+  choiceInt?: number | undefined;
+  choiceText?: string | undefined;
+  choiceFlag?: boolean | undefined;
+  choiceChild?: EditionsChildLike | null | undefined;
+}
+
+interface EditionsOpaqueLike {
+  hasExplicitInt(): boolean;
+  getExplicitInt(): number | undefined;
+  hasExplicitBool(): boolean;
+  getExplicitBool(): boolean | undefined;
+  hasExplicitString(): boolean;
+  getExplicitString(): string | undefined;
+  hasExplicitBytes(): boolean;
+  getExplicitBytes(): Uint8Array | undefined;
+  hasExplicitDouble(): boolean;
+  getExplicitDouble(): number | undefined;
+  hasStatus(): boolean;
+  getStatus(): number | undefined;
+  getImplicitCount(): number;
+  getImplicitFlag(): boolean;
+  hasChild(): boolean;
+  getChild(): EditionsChildLike | null;
+  hasDelimitedChild(): boolean;
+  getDelimitedChild(): EditionsChildLike | null;
+  getPackedVals(): number[];
+  getExpandedVals(): number[];
+  getScores(): Record<string, number>;
+  hasChoiceInt(): boolean;
+  getChoiceInt(): number | undefined;
+  hasChoiceText(): boolean;
+  getChoiceText(): string | undefined;
+  hasChoiceFlag(): boolean;
+  getChoiceFlag(): boolean | undefined;
+  hasChoiceChild(): boolean;
+  getChoiceChild(): EditionsChildLike | null | undefined;
+}
+
+function editionsChildrenEqual(
+  a: EditionsChildLike | null | undefined,
+  b: EditionsChildLike | null | undefined,
+): boolean {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return a.id === b.id && a.note === b.note;
+}
+
+function numberArraysEqual(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function numberMapsEqual(a: Record<string, number>, b: Record<string, number>): boolean {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (!Object.hasOwn(b, k) || a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
+function checkEditionsOpaqueParity(op: EditionsOpaqueLike, msg: EditionsMessageLike): boolean {
+  const opBytes = op.getExplicitBytes();
+  const bytesMatch =
+    opBytes === undefined && msg.explicitBytes === undefined
+      ? true
+      : opBytes !== undefined &&
+        msg.explicitBytes !== undefined &&
+        bytesEqual(opBytes, msg.explicitBytes);
+  return (
+    op.hasExplicitInt() === (msg.explicitInt !== undefined) &&
+    op.getExplicitInt() === msg.explicitInt &&
+    op.hasExplicitBool() === (msg.explicitBool !== undefined) &&
+    op.getExplicitBool() === msg.explicitBool &&
+    op.hasExplicitString() === (msg.explicitString !== undefined) &&
+    op.getExplicitString() === msg.explicitString &&
+    op.hasExplicitBytes() === (msg.explicitBytes !== undefined) &&
+    bytesMatch &&
+    op.hasExplicitDouble() === (msg.explicitDouble !== undefined) &&
+    Object.is(op.getExplicitDouble(), msg.explicitDouble) &&
+    op.hasStatus() === (msg.status !== undefined) &&
+    op.getStatus() === msg.status &&
+    op.getImplicitCount() === msg.implicitCount &&
+    op.getImplicitFlag() === msg.implicitFlag &&
+    op.hasChild() === (msg.child !== null) &&
+    editionsChildrenEqual(op.getChild(), msg.child) &&
+    op.hasDelimitedChild() === (msg.delimitedChild !== null) &&
+    editionsChildrenEqual(op.getDelimitedChild(), msg.delimitedChild) &&
+    numberArraysEqual(op.getPackedVals(), msg.packedVals) &&
+    numberArraysEqual(op.getExpandedVals(), msg.expandedVals) &&
+    numberMapsEqual(op.getScores(), msg.scores) &&
+    op.hasChoiceInt() === (msg.choice.case === 'choiceInt') &&
+    op.getChoiceInt() === msg.choiceInt &&
+    op.hasChoiceText() === (msg.choice.case === 'choiceText') &&
+    op.getChoiceText() === msg.choiceText &&
+    op.hasChoiceFlag() === (msg.choice.case === 'choiceFlag') &&
+    op.getChoiceFlag() === msg.choiceFlag &&
+    op.hasChoiceChild() === (msg.choice.case === 'choiceChild') &&
+    editionsChildrenEqual(op.getChoiceChild(), msg.choiceChild)
+  );
+}
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.byteLength !== b.byteLength) return false;
@@ -1008,8 +1806,126 @@ export function handleConformanceRequest(
             return resp;
           }
 
+          case 'omnibuf.conformance.TestEditions2023': {
+            const msg = createTestEditions2023({
+              explicitInt: 999,
+              explicitBool: true,
+              explicitString: 'stale',
+              explicitBytes: new Uint8Array([0xff]),
+              explicitDouble: 99.5,
+              status: Editions2023Status.EDITIONS2023_STATUS_PAUSED,
+              implicitCount: 999,
+              implicitFlag: true,
+              child: createEditions2023Child({ id: 999, note: 'stale' }),
+              delimitedChild: createEditions2023Child({ id: 999, note: 'stale' }),
+              packedVals: [999],
+              expandedVals: [999],
+              scores: { stale: 999 },
+              choice: { case: 'choiceText', value: 'stale' },
+            });
+            try {
+              decodeTestEditions2023(payload, msg);
+            } catch (err) {
+              resp.parse_error = err instanceof Error ? err.message : String(err);
+              return resp;
+            }
+            const op = new OpaqueTestEditions2023(payload);
+            if (!checkEditionsOpaqueParity(op, msg)) {
+              resp.parse_error = 'opaque TestEditions2023 getter mismatch with decoded struct';
+              return resp;
+            }
+            try {
+              resp.omnibuf_payload = marshalTestEditions2023OmniBuf(msg, {
+                deterministic: true,
+                selfDescribing: Boolean(req.self_describing),
+              });
+            } catch (err) {
+              resp.serialize_error = err instanceof Error ? err.message : String(err);
+            }
+            return resp;
+          }
+
+          case 'omnibuf.conformance.TestEditions2024': {
+            const msg = createTestEditions2024({
+              explicitInt: 999,
+              explicitBool: true,
+              explicitString: 'stale',
+              explicitBytes: new Uint8Array([0xff]),
+              explicitDouble: 99.5,
+              status: Editions2024Status.EDITIONS2024_STATUS_PAUSED,
+              implicitCount: 999,
+              implicitFlag: true,
+              child: createEditions2024Child({ id: 999, note: 'stale' }),
+              delimitedChild: createEditions2024Child({ id: 999, note: 'stale' }),
+              packedVals: [999],
+              expandedVals: [999],
+              scores: { stale: 999 },
+              choice: { case: 'choiceText', value: 'stale' },
+            });
+            try {
+              decodeTestEditions2024(payload, msg);
+            } catch (err) {
+              resp.parse_error = err instanceof Error ? err.message : String(err);
+              return resp;
+            }
+            const op = new OpaqueTestEditions2024(payload);
+            if (!checkEditionsOpaqueParity(op, msg)) {
+              resp.parse_error = 'opaque TestEditions2024 getter mismatch with decoded struct';
+              return resp;
+            }
+            try {
+              resp.omnibuf_payload = marshalTestEditions2024OmniBuf(msg, {
+                deterministic: true,
+                selfDescribing: Boolean(req.self_describing),
+              });
+            } catch (err) {
+              resp.serialize_error = err instanceof Error ? err.message : String(err);
+            }
+            return resp;
+          }
+
+          case 'omnibuf.conformance.TestEditions2026': {
+            const msg = createTestEditions2026({
+              explicitInt: 999,
+              explicitBool: true,
+              explicitString: 'stale',
+              explicitBytes: new Uint8Array([0xff]),
+              explicitDouble: 99.5,
+              status: Editions2026Status.EDITIONS2026_STATUS_PAUSED,
+              implicitCount: 999,
+              implicitFlag: true,
+              child: createEditions2026Child({ id: 999, note: 'stale' }),
+              delimitedChild: createEditions2026Child({ id: 999, note: 'stale' }),
+              packedVals: [999],
+              expandedVals: [999],
+              scores: { stale: 999 },
+              choice: { case: 'choiceText', value: 'stale' },
+            });
+            try {
+              decodeTestEditions2026(payload, msg);
+            } catch (err) {
+              resp.parse_error = err instanceof Error ? err.message : String(err);
+              return resp;
+            }
+            const op = new OpaqueTestEditions2026(payload);
+            if (!checkEditionsOpaqueParity(op, msg)) {
+              resp.parse_error = 'opaque TestEditions2026 getter mismatch with decoded struct';
+              return resp;
+            }
+            try {
+              resp.omnibuf_payload = marshalTestEditions2026OmniBuf(msg, {
+                deterministic: true,
+                selfDescribing: Boolean(req.self_describing),
+              });
+            } catch (err) {
+              resp.serialize_error = err instanceof Error ? err.message : String(err);
+            }
+            return resp;
+          }
+
           default:
-            resp.skipped = 'plugin tier generated for PeerUpdate and TestAllTypes';
+            resp.skipped =
+              'plugin tier generated for PeerUpdate, TestAllTypes, and Editions 2023/2024/2026';
             return resp;
         }
       }
@@ -1020,9 +1936,16 @@ export function handleConformanceRequest(
             ? PeerUpdateProtobufDesc
             : req.message_type === 'omnibuf.conformance.TestAllTypes'
               ? TestAllTypesProtobufDesc
-              : null;
+              : req.message_type === 'omnibuf.conformance.TestEditions2023'
+                ? TestEditions2023ProtobufDesc
+                : req.message_type === 'omnibuf.conformance.TestEditions2024'
+                  ? TestEditions2024ProtobufDesc
+                  : req.message_type === 'omnibuf.conformance.TestEditions2026'
+                    ? TestEditions2026ProtobufDesc
+                    : null;
         if (!desc) {
-          resp.skipped = 'protobuf types tier exercises pb.PeerUpdate and pb.TestAllTypes';
+          resp.skipped =
+            'protobuf types tier exercises PeerUpdate, TestAllTypes, and Editions 2023/2024/2026';
           return resp;
         }
         let msg;

@@ -51,20 +51,32 @@ function writePbStringField(out: number[], fieldNum: number, str: string): void 
   }
 }
 
-function encodeCodeGeneratorResponse(files: Array<{ name: string; content: string }>): Uint8Array {
+function encodeCodeGeneratorResponse(
+  files: Array<{ name: string; content: string }>,
+  error?: string,
+): Uint8Array {
   const out: number[] = [];
-  // feature = FEATURE_PROTO3_OPTIONAL (1), field 2, varint
+  if (error !== undefined && error.length > 0) {
+    writePbStringField(out, 1, error);
+  }
+  // FEATURE_PROTO3_OPTIONAL (1) | FEATURE_SUPPORTS_EDITIONS (2) = 3; Editions 2023..2026
   writePbVarint(out, (2 << 3) | 0);
-  writePbVarint(out, 1);
+  writePbVarint(out, 3);
+  writePbVarint(out, (3 << 3) | 0);
+  writePbVarint(out, 1000);
+  writePbVarint(out, (4 << 3) | 0);
+  writePbVarint(out, 1002);
 
-  for (const f of files) {
-    const fileBuf: number[] = [];
-    writePbStringField(fileBuf, 1, f.name);
-    writePbStringField(fileBuf, 15, f.content);
-    writePbVarint(out, (15 << 3) | 2);
-    writePbVarint(out, fileBuf.length);
-    for (let i = 0; i < fileBuf.length; i++) {
-      out.push(fileBuf[i]);
+  if (!error) {
+    for (const f of files) {
+      const fileBuf: number[] = [];
+      writePbStringField(fileBuf, 1, f.name);
+      writePbStringField(fileBuf, 15, f.content);
+      writePbVarint(out, (15 << 3) | 2);
+      writePbVarint(out, fileBuf.length);
+      for (let i = 0; i < fileBuf.length; i++) {
+        out.push(fileBuf[i]!);
+      }
     }
   }
   return new Uint8Array(out);
@@ -80,69 +92,74 @@ async function main(): Promise<void> {
   const filesToGenerate = new Set<string>();
   const protoFileSlices: Uint8Array[] = [];
 
-  let pos = 0;
-  while (pos < reqBytes.length) {
-    const [tag, p1] = readPbVarint(reqBytes, pos);
-    pos = p1;
-    const fieldNum = Number(tag >> 3n);
-    const wt = Number(tag & 7n);
-    if (wt === 2 && fieldNum === 1) {
-      const [sub, nextPos] = readPbBytes(reqBytes, pos);
-      const name = new TextDecoder().decode(sub);
-      filesToGenerate.add(name);
-      pos = nextPos;
-    } else if (wt === 2 && fieldNum === 15) {
-      // Field 15 in CodeGeneratorRequest is repeated FileDescriptorProto proto_file.
-      // Wrap it as Field 1 of a FileDescriptorSet so parseBinaryFileDescriptorSet can parse it.
-      const [sub, nextPos] = readPbBytes(reqBytes, pos);
-      pos = nextPos;
-      const wrapped: number[] = [];
-      writePbVarint(wrapped, (1 << 3) | 2);
-      writePbVarint(wrapped, sub.length);
-      const fdsBuf = new Uint8Array(wrapped.length + sub.length);
-      fdsBuf.set(wrapped, 0);
-      fdsBuf.set(sub, wrapped.length);
-      protoFileSlices.push(fdsBuf);
-    } else if (wt === 0) {
-      const [, p2] = readPbVarint(reqBytes, pos);
-      pos = p2;
-    } else if (wt === 2) {
-      const [, nextPos] = readPbBytes(reqBytes, pos);
-      pos = nextPos;
-    } else if (wt === 1) {
-      if (reqBytes.length - pos < 8) {
-        throw new Error('protoc-gen-omnibuf-es: truncated 64-bit field');
+  try {
+    let pos = 0;
+    while (pos < reqBytes.length) {
+      const [tag, p1] = readPbVarint(reqBytes, pos);
+      pos = p1;
+      const fieldNum = Number(tag >> 3n);
+      const wt = Number(tag & 7n);
+      if (wt === 2 && fieldNum === 1) {
+        const [sub, nextPos] = readPbBytes(reqBytes, pos);
+        const name = new TextDecoder().decode(sub);
+        filesToGenerate.add(name);
+        pos = nextPos;
+      } else if (wt === 2 && fieldNum === 15) {
+        // Field 15 in CodeGeneratorRequest is repeated FileDescriptorProto proto_file.
+        // Wrap it as Field 1 of a FileDescriptorSet so parseBinaryFileDescriptorSet can parse it.
+        const [sub, nextPos] = readPbBytes(reqBytes, pos);
+        pos = nextPos;
+        const wrapped: number[] = [];
+        writePbVarint(wrapped, (1 << 3) | 2);
+        writePbVarint(wrapped, sub.length);
+        const fdsBuf = new Uint8Array(wrapped.length + sub.length);
+        fdsBuf.set(wrapped, 0);
+        fdsBuf.set(sub, wrapped.length);
+        protoFileSlices.push(fdsBuf);
+      } else if (wt === 0) {
+        const [, p2] = readPbVarint(reqBytes, pos);
+        pos = p2;
+      } else if (wt === 2) {
+        const [, nextPos] = readPbBytes(reqBytes, pos);
+        pos = nextPos;
+      } else if (wt === 1) {
+        if (reqBytes.length - pos < 8) {
+          throw new Error('protoc-gen-omnibuf-es: truncated 64-bit field');
+        }
+        pos += 8;
+      } else if (wt === 5) {
+        if (reqBytes.length - pos < 4) {
+          throw new Error('protoc-gen-omnibuf-es: truncated 32-bit field');
+        }
+        pos += 4;
+      } else {
+        throw new Error(`protoc-gen-omnibuf-es: unsupported wire type ${wt}`);
       }
-      pos += 8;
-    } else if (wt === 5) {
-      if (reqBytes.length - pos < 4) {
-        throw new Error('protoc-gen-omnibuf-es: truncated 32-bit field');
+    }
+
+    const combinedLen = protoFileSlices.reduce((acc, s) => acc + s.length, 0);
+    const combinedFdsBytes = new Uint8Array(combinedLen);
+    let offset = 0;
+    for (const s of protoFileSlices) {
+      combinedFdsBytes.set(s, offset);
+      offset += s.length;
+    }
+
+    const fds = parseBinaryFileDescriptorSet(combinedFdsBytes);
+    const allFiles = fds.file ?? [];
+    const generated = [];
+    for (const file of allFiles) {
+      if (filesToGenerate.size === 0 || (file.name && filesToGenerate.has(file.name))) {
+        generated.push(generateFileCode(file, allFiles));
       }
-      pos += 4;
-    } else {
-      throw new Error(`protoc-gen-omnibuf-es: unsupported wire type ${wt}`);
     }
-  }
 
-  const combinedLen = protoFileSlices.reduce((acc, s) => acc + s.length, 0);
-  const combinedFdsBytes = new Uint8Array(combinedLen);
-  let offset = 0;
-  for (const s of protoFileSlices) {
-    combinedFdsBytes.set(s, offset);
-    offset += s.length;
+    const respBytes = encodeCodeGeneratorResponse(generated);
+    process.stdout.write(respBytes);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stdout.write(encodeCodeGeneratorResponse([], message));
   }
-
-  const fds = parseBinaryFileDescriptorSet(combinedFdsBytes);
-  const allFiles = fds.file ?? [];
-  const generated = [];
-  for (const file of allFiles) {
-    if (filesToGenerate.size === 0 || (file.name && filesToGenerate.has(file.name))) {
-      generated.push(generateFileCode(file, allFiles));
-    }
-  }
-
-  const respBytes = encodeCodeGeneratorResponse(generated);
-  process.stdout.write(respBytes);
 }
 
 main().catch((err) => {

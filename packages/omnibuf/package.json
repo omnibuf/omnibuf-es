@@ -1,6 +1,6 @@
 {
   "name": "@omnibuf/core",
-  "version": "0.1.0",
+  "version": "0.1.13",
   "description": "Core TypeScript implementation of the OmniBuf binary wire format",
   "type": "module",
   "license": "Apache-2.0",

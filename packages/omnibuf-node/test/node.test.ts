@@ -26,6 +26,8 @@ function expect(actual: unknown, message?: string) {
   };
 }
 import {
+  CONFORMANCE_FDS,
+  DescriptorRegistry,
   NodeBufferStringCodec,
   OpaquePeerUpdate,
   PeerUpdateSchema,
@@ -313,6 +315,11 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
 
   it('passes all valid vectors and rejects all invalid wire vectors in conformance_corpus.json across all 4 tiers', () => {
     const corpus = JSON.parse(readFileSync(CORPUS_PATH, 'utf8'));
+    const conformanceRegistry = new DescriptorRegistry(CONFORMANCE_FDS);
+    const isEditionsSchema = (schema: string): boolean =>
+      schema === 'TestEditions2023' ||
+      schema === 'TestEditions2024' ||
+      schema === 'TestEditions2026';
 
     // 1. Verify all valid vectors across Blind, AnnotatedStruct, ProtobufTypes, and Plugin tiers
     for (const vec of corpus.valid_vectors) {
@@ -343,20 +350,24 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
             ? 'omnibuf.conformance.TreeNode'
             : vec.schema === 'NestedCluster'
               ? 'omnibuf.conformance.NestedCluster'
-              : 'omnibuf.conformance.TestAllTypes';
+              : isEditionsSchema(vec.schema)
+                ? `omnibuf.conformance.${vec.schema}`
+                : 'omnibuf.conformance.TestAllTypes';
 
       const tiers =
         vec.schema === 'PeerUpdate' || vec.schema === 'TestAllTypes'
           ? [TestTierPlugin, TestTierProtobufTypes, TestTierAnnotatedStruct]
-          : [
-                'EmptyMessage',
-                'SparseField14',
-                'SelfDescribingSparse',
-                'TreeNode',
-                'NestedCluster',
-              ].includes(vec.schema)
-            ? [TestTierAnnotatedStruct]
-            : [];
+          : isEditionsSchema(vec.schema)
+            ? [TestTierPlugin, TestTierProtobufTypes]
+            : [
+                  'EmptyMessage',
+                  'SparseField14',
+                  'SelfDescribingSparse',
+                  'TreeNode',
+                  'NestedCluster',
+                ].includes(vec.schema)
+              ? [TestTierAnnotatedStruct]
+              : [];
 
       for (const tier of tiers) {
         const resp = handleConformanceRequest({
@@ -382,7 +393,44 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
           Buffer.from(resp.omnibuf_payload).toString('hex'),
         );
 
-        if (vec.schema === 'PeerUpdate') {
+        if (isEditionsSchema(vec.schema)) {
+          const respSD = handleConformanceRequest({
+            test_name: `${vec.name}/Tier_${tier}/SelfDescribing`,
+            message_type: canonicalType,
+            tier,
+            requested_output_format: WireFormatOmniBuf,
+            omnibuf_payload: rawWire,
+            self_describing: true,
+          });
+          expect(respSD.parse_error, `tier ${tier} SD parse_error on ${vec.name}`).toBe('');
+          expect(respSD.serialize_error, `tier ${tier} SD serialize_error on ${vec.name}`).toBe('');
+          expect(respSD.runtime_error, `tier ${tier} SD runtime_error on ${vec.name}`).toBe('');
+          const [meta, ok] = readField0SchemaMeta(respSD.omnibuf_payload);
+          expect(ok).toBe(true);
+          expect(meta?.fields?.[1]).toBe('explicit_int');
+          expect(meta?.fields?.[10]).toBe('delimited_child');
+          expect(meta?.fields?.[14]).toBe('choice_int');
+
+          // Also verify DescriptorRegistry resolves Editions 2023/2024/2026 byte-for-byte identically
+          if (tier === TestTierProtobufTypes) {
+            const regMsg = conformanceRegistry.decode(canonicalType, rawWire);
+            const regWire = conformanceRegistry.encode(canonicalType, regMsg, {
+              deterministic: true,
+              writeUnknownFields: true,
+            });
+            expect(Buffer.from(regWire).toString('hex')).toBe(
+              Buffer.from(resp.omnibuf_payload).toString('hex'),
+            );
+            const regWireSD = conformanceRegistry.encode(canonicalType, regMsg, {
+              deterministic: true,
+              selfDescribing: true,
+              writeUnknownFields: true,
+            });
+            expect(Buffer.from(regWireSD).toString('hex')).toBe(
+              Buffer.from(respSD.omnibuf_payload).toString('hex'),
+            );
+          }
+        } else if (vec.schema === 'PeerUpdate') {
           const respSD = handleConformanceRequest({
             test_name: `${vec.name}/Tier_${tier}/SelfDescribing`,
             message_type: canonicalType,
@@ -522,7 +570,9 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
             ? 'omnibuf.conformance.TreeNode'
             : icSchema === 'NestedCluster'
               ? 'omnibuf.conformance.NestedCluster'
-              : 'omnibuf.conformance.TestAllTypes';
+              : isEditionsSchema(icSchema)
+                ? `omnibuf.conformance.${icSchema}`
+                : 'omnibuf.conformance.TestAllTypes';
 
       const blindResp = handleConformanceRequest({
         test_name: `Invalid/${ic.name}/Blind`,
@@ -537,7 +587,9 @@ describe('@omnibuf/node - Byte-for-byte Verification Against Golden Files & Conf
       const icTiers =
         icSchema === 'PeerUpdate' || icSchema === 'TestAllTypes'
           ? [TestTierPlugin, TestTierProtobufTypes, TestTierAnnotatedStruct]
-          : [TestTierAnnotatedStruct];
+          : isEditionsSchema(icSchema)
+            ? [TestTierPlugin, TestTierProtobufTypes]
+            : [TestTierAnnotatedStruct];
       const isNonField0UTF8 = ic.category === 'InvalidUTF8' && !ic.name.includes('field0');
 
       for (const tier of icTiers) {

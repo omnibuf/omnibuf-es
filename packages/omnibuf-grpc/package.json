@@ -1,6 +1,6 @@
 {
   "name": "@omnibuf/grpc",
-  "version": "0.1.0",
+  "version": "0.1.13",
   "description": "OmniBuf marshallers and method definitions for @grpc/grpc-js",
   "type": "module",
   "license": "Apache-2.0",

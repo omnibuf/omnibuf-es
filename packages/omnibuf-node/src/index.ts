@@ -16,6 +16,9 @@ import {
 export * from '@omnibuf/core';
 export * from './conformance.js';
 export * from './gen/peer_omnibuf.pb.js';
+export * from './gen/editions_2023_omnibuf.pb.js';
+export * from './gen/editions_2024_omnibuf.pb.js';
+export * from './gen/editions_2026_omnibuf.pb.js';
 export {
   type AllTypesSubMsg,
   type TestAllTypes,

@@ -1,3 +1,10 @@
+import {
+  isDescriptorOptionExtension,
+  isSupportedEdition,
+  isZeroDecodedDefaultValue,
+  isZeroDefaultString,
+  resolveEditionFiles,
+} from './editions.js';
 import { base64ToUint8Array, readField0SchemaMeta, uint8ArrayToBase64 } from './blind.js';
 import { MaxNestingDepth, decodeUTF8 } from './wire.js';
 import {
@@ -14,8 +21,41 @@ import {
 } from './schema.js';
 
 /**
- * Minimal structural typing for `@bufbuild/protobuf` v1 & v2 `DescMessage` and `DescField`.
+ * Minimal structural typing for `@bufbuild/protobuf` v1 & v2 `DescFile`, `DescEnum`,
+ * `DescExtension`, `DescMessage`, and `DescField`.
  */
+export interface ProtobufDescEnum {
+  readonly name?: string;
+  readonly typeName?: string;
+  readonly open?: boolean;
+  readonly values?: readonly { readonly name?: string; readonly number?: number }[];
+  readonly proto?: {
+    readonly name?: string;
+    readonly options?: { readonly features?: EditionFeatures };
+  };
+}
+
+export interface ProtobufDescExtension {
+  readonly name?: string;
+  readonly typeName?: string;
+  readonly extendee?: { readonly typeName?: string };
+  readonly proto?: { readonly name?: string; readonly extendee?: string };
+}
+
+export interface ProtobufDescFile {
+  readonly name?: string;
+  readonly edition?: number | string;
+  readonly enums?: readonly ProtobufDescEnum[];
+  readonly extensions?: readonly ProtobufDescExtension[];
+  readonly proto?: {
+    readonly name?: string;
+    readonly syntax?: string;
+    readonly edition?: number | string;
+    readonly extension?: readonly FieldDescriptorProtoJSON[];
+    readonly options?: { readonly features?: EditionFeatures };
+  };
+}
+
 export interface ProtobufDescField {
   readonly number: number;
   readonly name: string;
@@ -26,28 +66,47 @@ export interface ProtobufDescField {
   readonly scalar?: number;
   readonly listKind?: 'scalar' | 'enum' | 'message';
   readonly message?: ProtobufDescMessage;
+  readonly enum?: ProtobufDescEnum;
   readonly mapKey?: number;
   readonly mapKind?: 'scalar' | 'enum' | 'message';
   readonly longAsString?: boolean;
   readonly presence?: number | string;
   readonly opt?: boolean;
+  readonly utf8Validation?: boolean;
+  readonly delimitedEncoding?: boolean;
+  readonly getDefaultValue?: () => unknown;
   readonly proto?: {
+    readonly label?: number | string;
+    readonly type?: number | string;
+    readonly defaultValue?: string;
     readonly proto3Optional?: boolean;
+    readonly options?: { readonly features?: EditionFeatures };
   };
   readonly oneof?: {
     readonly name: string;
     readonly localName?: string;
+    readonly proto?: {
+      readonly options?: { readonly features?: EditionFeatures };
+    };
   };
   readonly mapValue?: {
     readonly kind: 'scalar' | 'enum' | 'message';
     readonly scalar?: number;
     readonly message?: ProtobufDescMessage;
+    readonly enum?: ProtobufDescEnum;
   };
 }
 
 export interface ProtobufDescMessage {
   readonly typeName: string;
   readonly fields: readonly ProtobufDescField[];
+  readonly file?: ProtobufDescFile;
+  readonly nestedEnums?: readonly ProtobufDescEnum[];
+  readonly nestedExtensions?: readonly ProtobufDescExtension[];
+  readonly proto?: {
+    readonly extension?: readonly FieldDescriptorProtoJSON[];
+    readonly options?: { readonly features?: EditionFeatures };
+  };
 }
 
 /**
@@ -65,14 +124,30 @@ export interface FileDescriptorProtoJSON {
   enumType?: EnumDescriptorProtoJSON[];
   extension?: FieldDescriptorProtoJSON[];
   syntax?: string;
+  edition?: number | string;
+  options?: { features?: EditionFeatures };
+}
+
+export interface EditionFeatures {
+  fieldPresence?: number | string;
+  enumType?: number | string;
+  repeatedFieldEncoding?: number | string;
+  utf8Validation?: number | string;
+  messageEncoding?: number | string;
+  jsonFormat?: number | string;
+  enforceNamingStyle?: number | string;
+  defaultSymbolVisibility?: number | string;
+  enforceProtoLimits?: number | string;
 }
 
 export interface EnumDescriptorProtoJSON {
+  options?: { features?: EditionFeatures };
   name?: string;
   value?: Array<{ name?: string; number?: number }>;
 }
 
 export interface OneofDescriptorProtoJSON {
+  options?: { features?: EditionFeatures };
   name?: string;
 }
 
@@ -85,18 +160,22 @@ export interface DescriptorProtoJSON {
   oneofDecl?: OneofDescriptorProtoJSON[];
   options?: {
     mapEntry?: boolean;
+    features?: EditionFeatures;
   };
 }
 
 export interface FieldDescriptorProtoJSON {
   name?: string;
+  extendee?: string;
   number?: number;
   label?: string | number;
   type?: string | number;
   typeName?: string;
+  defaultValue?: string;
   jsonName?: string;
   oneofIndex?: number;
   proto3Optional?: boolean;
+  options?: { features?: EditionFeatures };
 }
 
 /**
@@ -236,6 +315,86 @@ const compiledProtobufDescCache = new WeakMap<
   MessageSchema<Record<string, unknown>>
 >();
 
+function inspectDescFileEdition(file: ProtobufDescFile | undefined): { isEditions: boolean } {
+  if (!file) return { isEditions: false };
+  const fileLabel = file.proto?.name ?? file.name ?? 'unknown';
+  if (file.proto?.syntax === 'editions') {
+    if (!isSupportedEdition(file.proto.edition)) {
+      throw new Error(
+        `omnibuf: unsupported protobuf edition ${String(file.proto.edition)} (${fileLabel})`,
+      );
+    }
+    return { isEditions: true };
+  }
+  if (
+    file.proto?.syntax === 'proto2' ||
+    file.proto?.syntax === 'proto3' ||
+    file.proto?.syntax === ''
+  ) {
+    if (
+      file.edition !== undefined &&
+      file.edition !== 998 &&
+      file.edition !== 'EDITION_PROTO2' &&
+      file.edition !== 999 &&
+      file.edition !== 'EDITION_PROTO3'
+    ) {
+      if (!isSupportedEdition(file.edition)) {
+        throw new Error(
+          `omnibuf: unsupported protobuf edition ${String(file.edition)} (${fileLabel})`,
+        );
+      }
+      return { isEditions: true };
+    }
+    return { isEditions: false };
+  }
+  if (file.edition !== undefined) {
+    if (
+      file.edition === 998 ||
+      file.edition === 'EDITION_PROTO2' ||
+      file.edition === 999 ||
+      file.edition === 'EDITION_PROTO3'
+    ) {
+      return { isEditions: false };
+    }
+    if (!isSupportedEdition(file.edition)) {
+      throw new Error(
+        `omnibuf: unsupported protobuf edition ${String(file.edition)} (${fileLabel})`,
+      );
+    }
+    return { isEditions: true };
+  }
+  return { isEditions: false };
+}
+
+function validateDescExtensions(
+  exts: readonly ProtobufDescExtension[] | undefined,
+  protoExts: readonly FieldDescriptorProtoJSON[] | undefined,
+  ownerLabel: string,
+  isEditions: boolean,
+): void {
+  const kind = isEditions ? 'editions' : 'proto2';
+  if (exts !== undefined) {
+    for (const ext of exts) {
+      const extendee = ext.extendee?.typeName ?? ext.proto?.extendee;
+      if (!isDescriptorOptionExtension({ extendee })) {
+        throw new Error(
+          `omnibuf: ${kind} extensions are not supported (${ownerLabel}.${ext.name ?? 'extension'})`,
+        );
+      }
+    }
+    return;
+  }
+  if (protoExts !== undefined) {
+    for (const ext of protoExts) {
+      if (!isDescriptorOptionExtension(ext)) {
+        throw new Error(
+          `omnibuf: ${kind} extensions are not supported (${ownerLabel}.${ext.name ?? 'extension'})`,
+        );
+      }
+    }
+  }
+}
+
 /**
  * Compile a `@bufbuild/protobuf` `DescMessage` (v1 or v2) into an OmniBuf `MessageSchema`.
  * Automatically maps `localName` (`camelCase`) and `.proto` `name` (`snake_case`) so both
@@ -254,16 +413,123 @@ export function schemaFromProtobufDesc<T extends object = Record<string, unknown
   }
   const cache = new Map<string, MessageSchema<Record<string, unknown>>>();
   const building = new Set<string>();
+  const validatedFiles = new Set<ProtobufDescFile>();
   const optionalSubMessages = options?.optionalSubMessages ?? true;
+
+  function validateMessage(d: ProtobufDescMessage): boolean {
+    const { isEditions } = inspectDescFileEdition(d.file);
+    if (d.file && !validatedFiles.has(d.file)) {
+      const fileLabel = d.file.proto?.name ?? d.file.name ?? d.typeName;
+      validateDescExtensions(d.file.extensions, d.file.proto?.extension, fileLabel, isEditions);
+      if (isEditions) {
+        for (const en of d.file.enums ?? []) {
+          if (en.open === false) {
+            throw new Error(
+              `omnibuf: editions CLOSED enums are not supported (${en.typeName ?? en.name ?? fileLabel})`,
+            );
+          }
+        }
+      }
+      validatedFiles.add(d.file);
+    }
+    validateDescExtensions(d.nestedExtensions, d.proto?.extension, d.typeName, isEditions);
+    if (isEditions) {
+      for (const en of d.nestedEnums ?? []) {
+        if (en.open === false) {
+          throw new Error(
+            `omnibuf: editions CLOSED enums are not supported (${en.typeName ?? en.name ?? d.typeName})`,
+          );
+        }
+      }
+    }
+    return isEditions;
+  }
+
+  function validateField(d: ProtobufDescMessage, f: ProtobufDescField, isEditions: boolean): void {
+    const fieldLabel = `${d.typeName}.${f.name}`;
+    const oneofPresence = f.oneof?.proto?.options?.features?.fieldPresence;
+    if (
+      f.presence === 3 ||
+      f.presence === 'LEGACY_REQUIRED' ||
+      oneofPresence === 3 ||
+      oneofPresence === 'LEGACY_REQUIRED' ||
+      (isEditions && (f.proto?.label === 2 || f.proto?.label === 'LABEL_REQUIRED'))
+    ) {
+      throw new Error(`omnibuf: editions LEGACY_REQUIRED fields are not supported (${fieldLabel})`);
+    }
+    if (
+      !isEditions &&
+      (f.proto?.type === ProtoScalarType.GROUP || f.proto?.type === 'TYPE_GROUP')
+    ) {
+      throw new Error(`omnibuf: proto2 groups (TYPE_GROUP) are not supported (${fieldLabel})`);
+    }
+    if (!isEditions) return;
+
+    const mapKind = f.mapKind ?? f.mapValue?.kind ?? 'scalar';
+    const mapValScalar = f.scalar ?? f.mapValue?.scalar;
+    const isEnumField =
+      f.fieldKind === 'enum' ||
+      (f.fieldKind === 'list' && f.listKind === 'enum') ||
+      (f.fieldKind === 'map' && mapKind === 'enum');
+    if (isEnumField) {
+      const en = f.enum ?? f.mapValue?.enum;
+      if (en?.open === false) {
+        throw new Error(
+          `omnibuf: editions CLOSED enums are not supported (${fieldLabel} -> ${en.typeName ?? en.name ?? ''})`,
+        );
+      }
+    }
+
+    const isStringField =
+      (f.fieldKind === 'scalar' && f.scalar === ProtoScalarType.STRING) ||
+      (f.fieldKind === 'list' && f.listKind === 'scalar' && f.scalar === ProtoScalarType.STRING) ||
+      (f.fieldKind === 'map' &&
+        (f.mapKey === ProtoScalarType.STRING ||
+          (mapKind === 'scalar' && mapValScalar === ProtoScalarType.STRING)));
+    const fieldUtf8 = f.proto?.options?.features?.utf8Validation;
+    const oneofUtf8 = f.oneof?.proto?.options?.features?.utf8Validation;
+    const oneofUtf8None =
+      (oneofUtf8 === 3 || oneofUtf8 === 'NONE') && fieldUtf8 !== 2 && fieldUtf8 !== 'VERIFY';
+    const utf8None =
+      f.utf8Validation === false || fieldUtf8 === 3 || fieldUtf8 === 'NONE' || oneofUtf8None;
+    if (isStringField && utf8None) {
+      throw new Error(`omnibuf: editions UTF-8 NONE is not supported (${fieldLabel})`);
+    }
+
+    if (f.fieldKind === 'scalar' || f.fieldKind === 'enum') {
+      const typeNum =
+        f.fieldKind === 'enum' ? ProtoScalarType.ENUM : (f.scalar ?? ProtoScalarType.UINT32);
+      if (typeof f.getDefaultValue === 'function') {
+        const defVal = f.getDefaultValue();
+        if (defVal !== undefined && !isZeroDecodedDefaultValue(typeNum, defVal)) {
+          throw new Error(
+            `omnibuf: editions custom non-zero default value "${String(f.proto?.defaultValue ?? defVal)}" is not supported (${fieldLabel})`,
+          );
+        }
+      } else if (f.proto?.defaultValue !== undefined && f.proto.defaultValue !== '') {
+        const zeroNames = f.enum?.values
+          ? new Set(f.enum.values.filter((v) => v.number === 0 && v.name).map((v) => v.name!))
+          : undefined;
+        if (!isZeroDefaultString(typeNum, f.proto.defaultValue, zeroNames)) {
+          throw new Error(
+            `omnibuf: editions custom non-zero default value "${f.proto.defaultValue}" is not supported (${fieldLabel})`,
+          );
+        }
+      }
+    }
+  }
 
   function build(d: ProtobufDescMessage): MessageSchema<Record<string, unknown>> {
     const existing = cache.get(d.typeName);
     if (existing) return existing;
 
+    const isEditions = validateMessage(d);
+
     building.add(d.typeName);
     const specs: Record<string, FieldSpec> = Object.create(null);
 
     for (const f of d.fields) {
+      validateField(d, f, isEditions);
       // Support both @bufbuild/protobuf v2 (`localName` + `name`) and v1 (`name` + `protoName`)
       const propKey =
         f.localName ?? (f.protoName ? f.name : safeObjectProperty(protoCamelCase(f.name)));
@@ -443,6 +709,7 @@ export class DescriptorRegistry {
   private readonly schemas = new Map<string, MessageSchema<Record<string, unknown>>>();
 
   constructor(fds: FileDescriptorSetJSON, options?: { useBigInt?: boolean }) {
+    fds = { ...fds, file: fds.file ? resolveEditionFiles(fds.file) : undefined };
     const rawMap = new Map<string, DescriptorProtoJSON>();
     const syntaxMap = new Map<string, string>();
     const pkgMap = new Map<string, string>();
@@ -454,7 +721,7 @@ export class DescriptorRegistry {
       syntax: string,
       pkg: string,
     ) => {
-      if ((desc.extension?.length ?? 0) > 0) {
+      if ((desc.extension ?? []).some((ext) => !isDescriptorOptionExtension(ext))) {
         throw new Error(`omnibuf: proto2 extensions are not supported (${desc.name ?? prefix})`);
       }
       const fullName = prefix ? `${prefix}.${desc.name ?? ''}` : (desc.name ?? '');
@@ -467,7 +734,7 @@ export class DescriptorRegistry {
     };
 
     for (const file of fds.file ?? []) {
-      if ((file.extension?.length ?? 0) > 0) {
+      if ((file.extension ?? []).some((ext) => !isDescriptorOptionExtension(ext))) {
         throw new Error(
           `omnibuf: proto2 extensions are not supported (${file.name ?? 'file.proto'})`,
         );
@@ -706,6 +973,46 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
     }
   }
 
+  function decodeFeaturesOption(b: Uint8Array, optionNumber: number): EditionFeatures {
+    const out: EditionFeatures = {};
+    const featureKeys: Record<number, keyof EditionFeatures> = {
+      1: 'fieldPresence',
+      2: 'enumType',
+      3: 'repeatedFieldEncoding',
+      4: 'utf8Validation',
+      5: 'messageEncoding',
+      6: 'jsonFormat',
+      7: 'enforceNamingStyle',
+      8: 'defaultSymbolVisibility',
+      9: 'enforceProtoLimits',
+    };
+    let pos = 0;
+    while (pos < b.length) {
+      const [tag, p] = readPbVarint(b, pos);
+      pos = p;
+      if (Number(tag >> 3n) === optionNumber && Number(tag & 7n) === 2) {
+        const [features, next] = readPbBytes(b, pos);
+        pos = next;
+        let fp = 0;
+        while (fp < features.length) {
+          const [ft, start] = readPbVarint(features, fp);
+          fp = start;
+          if (Number(ft & 7n) !== 0) {
+            fp = skipPbField(features, fp, Number(ft & 7n));
+            continue;
+          }
+          const [value, end] = readPbVarint(features, fp);
+          fp = end;
+          const key = featureKeys[Number(ft >> 3n)];
+          if (key) out[key] = Number(value);
+        }
+      } else {
+        pos = skipPbField(b, pos, Number(tag & 7n));
+      }
+    }
+    return out;
+  }
+
   function decodeFieldDescriptor(b: Uint8Array): FieldDescriptorProtoJSON {
     const out: FieldDescriptorProtoJSON = {};
     let pos = 0;
@@ -714,12 +1021,23 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
       pos = p1;
       const fieldNum = Number(tag >> 3n);
       const wt = Number(tag & 7n);
-      if (wt === 2 && (fieldNum === 1 || fieldNum === 6 || fieldNum === 10)) {
+      if (wt === 2 && fieldNum === 8) {
+        const [sub, nextPos] = readPbBytes(b, pos);
+        out.options = { features: decodeFeaturesOption(sub, 21) };
+        pos = nextPos;
+        continue;
+      }
+      if (
+        wt === 2 &&
+        (fieldNum === 1 || fieldNum === 2 || fieldNum === 6 || fieldNum === 7 || fieldNum === 10)
+      ) {
         const [sub, nextPos] = readPbBytes(b, pos);
         const str = decodeUTF8(sub);
         pos = nextPos;
         if (fieldNum === 1) out.name = str;
+        else if (fieldNum === 2) out.extendee = str;
         else if (fieldNum === 6) out.typeName = str;
+        else if (fieldNum === 7) out.defaultValue = str;
         else if (fieldNum === 10) out.jsonName = str;
       } else if (
         wt === 0 &&
@@ -747,6 +1065,12 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
       pos = p1;
       const fieldNum = Number(tag >> 3n);
       const wt = Number(tag & 7n);
+      if (wt === 2 && fieldNum === 2) {
+        const [sub, nextPos] = readPbBytes(b, pos);
+        out.options = { features: decodeFeaturesOption(sub, 1) };
+        pos = nextPos;
+        continue;
+      }
       if (wt === 2 && fieldNum === 1) {
         const [sub, nextPos] = readPbBytes(b, pos);
         out.name = decodeUTF8(sub);
@@ -789,6 +1113,12 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
       pos = p1;
       const fieldNum = Number(tag >> 3n);
       const wt = Number(tag & 7n);
+      if (wt === 2 && fieldNum === 3) {
+        const [sub, nextPos] = readPbBytes(b, pos);
+        out.options = { features: decodeFeaturesOption(sub, 7) };
+        pos = nextPos;
+        continue;
+      }
       if (wt === 2 && (fieldNum === 1 || fieldNum === 2)) {
         const [sub, nextPos] = readPbBytes(b, pos);
         pos = nextPos;
@@ -801,8 +1131,10 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
     return out;
   }
 
-  function decodeMessageOptions(b: Uint8Array): { mapEntry?: boolean } {
-    const out: { mapEntry?: boolean } = {};
+  function decodeMessageOptions(b: Uint8Array): { mapEntry?: boolean; features?: EditionFeatures } {
+    const out: { mapEntry?: boolean; features?: EditionFeatures } = {
+      features: decodeFeaturesOption(b, 12),
+    };
     let pos = 0;
     while (pos < b.length) {
       const [tag, p1] = readPbVarint(b, pos);
@@ -878,6 +1210,18 @@ export function parseBinaryFileDescriptorSet(buf: Uint8Array): FileDescriptorSet
       pos = p1;
       const fieldNum = Number(tag >> 3n);
       const wt = Number(tag & 7n);
+      if (wt === 2 && fieldNum === 8) {
+        const [sub, nextPos] = readPbBytes(b, pos);
+        out.options = { features: decodeFeaturesOption(sub, 50) };
+        pos = nextPos;
+        continue;
+      }
+      if (wt === 0 && fieldNum === 14) {
+        const [value, nextPos] = readPbVarint(b, pos);
+        out.edition = Number(value);
+        pos = nextPos;
+        continue;
+      }
       if (
         wt === 2 &&
         (fieldNum === 1 ||

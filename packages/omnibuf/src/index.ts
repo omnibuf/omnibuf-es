@@ -6,3 +6,4 @@ export * from './blind.js';
 export * from './schema.js';
 export * from './protobuf-es.js';
 export * from './marshal.js';
+export * from './editions.js';

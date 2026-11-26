@@ -1,5 +1,7 @@
 import {
   ProtoScalarType,
+  isDescriptorOptionExtension,
+  resolveEditionFile,
   parseFieldDescriptorType,
   protoCamelCase,
   safeObjectProperty,
@@ -198,6 +200,7 @@ interface ResolvedField {
   storageProp: string;
   getterName: string;
   setterName: string;
+  hasName?: string;
   shorthandMethods: string[];
   type: number;
   repeated: boolean;
@@ -1455,6 +1458,49 @@ function emitOpaqueGetterBody(f: ResolvedField, oneof?: ResolvedOneof): string {
   }
 }
 
+function emitOpaqueHasBody(f: ResolvedField, oneof?: ResolvedOneof): string {
+  const num = f.number;
+  const preamble = oneof
+    ? `const __src = $ob.activeOneofSlice(this._raw, ${num}, [${oneof.fields.map((of) => `[${of.number}, ${wireMaskForField(of)}]`).join(', ')}], this._depth); if (!__src) return false; `
+    : `const __src = this._sliceField(${num}); if (!__src) return false; `;
+  switch (f.type) {
+    case ProtoScalarType.UINT32:
+      return `${preamble}return $ob.readUint32(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.ENUM:
+      return `${preamble}return $ob.readEnum(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.UINT64:
+      return `${preamble}return $ob.readUintAuto(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.INT32:
+    case ProtoScalarType.SINT32:
+      return `${preamble}return $ob.readInt32(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.INT64:
+    case ProtoScalarType.SINT64:
+      return `${preamble}return $ob.readIntAuto(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.BOOL:
+      return `${preamble}return $ob.readBool(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.STRING:
+      return `${preamble}return $ob.readStringBytes(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.BYTES:
+      return `${preamble}return $ob.readBytesView(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.FIXED32:
+      return `${preamble}return $ob.readFixed32(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.SFIXED32:
+      return `${preamble}return $ob.readSfixed32(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.FLOAT:
+      return `${preamble}return $ob.readFloat32(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.FIXED64:
+      return `${preamble}return $ob.readFixed64(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.SFIXED64:
+      return `${preamble}return $ob.readSfixed64(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.DOUBLE:
+      return `${preamble}return $ob.readFloat64(__src, ${num}, this._depth)[1];`;
+    case ProtoScalarType.MESSAGE:
+      return `${preamble}return $ob.readSubMsg(__src, ${num}, this._depth)[1];`;
+    default:
+      return `${preamble}return false;`;
+  }
+}
+
 /**
  * Generate a TypeScript module (`*_omnibuf.pb.ts`) for a `FileDescriptorProtoJSON`.
  */
@@ -1462,14 +1508,18 @@ export function generateFileCode(
   file: FileDescriptorProtoJSON,
   allFiles?: FileDescriptorProtoJSON[],
 ): GeneratedFile {
+  const origFile = file;
+  const rawAllFiles = allFiles && allFiles.length > 0 ? allFiles : [file];
+  file = resolveEditionFile(file, rawAllFiles);
+  const resolvedAllFiles = rawAllFiles.map((f) => (f === origFile ? file : f));
   const fileName = file.name ?? 'messages.proto';
   const safeFileComment = fileName.replace(/[\r\n]+/g, ' ');
   const isProto2 = file.syntax === 'proto2';
-  if ((file.extension?.length ?? 0) > 0) {
+  if ((file.extension ?? []).some((ext) => !isDescriptorOptionExtension(ext))) {
     throw new Error(`omnibuf: proto2 extensions are not supported (${safeFileComment})`);
   }
   const pkg = file.package ?? '';
-  const registry = buildSymbolRegistry(allFiles ?? [file]);
+  const registry = buildSymbolRegistry(resolvedAllFiles);
 
   // Collect all enums and messages declared in THIS file in declaration order
   const localEnums: EnumSymbolInfo[] = [];
@@ -1602,7 +1652,7 @@ export function generateFileCode(
   for (const msgInfo of localMessages) {
     const msg = msgInfo.desc;
     const fullProtoName = msgInfo.fullProtoName;
-    if ((msg.extension?.length ?? 0) > 0) {
+    if ((msg.extension ?? []).some((ext) => !isDescriptorOptionExtension(ext))) {
       throw new Error(`omnibuf: proto2 extensions are not supported (${fullProtoName})`);
     }
     const fields: ResolvedField[] = [];
@@ -1797,6 +1847,20 @@ export function generateFileCode(
       usedOpaqueMembers.add(setterName);
       f.getterName = getterName;
       f.setterName = setterName;
+    }
+
+    for (const f of fields) {
+      const tracksPresence =
+        f.explicitPresence ||
+        Boolean(f.oneofLocalName) ||
+        (!f.repeated && !f.isMap && f.type === ProtoScalarType.MESSAGE);
+      if (tracksPresence) {
+        const candidateHas = `has${f.pascalName}`;
+        if (!usedOpaqueMembers.has(candidateHas)) {
+          usedOpaqueMembers.add(candidateHas);
+          f.hasName = candidateHas;
+        }
+      }
     }
 
     for (const f of fields) {
@@ -2207,6 +2271,7 @@ export function generateFileCode(
     for (const f of fields) {
       opaqueMethodNames.add(f.getterName);
       opaqueMethodNames.add(f.setterName);
+      if (f.hasName) opaqueMethodNames.add(f.hasName);
       for (const sh of f.shorthandMethods) opaqueMethodNames.add(sh);
     }
     const nestedOpaqueFields = fields.filter(
@@ -2260,11 +2325,31 @@ export function generateFileCode(
       } else {
         lines.push(`    if (this._dirtySet !== null && this._dirtySet.has(${f.number})) {`);
       }
-      lines.push(`      return this.${f.storageProp}!;`);
+      if (f.explicitPresence || f.oneofLocalName) {
+        lines.push(`      return this.${f.storageProp};`);
+      } else {
+        lines.push(`      return this.${f.storageProp}!;`);
+      }
       lines.push('    }');
       lines.push(`    ${emitOpaqueGetterBody(f, oneofGroup)}`);
       lines.push('  }');
       lines.push('');
+
+      if (f.hasName) {
+        lines.push(`  ${f.hasName}(): boolean {`);
+        if (use32Mask) {
+          lines.push(`    if ((this._dirtyMask & (1 << ${f.number})) !== 0) {`);
+        } else {
+          lines.push(`    if (this._dirtySet !== null && this._dirtySet.has(${f.number})) {`);
+        }
+        lines.push(
+          `      return this.${f.storageProp} !== undefined && this.${f.storageProp} !== null;`,
+        );
+        lines.push('    }');
+        lines.push(`    ${emitOpaqueHasBody(f, oneofGroup)}`);
+        lines.push('  }');
+        lines.push('');
+      }
 
       // Zero-copy subarray view helper for bytes / bytes[] fields
       if (!f.isMap && f.type === ProtoScalarType.BYTES) {
@@ -2456,7 +2541,7 @@ export function generateFileCode(
     for (const f of fields) {
       lines.push(`          case ${f.number}: {`);
       lines.push(
-        `            const msg = { ${f.localName}: this.${f.storageProp}! } as Partial<${msgName}>;`,
+        `            const msg = { ${f.localName}: this.${f.storageProp} } as Partial<${msgName}>;`,
       );
       lines.push(emitEncodeField(f, 'msg', '            '));
       lines.push('            break;');
