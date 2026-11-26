@@ -1,6 +1,6 @@
 {
   "name": "@omnibuf/web",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "OmniBuf for browsers and frontend runtimes - Web Streams, Blob/Response helpers, and interactive wire inspection",
   "type": "module",
   "license": "Apache-2.0",

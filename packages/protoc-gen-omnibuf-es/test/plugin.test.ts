@@ -1651,4 +1651,159 @@ describe('@omnibuf/protoc-gen-omnibuf-es - Generated Codec & Opaque Invariants',
       await cleanup();
     }
   });
+
+  it('round-trips fixed-width numeric arrays, 64-bit integer boundaries, and >16 KiB string arrays via inline fast paths', async () => {
+    const fds: FileDescriptorSetJSON = {
+      file: [
+        {
+          name: 'numeric_fast.proto',
+          package: 'bench.num',
+          syntax: 'proto3',
+          messageType: [
+            {
+              name: 'NumericPack',
+              field: [
+                { name: 'f64s', number: 1, label: 'LABEL_REPEATED', type: 'TYPE_DOUBLE' },
+                { name: 'f32s', number: 2, label: 'LABEL_REPEATED', type: 'TYPE_FLOAT' },
+                { name: 'fx32s', number: 3, label: 'LABEL_REPEATED', type: 'TYPE_FIXED32' },
+                { name: 'sfx32s', number: 4, label: 'LABEL_REPEATED', type: 'TYPE_SFIXED32' },
+                { name: 'fx64s', number: 5, label: 'LABEL_REPEATED', type: 'TYPE_FIXED64' },
+                { name: 'sfx64s', number: 6, label: 'LABEL_REPEATED', type: 'TYPE_SFIXED64' },
+                { name: 'i64', number: 7, label: 'LABEL_OPTIONAL', type: 'TYPE_INT64' },
+                { name: 's64', number: 8, label: 'LABEL_OPTIONAL', type: 'TYPE_SINT64' },
+                { name: 'fx64', number: 9, label: 'LABEL_OPTIONAL', type: 'TYPE_FIXED64' },
+                { name: 'sfx64', number: 10, label: 'LABEL_OPTIONAL', type: 'TYPE_SFIXED64' },
+                { name: 'strs', number: 11, label: 'LABEL_REPEATED', type: 'TYPE_STRING' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { mod, cleanup } = await compileAndImportGenerated(fds);
+    try {
+      // 1. Empty arrays
+      const emptyWire = mod.marshalNumericPackOmniBuf(mod.createNumericPack());
+      const emptyDec = mod.unmarshalNumericPackOmniBuf(emptyWire);
+      assert.deepEqual(emptyDec.f64s, []);
+      assert.deepEqual(emptyDec.f32s, []);
+      assert.deepEqual(emptyDec.fx32s, []);
+      assert.deepEqual(emptyDec.sfx32s, []);
+      assert.deepEqual(emptyDec.fx64s, []);
+      assert.deepEqual(emptyDec.sfx64s, []);
+      assert.deepEqual(emptyDec.strs, []);
+
+      // 2. Large (>16 KiB) float64[], float32[], fixed/sfixed arrays, and >16 KiB string[] (>127 count)
+      const f64s = Array.from({ length: 2200 }, (_, i) => (i - 1100) * 0.125);
+      const f32s = Array.from({ length: 300 }, (_, i) => Math.fround((i - 150) * 0.5));
+      const fx32s = [0, 1, 0x7fffffff, 0xffffffff];
+      const sfx32s = [-2147483648, -1, 0, 1, 2147483647];
+      const fx64s: (number | bigint)[] = [
+        0,
+        1,
+        1704067200000,
+        9007199254740991,
+        9007199254740992n,
+        18446744073709551615n,
+      ];
+      const sfx64s: (number | bigint)[] = [
+        -9223372036854775808n,
+        -9007199254740992n,
+        -9007199254740991,
+        -1,
+        0,
+        1,
+        1704067200000,
+        9007199254740991,
+        9007199254740992n,
+        9223372036854775807n,
+      ];
+      const strs = Array.from({ length: 400 }, (_, i) =>
+        i === 0 ? '' : i % 10 === 0 ? `🚀item-${i}-café` : `item_${i}_${'x'.repeat(40)}`,
+      );
+
+      const bigWire = mod.marshalNumericPackOmniBuf({
+        f64s,
+        f32s,
+        fx32s,
+        sfx32s,
+        fx64s,
+        sfx64s,
+        i64: 1704067200000,
+        s64: -4503599627370496,
+        fx64: 9007199254740991,
+        sfx64: -9007199254740991,
+        strs,
+      });
+      assert.ok(bigWire.byteLength > 34000);
+      const bigDec = mod.unmarshalNumericPackOmniBuf(bigWire);
+      assert.deepEqual(bigDec.f64s, f64s);
+      assert.deepEqual(bigDec.f32s, f32s);
+      assert.deepEqual(bigDec.fx32s, fx32s);
+      assert.deepEqual(bigDec.sfx32s, sfx32s);
+      assert.deepEqual(bigDec.fx64s, fx64s);
+      assert.deepEqual(bigDec.sfx64s, sfx64s);
+      assert.strictEqual(bigDec.i64, 1704067200000);
+      assert.strictEqual(bigDec.s64, -4503599627370496);
+      assert.strictEqual(bigDec.fx64, 9007199254740991);
+      assert.strictEqual(bigDec.sfx64, -9007199254740991);
+      assert.deepEqual(bigDec.strs, strs);
+
+      // 3. Exact JS type contract (number vs bigint) at every 64-bit boundary
+      const boundaries: (number | bigint)[] = [
+        0,
+        1,
+        -1,
+        63,
+        -64,
+        268435455,
+        -268435456,
+        268435456,
+        -268435457,
+        1704067200000,
+        -1704067200000,
+        4503599627370495,
+        -4503599627370496,
+        9007199254740991,
+        -9007199254740991,
+        9007199254740992n,
+        -9007199254740992n,
+        9223372036854775807n,
+        -9223372036854775808n,
+      ];
+      for (const v of boundaries) {
+        const w = mod.marshalNumericPackOmniBuf({ i64: v, s64: v, sfx64: v });
+        const d = mod.unmarshalNumericPackOmniBuf(w);
+        assert.strictEqual(d.i64, v, `i64 mismatch for ${String(v)}`);
+        assert.strictEqual(d.s64, v, `s64 mismatch for ${String(v)}`);
+        assert.strictEqual(d.sfx64, v, `sfx64 mismatch for ${String(v)}`);
+      }
+
+      // 4. Concatenated repeated float64[] chunks append properly
+      const c1 = mod.marshalNumericPackOmniBuf({ f64s: [1.5, 2.5] });
+      const c2 = mod.marshalNumericPackOmniBuf({ f64s: [3.5, 4.5] });
+      const joined = new Uint8Array(c1.length + c2.length);
+      joined.set(c1, 0);
+      joined.set(c2, c1.length);
+      const joinedDec = mod.unmarshalNumericPackOmniBuf(joined);
+      assert.deepEqual(joinedDec.f64s, [1.5, 2.5, 3.5, 4.5]);
+
+      // 5. Reject mismatched element wire type and truncated payload in inline float64[] decoder
+      const badWT = new Encoder();
+      badWT.writeFloat32Arr(1, [1.0, 2.0]);
+      assert.throws(() => mod.unmarshalNumericPackOmniBuf(badWT.finish()));
+
+      const trunc = new Encoder();
+      trunc.writeTag(1, WireArray);
+      trunc.beginContainer();
+      trunc.writeByte(9); // WireFloat64
+      trunc.writeRawVarint(2); // claims 2 doubles = 16 bytes
+      trunc.writeRawFloat64(1.0); // only 8 bytes
+      trunc.endContainer();
+      assert.throws(() => mod.unmarshalNumericPackOmniBuf(trunc.finish()));
+    } finally {
+      await cleanup();
+    }
+  });
 });

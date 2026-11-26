@@ -27,6 +27,7 @@ import {
   mapHeaderByte,
   toBigInt64Input,
   writeVarintAt,
+  type StringCodec,
 } from './wire.js';
 
 export { mapHeaderByte };
@@ -37,8 +38,10 @@ const MAX_RETAINED_SLAB = 256 * 1024;
  * Encoder encodes OmniBuf messages into a reusable contiguous byte buffer in a single forward pass.
  */
 export class Encoder {
-  private buf: Uint8Array;
-  private view: DataView;
+  private buf!: Uint8Array;
+  private view!: DataView;
+  private strWriter: ((str: string, offset: number) => number) | null = null;
+  private strWriterCodec: StringCodec | null = null;
   private pos = 0;
   private lenStack = new Int32Array(MaxNestingDepth * 2 + 8);
   private lenWidthStack = new Uint8Array(MaxNestingDepth * 2 + 8);
@@ -47,14 +50,28 @@ export class Encoder {
 
   constructor(initialCapacityOrBuffer: number | Uint8Array = 512, initialPos = 0) {
     if (initialCapacityOrBuffer instanceof Uint8Array) {
-      this.buf = initialCapacityOrBuffer;
-      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+      this.setBuf(initialCapacityOrBuffer);
       this.pos = Math.max(0, Math.min(initialPos, this.buf.byteLength));
     } else {
       const cap = Math.max(64, initialCapacityOrBuffer);
-      this.buf = new Uint8Array(cap);
-      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+      this.setBuf(new Uint8Array(cap));
     }
+  }
+
+  private setBuf(buf: Uint8Array): void {
+    this.buf = buf;
+    this.view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    this.strWriter = null;
+    this.strWriterCodec = null;
+  }
+
+  private getStrWriter(): ((str: string, offset: number) => number) | null {
+    const codec = getStringCodec();
+    if (this.strWriterCodec !== codec) {
+      this.strWriterCodec = codec;
+      this.strWriter = codec.createWriter ? codec.createWriter(this.buf) : null;
+    }
+    return this.strWriter;
   }
 
   /**
@@ -75,8 +92,7 @@ export class Encoder {
       if (this.pos > 0) {
         nextBuf.set(this.buf.subarray(0, this.pos), 0);
       }
-      this.buf = nextBuf;
-      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+      this.setBuf(nextBuf);
     }
   }
 
@@ -95,16 +111,14 @@ export class Encoder {
     this.depth = 0;
     if (this.buf.length > MAX_RETAINED_SLAB) {
       const cap = Math.max(8192, minRemaining);
-      this.buf = cap > 8192 ? allocBytes(cap) : new Uint8Array(cap);
-      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+      this.setBuf(cap > 8192 ? allocBytes(cap) : new Uint8Array(cap));
       this.pos = 0;
     } else if (this.buf.length - this.pos < minRemaining) {
       if (this.buf.length >= minRemaining) {
         this.pos = 0;
       } else {
         const cap = Math.max(8192, minRemaining);
-        this.buf = cap > 8192 ? allocBytes(cap) : new Uint8Array(cap);
-        this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+        this.setBuf(cap > 8192 ? allocBytes(cap) : new Uint8Array(cap));
         this.pos = 0;
       }
     }
@@ -121,8 +135,7 @@ export class Encoder {
     const len = endPos - startPos;
     if (this.buf.length > MAX_RETAINED_SLAB && startPos === 0 && len * 2 >= this.buf.length) {
       const out = this.buf.subarray(0, endPos);
-      this.buf = new Uint8Array(8192);
-      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+      this.setBuf(new Uint8Array(8192));
       this.pos = 0;
       return out;
     }
@@ -132,8 +145,7 @@ export class Encoder {
     }
     this.pos = startPos;
     if (this.buf.length > MAX_RETAINED_SLAB && startPos === 0) {
-      this.buf = new Uint8Array(8192);
-      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+      this.setBuf(new Uint8Array(8192));
     }
     return out;
   }
@@ -146,8 +158,7 @@ export class Encoder {
     this.pos = startPos;
     this.depth = 0;
     if (this.buf.length > MAX_RETAINED_SLAB && startPos === 0) {
-      this.buf = new Uint8Array(8192);
-      this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+      this.setBuf(new Uint8Array(8192));
     }
   }
 
@@ -202,8 +213,7 @@ export class Encoder {
     }
     const nextBuf = allocBytes(nextCap);
     nextBuf.set(this.buf.subarray(0, this.pos), 0);
-    this.buf = nextBuf;
-    this.view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
+    this.setBuf(nextBuf);
   }
 
   /**
@@ -292,7 +302,7 @@ export class Encoder {
   writeRawStringPayload(s: string): void {
     const n = s.length;
     if (n === 0) {
-      this.ensureCapacity(1);
+      if (this.pos >= this.buf.length) this.ensureCapacity(1);
       this.buf[this.pos++] = 0x01; // Prefix-Varint(0)
       return;
     }
@@ -301,8 +311,15 @@ export class Encoder {
       if (this.pos + 1 + n * 3 > this.buf.length) {
         this.ensureCapacity(1 + n * 3);
       }
+      const writer = this.getStrWriter();
       const buf = this.buf;
       const lenPos = this.pos;
+      if (writer !== null) {
+        const written = writer(s, lenPos + 1);
+        buf[lenPos] = (written << 1) | 1;
+        this.pos = lenPos + 1 + written;
+        return;
+      }
       let p = lenPos + 1;
       for (let i = 0; i < n; i++) {
         const c = s.charCodeAt(i);
@@ -339,7 +356,8 @@ export class Encoder {
       return;
     }
     const codec = getStringCodec();
-    if (codec.encodeInto) {
+    const writer = this.getStrWriter();
+    if (writer !== null || codec.encodeInto) {
       if (n <= 178956970) {
         // Single-pass UTF-8 encode: reserve minimum Prefix-Varint width for s.length,
         // write UTF-8 directly into the slab without a separate byteLength scan, and
@@ -351,7 +369,11 @@ export class Encoder {
         }
         const buf = this.buf;
         const lenPos = this.pos;
-        const written = codec.encodeInto(s, buf, lenPos + reserved);
+        const activeWriter = this.getStrWriter();
+        const written =
+          activeWriter !== null
+            ? activeWriter(s, lenPos + reserved)
+            : codec.encodeInto!(s, buf, lenPos + reserved);
         if (reserved === 4) {
           const w32 = ((written << 3) | 4) >>> 0;
           buf[lenPos] = w32 & 0xff;
@@ -394,7 +416,11 @@ export class Encoder {
       const byteLen = codec.byteLength(s);
       this.ensureCapacity(9 + byteLen);
       this.pos = writeVarintAt(this.buf, this.pos, byteLen);
-      const written = codec.encodeInto(s, this.buf, this.pos);
+      const activeWriter = this.getStrWriter();
+      const written =
+        activeWriter !== null
+          ? activeWriter(s, this.pos)
+          : codec.encodeInto!(s, this.buf, this.pos);
       this.pos += written;
       return;
     }
@@ -677,11 +703,11 @@ export class Encoder {
       fieldNum >= 1 &&
       fieldNum <= 1023 &&
       typeof v === 'number' &&
-      v >= -268435456 &&
-      v <= 268435455
+      v >= -4503599627370496 &&
+      v <= 4503599627370495
     ) {
-      if (this.pos + 6 > this.buf.length) {
-        this.ensureCapacity(6);
+      if (this.pos + 11 > this.buf.length) {
+        this.ensureCapacity(11);
       }
       const buf = this.buf;
       let p = this.pos;
@@ -693,19 +719,36 @@ export class Encoder {
         buf[p++] = t16 & 0xff;
         buf[p++] = (t16 >>> 8) & 0xff;
       }
-      const iv = ((v << 1) ^ (v >> 31)) >>> 0;
-      if (iv <= 127) {
-        buf[p++] = (iv << 1) | 1;
-      } else if (iv <= 16383) {
-        const u16 = (iv << 2) | 2;
-        buf[p++] = u16 & 0xff;
-        buf[p++] = (u16 >>> 8) & 0xff;
+      if (v >= -268435456 && v <= 268435455) {
+        const i = v | 0;
+        const iv = ((i << 1) ^ (i >> 31)) >>> 0;
+        if (iv <= 127) {
+          buf[p++] = (iv << 1) | 1;
+        } else if (iv <= 16383) {
+          const u16 = (iv << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else {
+          const w32 = ((iv << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        }
       } else {
-        const w32 = ((iv << 3) | 4) >>> 0;
-        buf[p++] = w32 & 0xff;
-        buf[p++] = (w32 >>> 8) & 0xff;
-        buf[p++] = (w32 >>> 16) & 0xff;
-        buf[p++] = (w32 >>> 24) & 0xff;
+        const t = Math.trunc(v);
+        const zz = t >= 0 ? t * 2 : -t * 2 - 1;
+        const lo = zz >>> 0;
+        const hi = Math.floor(zz / 0x100000000) >>> 0;
+        buf[p++] = 0x00;
+        buf[p++] = lo & 0xff;
+        buf[p++] = (lo >>> 8) & 0xff;
+        buf[p++] = (lo >>> 16) & 0xff;
+        buf[p++] = (lo >>> 24) & 0xff;
+        buf[p++] = hi & 0xff;
+        buf[p++] = (hi >>> 8) & 0xff;
+        buf[p++] = (hi >>> 16) & 0xff;
+        buf[p++] = (hi >>> 24) & 0xff;
       }
       this.pos = p;
       return;
@@ -719,11 +762,24 @@ export class Encoder {
    */
   writeBool(fieldNum: number, v: boolean): void {
     const wt = v ? WireBoolTrue : WireBoolFalse;
-    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 7) {
-      if (this.pos + 1 > this.buf.length) {
-        this.ensureCapacity(1);
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023) {
+      const tag = (fieldNum << 4) | wt;
+      if (tag <= 127) {
+        if (this.pos + 1 > this.buf.length) {
+          this.ensureCapacity(1);
+        }
+        this.buf[this.pos++] = (tag << 1) | 1;
+        return;
       }
-      this.buf[this.pos++] = (((fieldNum << 4) | wt) << 1) | 1;
+      if (this.pos + 2 > this.buf.length) {
+        this.ensureCapacity(2);
+      }
+      const u16 = (tag << 2) | 2;
+      const buf = this.buf;
+      const p = this.pos;
+      buf[p] = u16 & 0xff;
+      buf[p + 1] = (u16 >>> 8) & 0xff;
+      this.pos = p + 2;
       return;
     }
     this.writeTag(fieldNum, wt);
@@ -733,6 +789,24 @@ export class Encoder {
    * Writes a 4-byte little-endian uint32 field (`WireFixed32 = 4`).
    */
   writeFixed32(fieldNum: number, v: number): void {
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023) {
+      if (this.pos + 6 > this.buf.length) {
+        this.ensureCapacity(6);
+      }
+      const buf = this.buf;
+      let p = this.pos;
+      const tag = (fieldNum << 4) | WireFixed32;
+      if (tag <= 127) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      this.view.setUint32(p, v >>> 0, true);
+      this.pos = p + 4;
+      return;
+    }
     this.writeTag(fieldNum, WireFixed32);
     this.writeRawFixed32(v);
   }
@@ -741,6 +815,24 @@ export class Encoder {
    * Writes a 4-byte little-endian int32 field (`WireSfixed32 = 6`).
    */
   writeSfixed32(fieldNum: number, v: number): void {
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023) {
+      if (this.pos + 6 > this.buf.length) {
+        this.ensureCapacity(6);
+      }
+      const buf = this.buf;
+      let p = this.pos;
+      const tag = (fieldNum << 4) | WireSfixed32;
+      if (tag <= 127) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      this.view.setUint32(p, v >>> 0, true);
+      this.pos = p + 4;
+      return;
+    }
     this.writeTag(fieldNum, WireSfixed32);
     this.writeRawFixed32(v);
   }
@@ -749,13 +841,22 @@ export class Encoder {
    * Writes a 4-byte IEEE-754 float32 field (`WireFloat32 = 8`).
    */
   writeFloat32(fieldNum: number, v: number): void {
-    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 7) {
-      if (this.pos + 5 > this.buf.length) {
-        this.ensureCapacity(5);
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023) {
+      if (this.pos + 6 > this.buf.length) {
+        this.ensureCapacity(6);
       }
-      this.buf[this.pos++] = (((fieldNum << 4) | WireFloat32) << 1) | 1;
-      this.view.setFloat32(this.pos, v, true);
-      this.pos += 4;
+      const buf = this.buf;
+      let p = this.pos;
+      const tag = (fieldNum << 4) | WireFloat32;
+      if (tag <= 127) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      this.view.setFloat32(p, v, true);
+      this.pos = p + 4;
       return;
     }
     this.writeTag(fieldNum, WireFloat32);
@@ -766,6 +867,33 @@ export class Encoder {
    * Writes an 8-byte little-endian uint64 field (`WireFixed64 = 5`).
    */
   writeFixed64(fieldNum: number, v: number | bigint): void {
+    if (
+      (fieldNum | 0) === fieldNum &&
+      fieldNum >= 1 &&
+      fieldNum <= 1023 &&
+      typeof v === 'number' &&
+      v >= 0 &&
+      v <= 9007199254740991
+    ) {
+      if (this.pos + 10 > this.buf.length) {
+        this.ensureCapacity(10);
+      }
+      const buf = this.buf;
+      let p = this.pos;
+      const tag = (fieldNum << 4) | WireFixed64;
+      if (tag <= 127) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      const t = Math.trunc(v);
+      this.view.setUint32(p, t >>> 0, true);
+      this.view.setUint32(p + 4, Math.floor(t / 0x100000000) >>> 0, true);
+      this.pos = p + 8;
+      return;
+    }
     this.writeTag(fieldNum, WireFixed64);
     this.writeRawFixed64(v);
   }
@@ -774,6 +902,33 @@ export class Encoder {
    * Writes an 8-byte little-endian int64 field (`WireSfixed64 = 7`).
    */
   writeSfixed64(fieldNum: number, v: number | bigint): void {
+    if (
+      (fieldNum | 0) === fieldNum &&
+      fieldNum >= 1 &&
+      fieldNum <= 1023 &&
+      typeof v === 'number' &&
+      v >= -9007199254740991 &&
+      v <= 9007199254740991
+    ) {
+      if (this.pos + 10 > this.buf.length) {
+        this.ensureCapacity(10);
+      }
+      const buf = this.buf;
+      let p = this.pos;
+      const tag = (fieldNum << 4) | WireSfixed64;
+      if (tag <= 127) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      const t = Math.trunc(v);
+      this.view.setUint32(p, t >>> 0, true);
+      this.view.setInt32(p + 4, Math.floor(t / 0x100000000) | 0, true);
+      this.pos = p + 8;
+      return;
+    }
     this.writeTag(fieldNum, WireSfixed64);
     this.writeRawFixed64(v);
   }
@@ -782,13 +937,22 @@ export class Encoder {
    * Writes an 8-byte IEEE-754 float64 field (`WireFloat64 = 9`).
    */
   writeFloat64(fieldNum: number, v: number): void {
-    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 7) {
-      if (this.pos + 9 > this.buf.length) {
-        this.ensureCapacity(9);
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023) {
+      if (this.pos + 10 > this.buf.length) {
+        this.ensureCapacity(10);
       }
-      this.buf[this.pos++] = (((fieldNum << 4) | WireFloat64) << 1) | 1;
-      this.view.setFloat64(this.pos, v, true);
-      this.pos += 8;
+      const buf = this.buf;
+      let p = this.pos;
+      const tag = (fieldNum << 4) | WireFloat64;
+      if (tag <= 127) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      this.view.setFloat64(p, v, true);
+      this.pos = p + 8;
       return;
     }
     this.writeTag(fieldNum, WireFloat64);
@@ -823,6 +987,7 @@ export class Encoder {
       if (this.pos + tagBytes + 1 + n * 3 > this.buf.length) {
         this.ensureCapacity(tagBytes + 1 + n * 3);
       }
+      const writer = this.getStrWriter();
       const buf = this.buf;
       let p = this.pos;
       if (tagBytes === 1) {
@@ -834,6 +999,12 @@ export class Encoder {
       }
       const lenPos = p;
       p = lenPos + 1;
+      if (writer !== null) {
+        const written = writer(s, p);
+        buf[lenPos] = (written << 1) | 1;
+        this.pos = p + written;
+        return;
+      }
       for (let i = 0; i < n; i++) {
         const c = s.charCodeAt(i);
         if (c < 0x80) {
@@ -887,11 +1058,140 @@ export class Encoder {
    * Writes a repeated string array (`WireArray = 13`, `ElementType = WireString = 10`) with an outer backpatched 2B length prefix.
    */
   writeStringArr(fieldNum: number, items: readonly string[]): void {
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 536870911) {
+      let minBody = 2 + count;
+      for (let i = 0; i < count; i++) {
+        minBody += items[i]!.length;
+        if (minBody > 16383) break;
+      }
+      const reserved = minBody > 16383 ? 4 : 2;
+      const headerNeeded = 2 + reserved + 1 + 4 + Math.min(minBody, 16384);
+      if (this.pos + headerNeeded > this.buf.length) {
+        this.ensureCapacity(headerNeeded);
+      }
+      let buf = this.buf;
+      let p = this.pos;
+      const tag = (fieldNum << 4) | WireArray;
+      if (tag <= 127) {
+        buf[p++] = (tag << 1) | 1;
+      } else {
+        const t16 = (tag << 2) | 2;
+        buf[p++] = t16 & 0xff;
+        buf[p++] = (t16 >>> 8) & 0xff;
+      }
+      const lenPos = p;
+      p += reserved;
+      buf[p++] = WireString;
+      if (count <= 127) {
+        buf[p++] = (count << 1) | 1;
+      } else if (count <= 16383) {
+        const c16 = (count << 2) | 2;
+        buf[p++] = c16 & 0xff;
+        buf[p++] = (c16 >>> 8) & 0xff;
+      } else {
+        const c32 = ((count << 3) | 4) >>> 0;
+        buf[p++] = c32 & 0xff;
+        buf[p++] = (c32 >>> 8) & 0xff;
+        buf[p++] = (c32 >>> 16) & 0xff;
+        buf[p++] = (c32 >>> 24) & 0xff;
+      }
+      let writer = this.getStrWriter();
+      if (writer !== null) {
+        for (let i = 0; i < count; i++) {
+          const s = items[i]!;
+          const n = s.length;
+          if (n === 0) {
+            if (p >= buf.length) {
+              this.pos = p;
+              this.ensureCapacity(1);
+              buf = this.buf;
+              writer = this.getStrWriter()!;
+            }
+            buf[p++] = 0x01;
+          } else if (n <= 42) {
+            if (p + 1 + n * 3 > buf.length) {
+              this.pos = p;
+              this.ensureCapacity(1 + n * 3);
+              buf = this.buf;
+              writer = this.getStrWriter()!;
+            }
+            const written = writer(s, p + 1);
+            buf[p] = (written << 1) | 1;
+            p += 1 + written;
+          } else {
+            this.pos = p;
+            this.writeRawStringPayload(s);
+            buf = this.buf;
+            p = this.pos;
+            writer = this.getStrWriter()!;
+          }
+        }
+      } else {
+        this.pos = p;
+        for (let i = 0; i < count; i++) {
+          this.writeRawStringPayload(items[i]!);
+        }
+        buf = this.buf;
+        p = this.pos;
+      }
+      const subLen = p - (lenPos + reserved);
+      if (reserved === 2) {
+        if (subLen <= 16383) {
+          const u16 = ((subLen << 2) | 2) & 0xffff;
+          buf[lenPos] = u16 & 0xff;
+          buf[lenPos + 1] = (u16 >>> 8) & 0xff;
+          this.pos = p;
+          return;
+        }
+        if (subLen <= 536870911) {
+          this.pos = p;
+          this.ensureCapacity(2);
+          buf = this.buf;
+          buf.copyWithin(lenPos + 4, lenPos + 2, p);
+          const w32 = ((subLen << 3) | 4) >>> 0;
+          buf[lenPos] = w32 & 0xff;
+          buf[lenPos + 1] = (w32 >>> 8) & 0xff;
+          buf[lenPos + 2] = (w32 >>> 16) & 0xff;
+          buf[lenPos + 3] = (w32 >>> 24) & 0xff;
+          this.pos = p + 2;
+          return;
+        }
+        this.pos = p;
+        this.ensureCapacity(7);
+        buf = this.buf;
+        buf.copyWithin(lenPos + 9, lenPos + 2, p);
+        writeVarintAt(buf, lenPos, BigInt(subLen));
+        this.pos = p + 7;
+        return;
+      }
+      if (subLen <= 536870911) {
+        const w32 = ((subLen << 3) | 4) >>> 0;
+        buf[lenPos] = w32 & 0xff;
+        buf[lenPos + 1] = (w32 >>> 8) & 0xff;
+        buf[lenPos + 2] = (w32 >>> 16) & 0xff;
+        buf[lenPos + 3] = (w32 >>> 24) & 0xff;
+        this.pos = p;
+        return;
+      }
+      this.pos = p;
+      this.ensureCapacity(5);
+      buf = this.buf;
+      buf.copyWithin(lenPos + 9, lenPos + 4, p);
+      writeVarintAt(buf, lenPos, BigInt(subLen));
+      this.pos = p + 5;
+      return;
+    }
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length);
+    let minBody = 2 + count;
+    for (let i = 0; i < count; i++) {
+      minBody += items[i]!.length;
+      if (minBody > 16383) break;
+    }
+    this.beginContainer(minBody);
     this.writeByte(WireString);
-    this.writeRawVarint(items.length);
-    for (let i = 0; i < items.length; i++) {
+    this.writeRawVarint(count);
+    for (let i = 0; i < count; i++) {
       this.writeRawStringPayload(items[i]!);
     }
     this.endContainer();
@@ -1002,12 +1302,63 @@ export class Encoder {
    * Writes a packed boolean array (`WireArray = 13`, `ElementType = WireBoolFalse = 2`) with 1-byte `0x00`/`0x01` elements.
    */
   writeBoolArr(fieldNum: number, items: readonly boolean[]): void {
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 536870911) {
+      const countWidth = count <= 127 ? 1 : count <= 16383 ? 2 : 4;
+      const bodyLen = 1 + countWidth + count;
+      if (bodyLen <= 536870911) {
+        const tag = (fieldNum << 4) | WireArray;
+        const tagBytes = tag <= 127 ? 1 : 2;
+        const lenBytes = bodyLen <= 16383 ? 2 : 4;
+        const total = tagBytes + lenBytes + bodyLen;
+        if (this.pos + total > this.buf.length) this.ensureCapacity(total);
+        const buf = this.buf;
+        let p = this.pos;
+        if (tagBytes === 1) {
+          buf[p++] = (tag << 1) | 1;
+        } else {
+          const t16 = (tag << 2) | 2;
+          buf[p++] = t16 & 0xff;
+          buf[p++] = (t16 >>> 8) & 0xff;
+        }
+        if (lenBytes === 2) {
+          const u16 = (bodyLen << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else {
+          const w32 = ((bodyLen << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        }
+        buf[p++] = WireBoolFalse;
+        if (countWidth === 1) {
+          buf[p++] = (count << 1) | 1;
+        } else if (countWidth === 2) {
+          const c16 = (count << 2) | 2;
+          buf[p++] = c16 & 0xff;
+          buf[p++] = (c16 >>> 8) & 0xff;
+        } else {
+          const c32 = ((count << 3) | 4) >>> 0;
+          buf[p++] = c32 & 0xff;
+          buf[p++] = (c32 >>> 8) & 0xff;
+          buf[p++] = (c32 >>> 16) & 0xff;
+          buf[p++] = (c32 >>> 24) & 0xff;
+        }
+        for (let i = 0; i < count; i++) {
+          buf[p++] = items[i] ? 1 : 0;
+        }
+        this.pos = p;
+        return;
+      }
+    }
     this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length);
+    this.beginContainer(2 + count);
     this.writeByte(WireBoolFalse);
-    this.writeRawVarint(items.length);
-    this.ensureCapacity(items.length);
-    for (let i = 0; i < items.length; i++) {
+    this.writeRawVarint(count);
+    this.ensureCapacity(count);
+    for (let i = 0; i < count; i++) {
       this.buf[this.pos++] = items[i] ? 1 : 0;
     }
     this.endContainer();
@@ -1032,15 +1383,71 @@ export class Encoder {
    * Writes a packed float32 array (`WireArray = 13`, `ElementType = WireFloat32 = 8`).
    */
   writeFloat32Arr(fieldNum: number, items: ArrayLike<number>): void {
-    this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length * 4);
-    this.writeByte(WireFloat32);
-    this.writeRawVarint(items.length);
-    this.ensureCapacity(items.length * 4);
-    for (let i = 0; i < items.length; i++) {
-      this.view.setFloat32(this.pos, items[i]!, true);
-      this.pos += 4;
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 536870911) {
+      const countWidth = count <= 127 ? 1 : count <= 16383 ? 2 : 4;
+      const bodyLen = 1 + countWidth + count * 4;
+      if (bodyLen <= 536870911) {
+        const tag = (fieldNum << 4) | WireArray;
+        const tagBytes = tag <= 127 ? 1 : 2;
+        const lenBytes = bodyLen <= 16383 ? 2 : 4;
+        const total = tagBytes + lenBytes + bodyLen;
+        if (this.pos + total > this.buf.length) this.ensureCapacity(total);
+        const buf = this.buf;
+        const view = this.view;
+        let p = this.pos;
+        if (tagBytes === 1) {
+          buf[p++] = (tag << 1) | 1;
+        } else {
+          const t16 = (tag << 2) | 2;
+          buf[p++] = t16 & 0xff;
+          buf[p++] = (t16 >>> 8) & 0xff;
+        }
+        if (lenBytes === 2) {
+          const u16 = (bodyLen << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else {
+          const w32 = ((bodyLen << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        }
+        buf[p++] = WireFloat32;
+        if (countWidth === 1) {
+          buf[p++] = (count << 1) | 1;
+        } else if (countWidth === 2) {
+          const c16 = (count << 2) | 2;
+          buf[p++] = c16 & 0xff;
+          buf[p++] = (c16 >>> 8) & 0xff;
+        } else {
+          const c32 = ((count << 3) | 4) >>> 0;
+          buf[p++] = c32 & 0xff;
+          buf[p++] = (c32 >>> 8) & 0xff;
+          buf[p++] = (c32 >>> 16) & 0xff;
+          buf[p++] = (c32 >>> 24) & 0xff;
+        }
+        for (let i = 0; i < count; i++) {
+          view.setFloat32(p, items[i]!, true);
+          p += 4;
+        }
+        this.pos = p;
+        return;
+      }
     }
+    this.writeTag(fieldNum, WireArray);
+    this.beginContainer(2 + count * 4);
+    this.writeByte(WireFloat32);
+    this.writeRawVarint(count);
+    this.ensureCapacity(count * 4);
+    const view = this.view;
+    let p = this.pos;
+    for (let i = 0; i < count; i++) {
+      view.setFloat32(p, items[i]!, true);
+      p += 4;
+    }
+    this.pos = p;
     this.endContainer();
   }
 
@@ -1048,15 +1455,71 @@ export class Encoder {
    * Writes a packed fixed32 array (`WireArray = 13`, `ElementType = WireFixed32 = 4`).
    */
   writeFixed32Arr(fieldNum: number, items: ArrayLike<number>): void {
-    this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length * 4);
-    this.writeByte(WireFixed32);
-    this.writeRawVarint(items.length);
-    this.ensureCapacity(items.length * 4);
-    for (let i = 0; i < items.length; i++) {
-      this.view.setUint32(this.pos, items[i]! >>> 0, true);
-      this.pos += 4;
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 536870911) {
+      const countWidth = count <= 127 ? 1 : count <= 16383 ? 2 : 4;
+      const bodyLen = 1 + countWidth + count * 4;
+      if (bodyLen <= 536870911) {
+        const tag = (fieldNum << 4) | WireArray;
+        const tagBytes = tag <= 127 ? 1 : 2;
+        const lenBytes = bodyLen <= 16383 ? 2 : 4;
+        const total = tagBytes + lenBytes + bodyLen;
+        if (this.pos + total > this.buf.length) this.ensureCapacity(total);
+        const buf = this.buf;
+        const view = this.view;
+        let p = this.pos;
+        if (tagBytes === 1) {
+          buf[p++] = (tag << 1) | 1;
+        } else {
+          const t16 = (tag << 2) | 2;
+          buf[p++] = t16 & 0xff;
+          buf[p++] = (t16 >>> 8) & 0xff;
+        }
+        if (lenBytes === 2) {
+          const u16 = (bodyLen << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else {
+          const w32 = ((bodyLen << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        }
+        buf[p++] = WireFixed32;
+        if (countWidth === 1) {
+          buf[p++] = (count << 1) | 1;
+        } else if (countWidth === 2) {
+          const c16 = (count << 2) | 2;
+          buf[p++] = c16 & 0xff;
+          buf[p++] = (c16 >>> 8) & 0xff;
+        } else {
+          const c32 = ((count << 3) | 4) >>> 0;
+          buf[p++] = c32 & 0xff;
+          buf[p++] = (c32 >>> 8) & 0xff;
+          buf[p++] = (c32 >>> 16) & 0xff;
+          buf[p++] = (c32 >>> 24) & 0xff;
+        }
+        for (let i = 0; i < count; i++) {
+          view.setUint32(p, items[i]! >>> 0, true);
+          p += 4;
+        }
+        this.pos = p;
+        return;
+      }
     }
+    this.writeTag(fieldNum, WireArray);
+    this.beginContainer(2 + count * 4);
+    this.writeByte(WireFixed32);
+    this.writeRawVarint(count);
+    this.ensureCapacity(count * 4);
+    const view = this.view;
+    let p = this.pos;
+    for (let i = 0; i < count; i++) {
+      view.setUint32(p, items[i]! >>> 0, true);
+      p += 4;
+    }
+    this.pos = p;
     this.endContainer();
   }
 
@@ -1064,15 +1527,71 @@ export class Encoder {
    * Writes a packed sfixed32 array (`WireArray = 13`, `ElementType = WireSfixed32 = 6`).
    */
   writeSfixed32Arr(fieldNum: number, items: ArrayLike<number>): void {
-    this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length * 4);
-    this.writeByte(WireSfixed32);
-    this.writeRawVarint(items.length);
-    this.ensureCapacity(items.length * 4);
-    for (let i = 0; i < items.length; i++) {
-      this.view.setUint32(this.pos, items[i]! >>> 0, true);
-      this.pos += 4;
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 536870911) {
+      const countWidth = count <= 127 ? 1 : count <= 16383 ? 2 : 4;
+      const bodyLen = 1 + countWidth + count * 4;
+      if (bodyLen <= 536870911) {
+        const tag = (fieldNum << 4) | WireArray;
+        const tagBytes = tag <= 127 ? 1 : 2;
+        const lenBytes = bodyLen <= 16383 ? 2 : 4;
+        const total = tagBytes + lenBytes + bodyLen;
+        if (this.pos + total > this.buf.length) this.ensureCapacity(total);
+        const buf = this.buf;
+        const view = this.view;
+        let p = this.pos;
+        if (tagBytes === 1) {
+          buf[p++] = (tag << 1) | 1;
+        } else {
+          const t16 = (tag << 2) | 2;
+          buf[p++] = t16 & 0xff;
+          buf[p++] = (t16 >>> 8) & 0xff;
+        }
+        if (lenBytes === 2) {
+          const u16 = (bodyLen << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else {
+          const w32 = ((bodyLen << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        }
+        buf[p++] = WireSfixed32;
+        if (countWidth === 1) {
+          buf[p++] = (count << 1) | 1;
+        } else if (countWidth === 2) {
+          const c16 = (count << 2) | 2;
+          buf[p++] = c16 & 0xff;
+          buf[p++] = (c16 >>> 8) & 0xff;
+        } else {
+          const c32 = ((count << 3) | 4) >>> 0;
+          buf[p++] = c32 & 0xff;
+          buf[p++] = (c32 >>> 8) & 0xff;
+          buf[p++] = (c32 >>> 16) & 0xff;
+          buf[p++] = (c32 >>> 24) & 0xff;
+        }
+        for (let i = 0; i < count; i++) {
+          view.setUint32(p, items[i]! >>> 0, true);
+          p += 4;
+        }
+        this.pos = p;
+        return;
+      }
     }
+    this.writeTag(fieldNum, WireArray);
+    this.beginContainer(2 + count * 4);
+    this.writeByte(WireSfixed32);
+    this.writeRawVarint(count);
+    this.ensureCapacity(count * 4);
+    const view = this.view;
+    let p = this.pos;
+    for (let i = 0; i < count; i++) {
+      view.setUint32(p, items[i]! >>> 0, true);
+      p += 4;
+    }
+    this.pos = p;
     this.endContainer();
   }
 
@@ -1080,15 +1599,71 @@ export class Encoder {
    * Writes a packed float64 array (`WireArray = 13`, `ElementType = WireFloat64 = 9`).
    */
   writeFloat64Arr(fieldNum: number, items: ArrayLike<number>): void {
-    this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length * 8);
-    this.writeByte(WireFloat64);
-    this.writeRawVarint(items.length);
-    this.ensureCapacity(items.length * 8);
-    for (let i = 0; i < items.length; i++) {
-      this.view.setFloat64(this.pos, items[i]!, true);
-      this.pos += 8;
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 536870911) {
+      const countWidth = count <= 127 ? 1 : count <= 16383 ? 2 : 4;
+      const bodyLen = 1 + countWidth + count * 8;
+      if (bodyLen <= 536870911) {
+        const tag = (fieldNum << 4) | WireArray;
+        const tagBytes = tag <= 127 ? 1 : 2;
+        const lenBytes = bodyLen <= 16383 ? 2 : 4;
+        const total = tagBytes + lenBytes + bodyLen;
+        if (this.pos + total > this.buf.length) this.ensureCapacity(total);
+        const buf = this.buf;
+        const view = this.view;
+        let p = this.pos;
+        if (tagBytes === 1) {
+          buf[p++] = (tag << 1) | 1;
+        } else {
+          const t16 = (tag << 2) | 2;
+          buf[p++] = t16 & 0xff;
+          buf[p++] = (t16 >>> 8) & 0xff;
+        }
+        if (lenBytes === 2) {
+          const u16 = (bodyLen << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else {
+          const w32 = ((bodyLen << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        }
+        buf[p++] = WireFloat64;
+        if (countWidth === 1) {
+          buf[p++] = (count << 1) | 1;
+        } else if (countWidth === 2) {
+          const c16 = (count << 2) | 2;
+          buf[p++] = c16 & 0xff;
+          buf[p++] = (c16 >>> 8) & 0xff;
+        } else {
+          const c32 = ((count << 3) | 4) >>> 0;
+          buf[p++] = c32 & 0xff;
+          buf[p++] = (c32 >>> 8) & 0xff;
+          buf[p++] = (c32 >>> 16) & 0xff;
+          buf[p++] = (c32 >>> 24) & 0xff;
+        }
+        for (let i = 0; i < count; i++) {
+          view.setFloat64(p, items[i]!, true);
+          p += 8;
+        }
+        this.pos = p;
+        return;
+      }
     }
+    this.writeTag(fieldNum, WireArray);
+    this.beginContainer(2 + count * 8);
+    this.writeByte(WireFloat64);
+    this.writeRawVarint(count);
+    this.ensureCapacity(count * 8);
+    const view = this.view;
+    let p = this.pos;
+    for (let i = 0; i < count; i++) {
+      view.setFloat64(p, items[i]!, true);
+      p += 8;
+    }
+    this.pos = p;
     this.endContainer();
   }
 
@@ -1096,16 +1671,80 @@ export class Encoder {
    * Writes a packed fixed64 array (`WireArray = 13`, `ElementType = WireFixed64 = 5`).
    */
   writeFixed64Arr(fieldNum: number, items: ArrayLike<number | bigint>): void {
-    this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length * 8);
-    this.writeByte(WireFixed64);
-    this.writeRawVarint(items.length);
-    this.ensureCapacity(items.length * 8);
-    for (let i = 0; i < items.length; i++) {
-      const u = BigInt.asUintN(64, toBigInt64Input(items[i]!));
-      this.view.setBigUint64(this.pos, u, true);
-      this.pos += 8;
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 536870911) {
+      const countWidth = count <= 127 ? 1 : count <= 16383 ? 2 : 4;
+      const bodyLen = 1 + countWidth + count * 8;
+      if (bodyLen <= 536870911) {
+        const tag = (fieldNum << 4) | WireArray;
+        const tagBytes = tag <= 127 ? 1 : 2;
+        const lenBytes = bodyLen <= 16383 ? 2 : 4;
+        const total = tagBytes + lenBytes + bodyLen;
+        if (this.pos + total > this.buf.length) this.ensureCapacity(total);
+        const buf = this.buf;
+        const view = this.view;
+        let p = this.pos;
+        if (tagBytes === 1) {
+          buf[p++] = (tag << 1) | 1;
+        } else {
+          const t16 = (tag << 2) | 2;
+          buf[p++] = t16 & 0xff;
+          buf[p++] = (t16 >>> 8) & 0xff;
+        }
+        if (lenBytes === 2) {
+          const u16 = (bodyLen << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else {
+          const w32 = ((bodyLen << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        }
+        buf[p++] = WireFixed64;
+        if (countWidth === 1) {
+          buf[p++] = (count << 1) | 1;
+        } else if (countWidth === 2) {
+          const c16 = (count << 2) | 2;
+          buf[p++] = c16 & 0xff;
+          buf[p++] = (c16 >>> 8) & 0xff;
+        } else {
+          const c32 = ((count << 3) | 4) >>> 0;
+          buf[p++] = c32 & 0xff;
+          buf[p++] = (c32 >>> 8) & 0xff;
+          buf[p++] = (c32 >>> 16) & 0xff;
+          buf[p++] = (c32 >>> 24) & 0xff;
+        }
+        for (let i = 0; i < count; i++) {
+          const v = items[i]!;
+          if (typeof v === 'number' && v >= 0 && v <= 9007199254740991) {
+            const t = Math.trunc(v);
+            view.setUint32(p, t >>> 0, true);
+            view.setUint32(p + 4, Math.floor(t / 0x100000000) >>> 0, true);
+          } else {
+            const u = BigInt.asUintN(64, toBigInt64Input(v));
+            view.setBigUint64(p, u, true);
+          }
+          p += 8;
+        }
+        this.pos = p;
+        return;
+      }
     }
+    this.writeTag(fieldNum, WireArray);
+    this.beginContainer(2 + count * 8);
+    this.writeByte(WireFixed64);
+    this.writeRawVarint(count);
+    this.ensureCapacity(count * 8);
+    const view = this.view;
+    let p = this.pos;
+    for (let i = 0; i < count; i++) {
+      const u = BigInt.asUintN(64, toBigInt64Input(items[i]!));
+      view.setBigUint64(p, u, true);
+      p += 8;
+    }
+    this.pos = p;
     this.endContainer();
   }
 
@@ -1113,16 +1752,80 @@ export class Encoder {
    * Writes a packed sfixed64 array (`WireArray = 13`, `ElementType = WireSfixed64 = 7`).
    */
   writeSfixed64Arr(fieldNum: number, items: ArrayLike<number | bigint>): void {
-    this.writeTag(fieldNum, WireArray);
-    this.beginContainer(2 + items.length * 8);
-    this.writeByte(WireSfixed64);
-    this.writeRawVarint(items.length);
-    this.ensureCapacity(items.length * 8);
-    for (let i = 0; i < items.length; i++) {
-      const u = BigInt.asUintN(64, toBigInt64Input(items[i]!));
-      this.view.setBigUint64(this.pos, u, true);
-      this.pos += 8;
+    const count = items.length;
+    if ((fieldNum | 0) === fieldNum && fieldNum >= 1 && fieldNum <= 1023 && count <= 536870911) {
+      const countWidth = count <= 127 ? 1 : count <= 16383 ? 2 : 4;
+      const bodyLen = 1 + countWidth + count * 8;
+      if (bodyLen <= 536870911) {
+        const tag = (fieldNum << 4) | WireArray;
+        const tagBytes = tag <= 127 ? 1 : 2;
+        const lenBytes = bodyLen <= 16383 ? 2 : 4;
+        const total = tagBytes + lenBytes + bodyLen;
+        if (this.pos + total > this.buf.length) this.ensureCapacity(total);
+        const buf = this.buf;
+        const view = this.view;
+        let p = this.pos;
+        if (tagBytes === 1) {
+          buf[p++] = (tag << 1) | 1;
+        } else {
+          const t16 = (tag << 2) | 2;
+          buf[p++] = t16 & 0xff;
+          buf[p++] = (t16 >>> 8) & 0xff;
+        }
+        if (lenBytes === 2) {
+          const u16 = (bodyLen << 2) | 2;
+          buf[p++] = u16 & 0xff;
+          buf[p++] = (u16 >>> 8) & 0xff;
+        } else {
+          const w32 = ((bodyLen << 3) | 4) >>> 0;
+          buf[p++] = w32 & 0xff;
+          buf[p++] = (w32 >>> 8) & 0xff;
+          buf[p++] = (w32 >>> 16) & 0xff;
+          buf[p++] = (w32 >>> 24) & 0xff;
+        }
+        buf[p++] = WireSfixed64;
+        if (countWidth === 1) {
+          buf[p++] = (count << 1) | 1;
+        } else if (countWidth === 2) {
+          const c16 = (count << 2) | 2;
+          buf[p++] = c16 & 0xff;
+          buf[p++] = (c16 >>> 8) & 0xff;
+        } else {
+          const c32 = ((count << 3) | 4) >>> 0;
+          buf[p++] = c32 & 0xff;
+          buf[p++] = (c32 >>> 8) & 0xff;
+          buf[p++] = (c32 >>> 16) & 0xff;
+          buf[p++] = (c32 >>> 24) & 0xff;
+        }
+        for (let i = 0; i < count; i++) {
+          const v = items[i]!;
+          if (typeof v === 'number' && v >= -9007199254740991 && v <= 9007199254740991) {
+            const t = Math.trunc(v);
+            view.setUint32(p, t >>> 0, true);
+            view.setInt32(p + 4, Math.floor(t / 0x100000000) | 0, true);
+          } else {
+            const u = BigInt.asUintN(64, toBigInt64Input(v));
+            view.setBigUint64(p, u, true);
+          }
+          p += 8;
+        }
+        this.pos = p;
+        return;
+      }
     }
+    this.writeTag(fieldNum, WireArray);
+    this.beginContainer(2 + count * 8);
+    this.writeByte(WireSfixed64);
+    this.writeRawVarint(count);
+    this.ensureCapacity(count * 8);
+    const view = this.view;
+    let p = this.pos;
+    for (let i = 0; i < count; i++) {
+      const u = BigInt.asUintN(64, toBigInt64Input(items[i]!));
+      view.setBigUint64(p, u, true);
+      p += 8;
+    }
+    this.pos = p;
     this.endContainer();
   }
 

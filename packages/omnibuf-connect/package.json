@@ -1,6 +1,6 @@
 {
   "name": "@omnibuf/connect",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "OmniBuf binary codec and unary handlers for @connectrpc/connect",
   "type": "module",
   "license": "Apache-2.0",

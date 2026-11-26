@@ -30,11 +30,11 @@ import {
   decodeZigZagAuto,
   decodeZigZagBigInt,
   float32FromBits,
-  float64FromBits,
   locateField,
   nextContainerField,
   parseArrayHeader,
   parseMapHeader,
+  readFloat64At,
   skipValidatedValue,
   validateField0At,
 } from './wire.js';
@@ -211,11 +211,11 @@ export function readFixed64(
   if (!ok || valSlice.length < 8) {
     return [0n, false];
   }
-  let u64 = 0n;
-  for (let i = 7; i >= 0; i--) {
-    u64 = (u64 << 8n) | BigInt(valSlice[i]!);
-  }
-  return [u64, true];
+  const lo =
+    (valSlice[0]! | (valSlice[1]! << 8) | (valSlice[2]! << 16) | (valSlice[3]! << 24)) >>> 0;
+  const hi =
+    (valSlice[4]! | (valSlice[5]! << 8) | (valSlice[6]! << 16) | (valSlice[7]! << 24)) >>> 0;
+  return [(BigInt(hi) << 32n) | BigInt(lo), true];
 }
 
 export function readFixed64Auto(
@@ -223,9 +223,18 @@ export function readFixed64Auto(
   fieldNum: number,
   depth = 0,
 ): [value: number | bigint, ok: boolean] {
-  const [u64, ok] = readFixed64(packet, fieldNum, depth);
-  if (!ok) return [0, false];
-  return [u64 <= 9007199254740991n ? Number(u64) : u64, true];
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireFixed64, depth);
+  if (!ok || valSlice.length < 8) {
+    return [0, false];
+  }
+  const lo =
+    (valSlice[0]! | (valSlice[1]! << 8) | (valSlice[2]! << 16) | (valSlice[3]! << 24)) >>> 0;
+  const hi =
+    (valSlice[4]! | (valSlice[5]! << 8) | (valSlice[6]! << 16) | (valSlice[7]! << 24)) >>> 0;
+  if (hi <= 0x1fffff) {
+    return [hi * 0x100000000 + lo, true];
+  }
+  return [(BigInt(hi) << 32n) | BigInt(lo), true];
 }
 
 export function readSfixed64(
@@ -237,11 +246,10 @@ export function readSfixed64(
   if (!ok || valSlice.length < 8) {
     return [0n, false];
   }
-  let u64 = 0n;
-  for (let i = 7; i >= 0; i--) {
-    u64 = (u64 << 8n) | BigInt(valSlice[i]!);
-  }
-  return [BigInt.asIntN(64, u64), true];
+  const lo =
+    (valSlice[0]! | (valSlice[1]! << 8) | (valSlice[2]! << 16) | (valSlice[3]! << 24)) >>> 0;
+  const hi = valSlice[4]! | (valSlice[5]! << 8) | (valSlice[6]! << 16) | (valSlice[7]! << 24) | 0;
+  return [(BigInt(hi) << 32n) + BigInt(lo), true];
 }
 
 export function readSfixed64Auto(
@@ -249,9 +257,17 @@ export function readSfixed64Auto(
   fieldNum: number,
   depth = 0,
 ): [value: number | bigint, ok: boolean] {
-  const [s64, ok] = readSfixed64(packet, fieldNum, depth);
-  if (!ok) return [0, false];
-  return [s64 >= -9007199254740991n && s64 <= 9007199254740991n ? Number(s64) : s64, true];
+  const { valSlice, ok } = locateField(packet, fieldNum, 1 << WireSfixed64, depth);
+  if (!ok || valSlice.length < 8) {
+    return [0, false];
+  }
+  const lo =
+    (valSlice[0]! | (valSlice[1]! << 8) | (valSlice[2]! << 16) | (valSlice[3]! << 24)) >>> 0;
+  const hi = valSlice[4]! | (valSlice[5]! << 8) | (valSlice[6]! << 16) | (valSlice[7]! << 24) | 0;
+  if ((hi >= -0x1fffff && hi <= 0x1fffff) || (hi === -0x200000 && lo !== 0)) {
+    return [hi * 0x100000000 + lo, true];
+  }
+  return [(BigInt(hi) << 32n) + BigInt(lo), true];
 }
 
 export function readFloat64(
@@ -263,11 +279,7 @@ export function readFloat64(
   if (!ok || valSlice.length < 8) {
     return [0, false];
   }
-  let u64 = 0n;
-  for (let i = 7; i >= 0; i--) {
-    u64 = (u64 << 8n) | BigInt(valSlice[i]!);
-  }
-  return [float64FromBits(u64), true];
+  return [readFloat64At(valSlice, 0), true];
 }
 
 function locateStringSlice(
@@ -869,21 +881,51 @@ export function appendUint32ArrBody(dst: number[], body: Uint8Array): [out: numb
 
 export function appendEnumArrBody(dst: number[], body: Uint8Array): [out: number[], ok: boolean] {
   const origLen = dst.length;
+  const n = body.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireSint) {
     return [[], false];
   }
   let p = startP;
+  dst.length = origLen + c;
   for (let i = 0; i < c; i++) {
-    const [v, vn] = decodeVarintBigInt(body, p);
-    if (vn === 0) {
+    if (p >= n) {
       dst.length = origLen;
       return [[], false];
     }
-    p += vn;
-    dst.push(decodeZigZag32(v));
+    const vb = body[p]!;
+    if ((vb & 1) !== 0) {
+      const u = vb >>> 1;
+      dst[origLen + i] = (u >>> 1) ^ -(u & 1);
+      p += 1;
+    } else if ((vb & 2) !== 0) {
+      if (p + 2 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      const u = (vb | (body[p + 1]! << 8)) >>> 2;
+      dst[origLen + i] = (u >>> 1) ^ -(u & 1);
+      p += 2;
+    } else if ((vb & 4) !== 0) {
+      if (p + 4 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      const u =
+        ((vb | (body[p + 1]! << 8) | (body[p + 2]! << 16) | (body[p + 3]! << 24)) >>> 3) >>> 0;
+      dst[origLen + i] = (u >>> 1) ^ -(u & 1);
+      p += 4;
+    } else {
+      const [v, vn] = decodeVarintBigInt(body, p, n);
+      if (vn === 0) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      p += vn;
+      dst[origLen + i] = decodeZigZag32(v);
+    }
   }
-  if (p !== body.length) {
+  if (p !== n) {
     dst.length = origLen;
     return [[], false];
   }
@@ -897,21 +939,51 @@ export function appendUintArrAutoBody(
   body: Uint8Array,
 ): [out: (number | bigint)[], ok: boolean] {
   const origLen = dst.length;
+  const n = body.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireUint) {
     return [[], false];
   }
   let p = startP;
+  dst.length = origLen + c;
   for (let i = 0; i < c; i++) {
-    const [v, vn] = decodeVarintAuto(body, p);
-    if (vn === 0) {
+    if (p >= n) {
       dst.length = origLen;
       return [[], false];
     }
-    p += vn;
-    dst.push(v);
+    const vb = body[p]!;
+    if ((vb & 1) !== 0) {
+      dst[origLen + i] = vb >>> 1;
+      p += 1;
+    } else if ((vb & 2) !== 0) {
+      if (p + 2 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      dst[origLen + i] = (vb | (body[p + 1]! << 8)) >>> 2;
+      p += 2;
+    } else if ((vb & 4) !== 0) {
+      if (p + 4 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      dst[origLen + i] =
+        ((vb | (body[p + 1]! << 8) | (body[p + 2]! << 16) | (body[p + 3]! << 24)) >>> 3) >>> 0;
+      p += 4;
+    } else {
+      if (vb !== 0 || p + 9 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      const lo =
+        (body[p + 1]! | (body[p + 2]! << 8) | (body[p + 3]! << 16) | (body[p + 4]! << 24)) >>> 0;
+      const hi =
+        (body[p + 5]! | (body[p + 6]! << 8) | (body[p + 7]! << 16) | (body[p + 8]! << 24)) >>> 0;
+      dst[origLen + i] = hi <= 0x1fffff ? hi * 0x100000000 + lo : (BigInt(hi) << 32n) | BigInt(lo);
+      p += 9;
+    }
   }
-  if (p !== body.length) {
+  if (p !== n) {
     dst.length = origLen;
     return [[], false];
   }
@@ -923,21 +995,60 @@ export function appendSintArrAutoBody(
   body: Uint8Array,
 ): [out: (number | bigint)[], ok: boolean] {
   const origLen = dst.length;
+  const n = body.length;
   const [elemType, c, startP, ok] = parseArrayHeader(body);
   if (!ok || elemType !== WireSint) {
     return [[], false];
   }
   let p = startP;
+  dst.length = origLen + c;
   for (let i = 0; i < c; i++) {
-    const [v, vn] = decodeVarintBigInt(body, p);
-    if (vn === 0) {
+    if (p >= n) {
       dst.length = origLen;
       return [[], false];
     }
-    p += vn;
-    dst.push(decodeZigZagAuto(v));
+    const vb = body[p]!;
+    if ((vb & 1) !== 0) {
+      const u = vb >>> 1;
+      dst[origLen + i] = (u >>> 1) ^ -(u & 1);
+      p += 1;
+    } else if ((vb & 2) !== 0) {
+      if (p + 2 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      const u = (vb | (body[p + 1]! << 8)) >>> 2;
+      dst[origLen + i] = (u >>> 1) ^ -(u & 1);
+      p += 2;
+    } else if ((vb & 4) !== 0) {
+      if (p + 4 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      const u =
+        ((vb | (body[p + 1]! << 8) | (body[p + 2]! << 16) | (body[p + 3]! << 24)) >>> 3) >>> 0;
+      dst[origLen + i] = (u >>> 1) ^ -(u & 1);
+      p += 4;
+    } else {
+      if (vb !== 0 || p + 9 > n) {
+        dst.length = origLen;
+        return [[], false];
+      }
+      const lo =
+        (body[p + 1]! | (body[p + 2]! << 8) | (body[p + 3]! << 16) | (body[p + 4]! << 24)) >>> 0;
+      const hi =
+        (body[p + 5]! | (body[p + 6]! << 8) | (body[p + 7]! << 16) | (body[p + 8]! << 24)) >>> 0;
+      if (hi < 0x3fffff || (hi === 0x3fffff && lo !== 0xffffffff)) {
+        const half = hi * 2147483648 + (lo >>> 1);
+        dst[origLen + i] = (lo & 1) === 0 ? half : -(half + 1);
+      } else {
+        const u64 = (BigInt(hi) << 32n) | BigInt(lo);
+        dst[origLen + i] = BigInt.asIntN(64, (u64 >> 1n) ^ -(u64 & 1n));
+      }
+      p += 9;
+    }
   }
-  if (p !== body.length) {
+  if (p !== n) {
     dst.length = origLen;
     return [[], false];
   }
@@ -952,11 +1063,14 @@ export function appendFloat32ArrBody(
   if (!ok || elemType !== WireFloat32 || body.length - startP !== c * 4) {
     return [[], false];
   }
+  if (c === 0) return [dst, true];
+  const base = dst.length;
+  dst.length = base + c;
+  const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  let off = startP;
   for (let i = 0; i < c; i++) {
-    const off = startP + i * 4;
-    const bits =
-      (body[off]! | (body[off + 1]! << 8) | (body[off + 2]! << 16) | (body[off + 3]! << 24)) >>> 0;
-    dst.push(float32FromBits(bits));
+    dst[base + i] = dv.getFloat32(off, true);
+    off += 4;
   }
   return [dst, true];
 }
@@ -969,13 +1083,14 @@ export function appendFloat64ArrBody(
   if (!ok || elemType !== WireFloat64 || body.length - startP !== c * 8) {
     return [[], false];
   }
+  if (c === 0) return [dst, true];
+  const base = dst.length;
+  dst.length = base + c;
+  const dv = new DataView(body.buffer, body.byteOffset, body.byteLength);
+  let off = startP;
   for (let i = 0; i < c; i++) {
-    const off = startP + i * 8;
-    let u64 = 0n;
-    for (let b = 7; b >= 0; b--) {
-      u64 = (u64 << 8n) | BigInt(body[off + b]!);
-    }
-    dst.push(float64FromBits(u64));
+    dst[base + i] = dv.getFloat64(off, true);
+    off += 8;
   }
   return [dst, true];
 }
@@ -1270,12 +1385,14 @@ export function readFixed32Arr(
       return [[], false];
     }
     found = true;
+    const base = out.length;
+    out.length = base + c;
+    let off = startP;
     for (let i = 0; i < c; i++) {
-      const off = startP + i * 4;
-      out.push(
+      out[base + i] =
         (body[off]! | (body[off + 1]! << 8) | (body[off + 2]! << 16) | (body[off + 3]! << 24)) >>>
-          0,
-      );
+        0;
+      off += 4;
     }
   }
 }
@@ -1305,11 +1422,13 @@ export function readSfixed32Arr(
       return [[], false];
     }
     found = true;
+    const base = out.length;
+    out.length = base + c;
+    let off = startP;
     for (let i = 0; i < c; i++) {
-      const off = startP + i * 4;
-      out.push(
-        body[off]! | (body[off + 1]! << 8) | (body[off + 2]! << 16) | (body[off + 3]! << 24) | 0,
-      );
+      out[base + i] =
+        body[off]! | (body[off + 1]! << 8) | (body[off + 2]! << 16) | (body[off + 3]! << 24) | 0;
+      off += 4;
     }
   }
 }
@@ -1339,13 +1458,21 @@ export function readFixed64Arr(
       return [[], false];
     }
     found = true;
+    const base = out.length;
+    out.length = base + c;
+    let off = startP;
     for (let i = 0; i < c; i++) {
-      const off = startP + i * 8;
-      let u64 = 0n;
-      for (let b = 7; b >= 0; b--) {
-        u64 = (u64 << 8n) | BigInt(body[off + b]!);
-      }
-      out.push(u64 <= 9007199254740991n ? Number(u64) : u64);
+      const lo =
+        (body[off]! | (body[off + 1]! << 8) | (body[off + 2]! << 16) | (body[off + 3]! << 24)) >>>
+        0;
+      const hi =
+        (body[off + 4]! |
+          (body[off + 5]! << 8) |
+          (body[off + 6]! << 16) |
+          (body[off + 7]! << 24)) >>>
+        0;
+      out[base + i] = hi <= 0x1fffff ? hi * 0x100000000 + lo : (BigInt(hi) << 32n) | BigInt(lo);
+      off += 8;
     }
   }
 }
@@ -1375,14 +1502,24 @@ export function readSfixed64Arr(
       return [[], false];
     }
     found = true;
+    const base = out.length;
+    out.length = base + c;
+    let off = startP;
     for (let i = 0; i < c; i++) {
-      const off = startP + i * 8;
-      let u64 = 0n;
-      for (let b = 7; b >= 0; b--) {
-        u64 = (u64 << 8n) | BigInt(body[off + b]!);
-      }
-      const s64 = BigInt.asIntN(64, u64);
-      out.push(s64 >= -9007199254740991n && s64 <= 9007199254740991n ? Number(s64) : s64);
+      const lo =
+        (body[off]! | (body[off + 1]! << 8) | (body[off + 2]! << 16) | (body[off + 3]! << 24)) >>>
+        0;
+      const hi =
+        body[off + 4]! |
+        (body[off + 5]! << 8) |
+        (body[off + 6]! << 16) |
+        (body[off + 7]! << 24) |
+        0;
+      out[base + i] =
+        (hi >= -0x1fffff && hi <= 0x1fffff) || (hi === -0x200000 && lo !== 0)
+          ? hi * 0x100000000 + lo
+          : (BigInt(hi) << 32n) + BigInt(lo);
+      off += 8;
     }
   }
 }
@@ -1495,12 +1632,28 @@ export function readSubMsgArrDecoded<T>(
     if (!ok) return [[], false];
     found = true;
     let [, , p] = parseArrayHeader(body);
+    const base = out.length;
+    out.length = base + count;
     for (let i = 0; i < count; i++) {
-      const [el, en] = decodeVarintBigInt(body, p);
-      p += en;
-      const elNum = Number(el);
+      let elNum: number;
+      const eb0 = body[p]!;
+      if ((eb0 & 1) !== 0) {
+        elNum = eb0 >>> 1;
+        p += 1;
+      } else if ((eb0 & 2) !== 0) {
+        elNum = (eb0 | (body[p + 1]! << 8)) >>> 2;
+        p += 2;
+      } else if ((eb0 & 4) !== 0) {
+        elNum =
+          ((eb0 | (body[p + 1]! << 8) | (body[p + 2]! << 16) | (body[p + 3]! << 24)) >>> 3) >>> 0;
+        p += 4;
+      } else {
+        const [el, en] = decodeVarintBigInt(body, p);
+        p += en;
+        elNum = Number(el);
+      }
       try {
-        out.push(decodeFn(body.subarray(p, p + elNum)));
+        out[base + i] = decodeFn(body.subarray(p, p + elNum));
       } catch (err) {
         if (err instanceof Error && /MaxNestingDepth|nesting depth/i.test(err.message)) {
           throw err;
@@ -1579,28 +1732,28 @@ function readMapEntryPayload(
     }
     case WireFixed64: {
       if (body.length - p < 8) throw new Error('omnibuf: truncated map fixed64');
-      let u64 = 0n;
-      for (let b = 7; b >= 0; b--) {
-        u64 = (u64 << 8n) | BigInt(body[p + b]!);
-      }
-      return [u64 <= 9007199254740991n ? Number(u64) : u64, p + 8];
+      const lo =
+        (body[p]! | (body[p + 1]! << 8) | (body[p + 2]! << 16) | (body[p + 3]! << 24)) >>> 0;
+      const hi =
+        (body[p + 4]! | (body[p + 5]! << 8) | (body[p + 6]! << 16) | (body[p + 7]! << 24)) >>> 0;
+      return [hi <= 0x1fffff ? hi * 0x100000000 + lo : (BigInt(hi) << 32n) | BigInt(lo), p + 8];
     }
     case WireSfixed64: {
       if (body.length - p < 8) throw new Error('omnibuf: truncated map sfixed64');
-      let u64 = 0n;
-      for (let b = 7; b >= 0; b--) {
-        u64 = (u64 << 8n) | BigInt(body[p + b]!);
-      }
-      const s64 = BigInt.asIntN(64, u64);
-      return [s64 >= -9007199254740991n && s64 <= 9007199254740991n ? Number(s64) : s64, p + 8];
+      const lo =
+        (body[p]! | (body[p + 1]! << 8) | (body[p + 2]! << 16) | (body[p + 3]! << 24)) >>> 0;
+      const hi =
+        body[p + 4]! | (body[p + 5]! << 8) | (body[p + 6]! << 16) | (body[p + 7]! << 24) | 0;
+      return [
+        (hi >= -0x1fffff && hi <= 0x1fffff) || (hi === -0x200000 && lo !== 0)
+          ? hi * 0x100000000 + lo
+          : (BigInt(hi) << 32n) + BigInt(lo),
+        p + 8,
+      ];
     }
     case WireFloat64: {
       if (body.length - p < 8) throw new Error('omnibuf: truncated map float64');
-      let u64 = 0n;
-      for (let b = 7; b >= 0; b--) {
-        u64 = (u64 << 8n) | BigInt(body[p + b]!);
-      }
-      return [float64FromBits(u64), p + 8];
+      return [readFloat64At(body, p), p + 8];
     }
     case WireSubMsg: {
       const [len, ln] = decodeVarintBigInt(body, p);

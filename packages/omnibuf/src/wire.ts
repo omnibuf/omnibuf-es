@@ -183,6 +183,7 @@ export interface StringCodec {
   decode(bytes: Uint8Array, start?: number, end?: number): string;
   byteLength(str: string): number;
   encodeInto?(str: string, dst: Uint8Array, offset: number): number;
+  createWriter?(dst: Uint8Array): ((str: string, offset: number) => number) | null;
 }
 
 const sharedTextEncoder = new TextEncoder();
@@ -190,7 +191,7 @@ const sharedTextDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: tru
 
 const fromCharCode = String.fromCharCode;
 
-function decodeASCII1To8(bytes: Uint8Array, i: number, len: number): string | null {
+function decodeASCII1To16(bytes: Uint8Array, i: number, len: number): string | null {
   switch (len) {
     case 1: {
       const b0 = bytes[i]!;
@@ -256,6 +257,147 @@ function decodeASCII1To8(bytes: Uint8Array, i: number, len: number): string | nu
         ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7)
         : null;
     }
+    case 9: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8) < 0x80
+        ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8)
+        : null;
+    }
+    case 10: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9) < 0x80
+        ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9)
+        : null;
+    }
+    case 11: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10) < 0x80
+        ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10)
+        : null;
+    }
+    case 12: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11) < 0x80
+        ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11)
+        : null;
+    }
+    case 13: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11 | b12) < 0x80
+        ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12)
+        : null;
+    }
+    case 14: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11 | b12 | b13) < 0x80
+        ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13)
+        : null;
+    }
+    case 15: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11 | b12 | b13 | b14) < 0x80
+        ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14)
+        : null;
+    }
+    case 16: {
+      const b0 = bytes[i]!,
+        b1 = bytes[i + 1]!,
+        b2 = bytes[i + 2]!,
+        b3 = bytes[i + 3]!,
+        b4 = bytes[i + 4]!,
+        b5 = bytes[i + 5]!,
+        b6 = bytes[i + 6]!,
+        b7 = bytes[i + 7]!,
+        b8 = bytes[i + 8]!,
+        b9 = bytes[i + 9]!,
+        b10 = bytes[i + 10]!,
+        b11 = bytes[i + 11]!,
+        b12 = bytes[i + 12]!,
+        b13 = bytes[i + 13]!,
+        b14 = bytes[i + 14]!,
+        b15 = bytes[i + 15]!;
+      return (b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | b9 | b10 | b11 | b12 | b13 | b14 | b15) <
+        0x80
+        ? fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15)
+        : null;
+    }
     default:
       return null;
   }
@@ -267,7 +409,7 @@ function decodeASCII1To8(bytes: Uint8Array, i: number, len: number): string | nu
  * Returns `null` if any byte is `>= 0x80`.
  */
 function decodeShortASCII(bytes: Uint8Array, start: number, len: number): string | null {
-  if (len <= 8) return decodeASCII1To8(bytes, start, len);
+  if (len <= 16) return decodeASCII1To16(bytes, start, len);
   let out = '';
   let i = start;
   const end = start + len;
@@ -297,15 +439,9 @@ function decodeShortASCII(bytes: Uint8Array, start: number, len: number): string
     out += fromCharCode(b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15);
     i += 16;
   }
-  if (i + 8 <= end) {
-    const mid = decodeASCII1To8(bytes, i, 8);
-    if (mid === null) return null;
-    out += mid;
-    i += 8;
-  }
   const rem = end - i;
   if (rem > 0) {
-    const tail = decodeASCII1To8(bytes, i, rem);
+    const tail = decodeASCII1To16(bytes, i, rem);
     if (tail === null) return null;
     out += tail;
   }
@@ -525,7 +661,7 @@ export function encodeZigZag(n: number | bigint): bigint {
 }
 
 /**
- * Fast-path ZigZag encoding for 32-bit signed integers that fit in safe number range.
+ * Fast-path ZigZag encoding for signed integers whose ZigZag encoding fits in a safe JS number (`<= 2^53 - 1`).
  */
 export function encodeZigZagNumber(n: number | bigint): number | bigint {
   if (typeof n === 'number') {
@@ -535,6 +671,10 @@ export function encodeZigZagNumber(n: number | bigint): number | bigint {
     if (n >= -268435456 && n <= 268435455) {
       const i = n | 0;
       return ((i << 1) ^ (i >> 31)) >>> 0;
+    }
+    const t = Math.trunc(n);
+    if (t >= -4503599627370496 && t <= 4503599627370495) {
+      return t >= 0 ? (t === 0 ? 0 : t * 2) : -t * 2 - 1;
     }
   }
   return encodeZigZag(n);
@@ -579,9 +719,15 @@ export function decodeZigZag32(u: number | bigint): number {
  * or a bigint when outside [-9007199254740991, 9007199254740991].
  */
 export function decodeZigZagAuto(u: number | bigint): number | bigint {
-  if (typeof u === 'number' && u <= 0xffffffff) {
-    const res = (u >>> 1) ^ -(u & 1);
-    return res === 0 ? 0 : res;
+  if (typeof u === 'number') {
+    if (u <= 0xffffffff && u >= 0) {
+      const res = (u >>> 1) ^ -(u & 1);
+      return res === 0 ? 0 : res;
+    }
+    if (u >= 0 && u <= 9007199254740991) {
+      const res = u % 2 === 0 ? u / 2 : -((u + 1) / 2);
+      return res === 0 ? 0 : res;
+    }
   }
   const b = decodeZigZagBigInt(u);
   if (b >= -9007199254740991n && b <= 9007199254740991n) {

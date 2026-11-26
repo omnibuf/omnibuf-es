@@ -65,6 +65,12 @@ export const NodeBufferStringCodec: StringCodec = {
     const off = offset < 0 ? 0 : offset;
     return nodeTextEncoder.encodeInto(str, dst.subarray(off)).written ?? 0;
   },
+  createWriter(dst: Uint8Array): (str: string, offset: number) => number {
+    const b = Buffer.from(dst.buffer, dst.byteOffset, dst.byteLength) as Buffer & {
+      utf8Write(str: string, offset: number): number;
+    };
+    return (str: string, offset: number): number => b.utf8Write(str, offset);
+  },
 };
 
 const EMPTY_BYTES = new Uint8Array(0);
